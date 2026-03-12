@@ -1,18 +1,27 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase";
 
 export default function AuthCallback() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [status, setStatus] = useState("Verifying...");
 
   useEffect(() => {
     async function handleCallback() {
       const supabase = createClient();
+      const code = searchParams.get("code");
 
-      // Exchange the auth code for a session
+      if (code) {
+        const { error } = await supabase.auth.exchangeCodeForSession(code);
+        if (error) {
+          setStatus("Error: " + error.message);
+          return;
+        }
+      }
+
       const { data, error } = await supabase.auth.getSession();
 
       // Check for errors OR no session (user denied/cancelled)
@@ -26,7 +35,7 @@ export default function AuthCallback() {
     }
 
     handleCallback();
-  }, [router]);
+  }, [router, searchParams]);
 
   return (
     <div

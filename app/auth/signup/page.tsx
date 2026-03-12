@@ -14,6 +14,13 @@ import {
 } from "lucide-react";
 import { createClient } from "@/lib/supabase";
 
+function getAuthRedirectUrl() {
+  if (typeof window !== "undefined") {
+    return `${window.location.origin}/auth/callback`;
+  }
+  return `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/auth/callback`;
+}
+
 const perks = [
   "1 free scan every month",
   "Full 4-Guard security report",
@@ -297,7 +304,7 @@ export default function SignupPage() {
               await supabase.auth.signInWithOAuth({
                 provider: "github",
                 options: {
-                  redirectTo: `${window.location.origin}/auth/callback`,
+                  redirectTo: getAuthRedirectUrl(),
                 },
               });
             }}

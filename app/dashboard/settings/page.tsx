@@ -17,6 +17,13 @@ import DashboardSidebar from "@/components/layout/DashboardSidebar";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase";
 
+function getAuthRedirectUrl() {
+  if (typeof window !== "undefined") {
+    return `${window.location.origin}/auth/callback`;
+  }
+  return `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/auth/callback`;
+}
+
 type Tab = "profile" | "integrations" | "notifications" | "billing" | "security";
 
 const tabs: { id: Tab; label: string; icon: typeof User }[] = [
@@ -60,7 +67,7 @@ export default function SettingsPage() {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "github",
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        redirectTo: getAuthRedirectUrl(),
         scopes: "repo user:email",
       },
     });

@@ -6,6 +6,13 @@ import { useState } from "react";
 import { Github, Mail, Eye, EyeOff, ArrowRight, Shield } from "lucide-react";
 import { createClient } from "@/lib/supabase";
 
+function getAuthRedirectUrl() {
+  if (typeof window !== "undefined") {
+    return `${window.location.origin}/auth/callback`;
+  }
+  return `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/auth/callback`;
+}
+
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -272,7 +279,7 @@ export default function LoginPage() {
               await supabase.auth.signInWithOAuth({
                 provider: "github",
                 options: {
-                  redirectTo: `${window.location.origin}/auth/callback`,
+                  redirectTo: getAuthRedirectUrl(),
                 },
               });
             }}
