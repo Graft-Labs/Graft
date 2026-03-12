@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { randomUUID } from 'node:crypto'
-import { getUserSession } from '@/lib/supabase-server'
+import { createServerClient } from '@/lib/supabase-server'
 
 interface ScanPayload {
   repo: string
@@ -17,9 +17,11 @@ export async function POST(request: NextRequest) {
   try {
     logScan('start', { traceId })
 
-    const session = await getUserSession()
+    // Use getUser() (secure — verifies JWT with Supabase server) instead of getSession()
+    const supabase = await createServerClient()
+    const { data: { user }, error: userError } = await supabase.auth.getUser()
 
-    if (!session || !session.user) {
+    if (userError || !user) {
       logScan('unauthorized', { traceId })
       return NextResponse.json(
         { error: 'unauthorized', message: 'Please log in to start a scan' },
@@ -27,12 +29,15 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Get session separately only to read provider_token (not for auth)
+    const { data: { session } } = await supabase.auth.getSession()
+
     const body: ScanPayload = await request.json()
     const { repo, branch = 'main' } = body
 
     logScan('payload_received', {
       traceId,
-      userId: session.user.id,
+      userId: user.id,
       repo,
       branch,
     })
@@ -50,33 +55,30 @@ export async function POST(request: NextRequest) {
     const repoOwner = repoParts[repoParts.length - 2]
     const repoName = repoParts[repoParts.length - 1]
 
-    const isPrivate = repoUrl.includes('github.com') && !repoUrl.includes('github.com/' + repoOwner + '/' + repoName + '/tree/')
-    logScan('repo_parsed', { traceId, repoOwner, repoName, isPrivate })
+    // Detect privacy by calling GitHub API — don't assume based on URL shape
+    let isPrivate = false
+    let githubToken: string | null = session?.provider_token ?? null
 
-    let githubToken: string | null = null
-
-    if (session.provider_token) {
-      githubToken = session.provider_token
-    } else if (isPrivate) {
-      const supabaseAccessToken = session.access_token
-      const { data: identityData } = await fetch(
-        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/auth/v1/user/${session.user.id}/identities`,
-        {
-          headers: {
-            Authorization: `Bearer ${supabaseAccessToken}`,
-            Apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-          },
-        }
-      ).then(res => res.json())
-
-      const githubIdentity = identityData?.identities?.find(
-        (id: { provider: string }) => id.provider === 'github'
-      )
-
-      if (githubIdentity?.provider_token) {
-        githubToken = githubIdentity.provider_token
+    const repoCheckRes = await fetch(
+      `https://api.github.com/repos/${repoOwner}/${repoName}`,
+      {
+        headers: {
+          Accept: 'application/vnd.github+json',
+          ...(githubToken ? { Authorization: `Bearer ${githubToken}` } : {}),
+        },
       }
+    )
+
+    if (repoCheckRes.ok) {
+      const repoData = await repoCheckRes.json()
+      isPrivate = repoData.private === true
+    } else if (repoCheckRes.status === 404) {
+      // Repo not accessible without a token — treat as private
+      isPrivate = true
     }
+    // If GitHub API is unreachable, default isPrivate=false and let the scan proceed
+
+    logScan('repo_parsed', { traceId, repoOwner, repoName, isPrivate })
 
     if (isPrivate && !githubToken) {
       logScan('private_repo_without_token', { traceId })
@@ -89,21 +91,19 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const supabase = await (await import('@/lib/supabase-server')).createServerClient()
-
     const userName =
-      (session.user.user_metadata?.full_name as string | undefined) ||
-      (session.user.user_metadata?.name as string | undefined) ||
+      (user.user_metadata?.full_name as string | undefined) ||
+      (user.user_metadata?.name as string | undefined) ||
       null
     const userAvatar =
-      (session.user.user_metadata?.avatar_url as string | undefined) || null
+      (user.user_metadata?.avatar_url as string | undefined) || null
 
     const { error: userUpsertError } = await supabase
       .from('users')
       .upsert(
         {
-          id: session.user.id,
-          email: session.user.email,
+          id: user.id,
+          email: user.email,
           name: userName,
           avatar_url: userAvatar,
           updated_at: new Date().toISOString(),
@@ -127,7 +127,7 @@ export async function POST(request: NextRequest) {
     const { data: scan, error: scanError } = await supabase
       .from('scans')
       .insert({
-        user_id: session.user.id,
+        user_id: user.id,
         repo: repoUrl,
         branch: branch,
         status: 'pending',
