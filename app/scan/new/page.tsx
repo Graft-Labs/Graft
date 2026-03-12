@@ -66,7 +66,7 @@ export default function NewScanPage() {
       return;
     }
 
-    if (scan?.status === "completed") {
+    if (scan?.status === "complete") {
       if (pollingRef.current) {
         clearInterval(pollingRef.current);
       }

@@ -53,7 +53,7 @@ export async function POST(
     const { error: updateError } = await supabase
       .from('scans')
       .update({
-        status: 'completed',
+        status: 'complete',
         overall_score: scores.overall,
         security_score: scores.security,
         scalability_score: scores.scalability,
@@ -64,7 +64,6 @@ export async function POST(
         medium_count: mediumCount,
         low_count: lowCount,
         completed_at: new Date().toISOString(),
-        raw_results: body,
       })
       .eq('id', scanId)
 
@@ -79,14 +78,12 @@ export async function POST(
     const issuesToInsert = issues.map(issue => ({
       scan_id: scanId,
       guard: issue.guard,
-      category: issue.category,
       severity: issue.severity,
       title: issue.title,
       description: issue.description,
-      fix_suggestion: issue.fix_suggestion,
-      code_snippet: issue.code_snippet || null,
-      file_path: issue.file_path || null,
-      line_number: issue.line_number || null,
+      file: issue.file_path || null,
+      line: issue.line_number || null,
+      fix: issue.fix_suggestion,
     }))
 
     if (issuesToInsert.length > 0) {

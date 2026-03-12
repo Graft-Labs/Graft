@@ -74,7 +74,7 @@ export async function POST(request: NextRequest) {
       .from('scans')
       .insert({
         user_id: session.user.id,
-        repo_url: repoUrl,
+        repo: repoUrl,
         branch: branch,
         status: 'pending',
       })
@@ -129,7 +129,7 @@ export async function POST(request: NextRequest) {
 
       await supabase
         .from('scans')
-        .update({ status: 'failed', error_message: 'Failed to trigger scan workflow' })
+        .update({ status: 'failed' })
         .eq('id', scan.id)
 
       return NextResponse.json(
