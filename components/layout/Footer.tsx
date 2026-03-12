@@ -53,7 +53,7 @@ export default function Footer() {
                 { href: "/auth/signup", label: "Start Free" },
                 { href: "/dashboard", label: "Dashboard" },
               ].map((link) => (
-                <li key={link.href}>
+                <li key={link.label}>
                   <Link
                     href={link.href}
                     className="text-sm transition-colors hover:opacity-100"
