@@ -79,6 +79,14 @@ export default function NewScanPage() {
       if (pollingRef.current) {
         clearInterval(pollingRef.current);
       }
+    } else if (scan?.status === "pending" || scan?.status === "scanning") {
+      // keep polling
+    } else {
+      setScanning(false);
+      setError(`Scan ended in unexpected status: ${scan?.status || "unknown"}`);
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current);
+      }
     }
   }, [router, supabase]);
 

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerClient } from '@/lib/supabase-server'
+import { createClient } from '@supabase/supabase-js'
 import { analyzeToolOutputs, calculateScores, ToolOutputs } from '@/lib/ai/analyzer'
 
 export async function POST(
@@ -18,6 +18,14 @@ export async function POST(
     }
 
     const body: ToolOutputs = await request.json()
+    console.log('[scan-results] payload_received', {
+      scanId,
+      hasTrufflehog: Boolean(body.trufflehog),
+      hasOSV: Boolean(body.osv),
+      hasSemgrep: Boolean(body.semgrep),
+      hasReactDoctor: Boolean(body.react_doctor),
+      osvSkipped: body.osv_skipped,
+    })
 
     if (!body.scan_id || body.scan_id !== scanId) {
       return NextResponse.json(
@@ -26,7 +34,18 @@ export async function POST(
       )
     }
 
-    const supabase = await createServerClient()
+    const secretKey = process.env.SUPABASE_SECRET_KEY
+    if (!secretKey) {
+      return NextResponse.json(
+        { error: 'server_config_error', message: 'SUPABASE_SECRET_KEY is not configured' },
+        { status: 500 }
+      )
+    }
+
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      secretKey
+    )
 
     const { data: scan, error: scanFetchError } = await supabase
       .from('scans')
@@ -42,8 +61,16 @@ export async function POST(
     }
 
     const issues = await analyzeToolOutputs(body)
+    console.log('[scan-results] issues_analyzed', {
+      scanId,
+      issuesCount: issues.length,
+    })
 
     const scores = calculateScores(issues)
+    console.log('[scan-results] scores_calculated', {
+      scanId,
+      scores,
+    })
 
     const criticalCount = issues.filter(i => i.severity === 'critical').length
     const highCount = issues.filter(i => i.severity === 'high').length
@@ -93,8 +120,15 @@ export async function POST(
 
       if (insertError) {
         console.error('Failed to insert issues:', insertError)
+      } else {
+        console.log('[scan-results] issues_inserted', {
+          scanId,
+          inserted: issuesToInsert.length,
+        })
       }
     }
+
+    console.log('[scan-results] completed', { scanId })
 
     return NextResponse.json({
       success: true,
