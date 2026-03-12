@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { randomUUID } from 'node:crypto'
 import { getUserSession } from '@/lib/supabase-server'
 
 interface ScanPayload {
@@ -11,8 +12,9 @@ function logScan(stage: string, meta: Record<string, unknown>) {
 }
 
 export async function POST(request: NextRequest) {
+  const traceId = randomUUID()
+
   try {
-    const traceId = crypto.randomUUID()
     logScan('start', { traceId })
 
     const session = await getUserSession()
@@ -228,9 +230,21 @@ export async function POST(request: NextRequest) {
       trace_id: traceId,
     })
   } catch (error) {
-    console.error('Scan API error:', error)
+    const err = error instanceof Error ? error : new Error('Unknown error')
+    console.error('Scan API error:', err)
+    logScan('unhandled_exception', {
+      traceId,
+      message: err.message,
+      stack: err.stack,
+    })
+
     return NextResponse.json(
-      { error: 'internal_error', message: 'An unexpected error occurred' },
+      {
+        error: 'internal_error',
+        message: 'An unexpected error occurred',
+        details: err.message,
+        trace_id: traceId,
+      },
       { status: 500 }
     )
   }
