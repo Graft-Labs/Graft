@@ -70,6 +70,39 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = await (await import('@/lib/supabase-server')).createServerClient()
+
+    const userName =
+      (session.user.user_metadata?.full_name as string | undefined) ||
+      (session.user.user_metadata?.name as string | undefined) ||
+      null
+    const userAvatar =
+      (session.user.user_metadata?.avatar_url as string | undefined) || null
+
+    const { error: userUpsertError } = await supabase
+      .from('users')
+      .upsert(
+        {
+          id: session.user.id,
+          email: session.user.email,
+          name: userName,
+          avatar_url: userAvatar,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'id' }
+      )
+
+    if (userUpsertError) {
+      console.error('Failed to upsert user record:', userUpsertError)
+      return NextResponse.json(
+        {
+          error: 'user_sync_error',
+          message: 'Failed to sync user profile before scan',
+          details: userUpsertError.message,
+        },
+        { status: 500 }
+      )
+    }
+
     const { data: scan, error: scanError } = await supabase
       .from('scans')
       .insert({
@@ -84,7 +117,11 @@ export async function POST(request: NextRequest) {
     if (scanError) {
       console.error('Failed to create scan:', scanError)
       return NextResponse.json(
-        { error: 'database_error', message: 'Failed to create scan record' },
+        {
+          error: 'database_error',
+          message: 'Failed to create scan record',
+          details: scanError.message,
+        },
         { status: 500 }
       )
     }
