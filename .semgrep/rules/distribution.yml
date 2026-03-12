@@ -1,0 +1,51 @@
+rules:
+  - id: shipguard-missing-og-tags
+    pattern: |
+      <meta property="og:$TAG" content="..." />
+    message: "Open Graph tag detected"
+    severity: INFO
+    languages:
+      - generic
+    metadata:
+      guard: distribution
+      category: seo
+      recommendation: present
+
+  - id: shipguard-missing-meta-description
+    pattern: |
+      <meta name="description" content="..." />
+    message: "Meta description tag detected"
+    severity: INFO
+    languages:
+      - generic
+    metadata:
+      guard: distribution
+      category: seo
+      recommendation: present
+
+  - id: shipguard-missing-title
+    pattern: |
+      <title>...</title>
+    message: "Page title detected"
+    severity: INFO
+    languages:
+      - generic
+    metadata:
+      guard: distribution
+      category: seo
+      recommendation: present
+
+  - id: shipguard-cookie-consent
+    pattern: |
+      cookie_consent
+      CookieConsent
+      cookieBanner
+    message: "Cookie consent mechanism detected"
+    severity: INFO
+    languages:
+      - javascript
+      - typescript
+    metadata:
+      guard: distribution
+      category: privacy
+      recommendation: present

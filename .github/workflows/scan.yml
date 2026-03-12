@@ -1,0 +1,156 @@
+name: ShipGuard Scan
+
+on:
+  repository_dispatch:
+    types: [run-scan]
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Parse inputs
+        run: |
+          echo "SCAN_ID=${{ github.event.client_payload.scan_id }}" >> $GITHUB_ENV
+          echo "REPO=${{ github.event.client_payload.repo }}" >> $GITHUB_ENV
+          echo "BRANCH=${{ github.event.client_payload.branch }}" >> $GITHUB_ENV
+          echo "GITHUB_TOKEN=${{ github.event.client_payload.github_token }}" >> $GITHUB_ENV
+          echo "WEBHOOK_URL=${{ github.event.client_payload.webhook_url }}" >> $GITHUB_ENV
+          echo "WEBHOOK_SECRET=${{ github.event.client_payload.webhook_secret }}" >> $GITHUB_ENV
+
+      - name: Checkout target repository
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.REPO }}
+          ref: ${{ env.BRANCH }}
+          token: ${{ env.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Detect lockfiles for OSV-Scanner
+        id: lockfiles
+        run: |
+          if [ -f "package-lock.json" ]; then
+            echo "lockfile=package-lock.json" >> $GITHUB_ENV
+          elif [ -f "yarn.lock" ]; then
+            echo "lockfile=yarn.lock" >> $GITHUB_ENV
+          elif [ -f "pnpm-lock.yaml" ]; then
+            echo "lockfile=pnpm-lock.yaml" >> $GITHUB_ENV
+          else
+            echo "lockfile=" >> $GITHUB_ENV
+          fi
+          echo "Lockfile: ${{ env.lockfile }}"
+
+      - name: Run TruffleHog
+        id: trufflehog
+        run: |
+          npx trufflehog@latest filesystem --json . 2>/dev/null | tee trufflehog.json || echo "[]" > trufflehog.json
+        continue-on-error: true
+
+      - name: Run OSV-Scanner
+        id: osv
+        run: |
+          if [ -n "${{ env.lockfile }}" ]; then
+            npx @osv-scanner/cli@latest -l ${{ env.lockfile }} --format json > osv.json || echo "[]" > osv.json
+            echo "osv_skipped=false" >> $GITHUB_ENV
+          else
+            echo "[]" > osv.json
+            echo "osv_skipped=true" >> $GITHUB_ENV
+          fi
+
+      - name: Run Semgrep
+        id: semgrep
+        run: |
+          npx semgrep@latest --config=auto --json --time . > semgrep.json 2>&1 || echo '{"results":[]}' > semgrep.json
+
+      - name: Run react-doctor
+        id: react-doctor
+        run: |
+          npx react-doctor@latest --json . > react-doctor.json 2>&1 || echo '{"issues":[]}' > react-doctor.json
+
+      - name: Check for critical files
+        id: files
+        run: |
+          echo "=== File Existence Check ==="
+          
+          # Check for key files
+          echo "has_env_example=$(test -f .env.example && echo 'true' || echo 'false')" >> $GITHUB_ENV
+          echo "has_robots=$(test -f public/robots.txt && echo 'true' || echo 'false')" >> $GITHUB_ENV
+          echo "has_sitemap=$(test -f public/sitemap.xml && echo 'true' || echo 'false')" >> $GITHUB_ENV
+          echo "has_404=$(test -f app/not-found.tsx -o -f pages/404.tsx && echo 'true' || echo 'false')" >> $GITHUB_ENV
+          echo "has_pricing=$(test -f app/pricing/page.tsx -o -f pages/pricing.tsx -o -f pricing.html && echo 'true' || echo 'false')" >> $GITHUB_ENV
+          echo "has_privacy=$(test -f app/privacy/page.tsx -o -f pages/privacy.tsx -o -f privacy.html && echo 'true' || echo 'false')" >> $GITHUB_ENV
+          echo "has_terms=$(test -f app/terms/page.tsx -o -f pages/terms.tsx -o -f terms.html && echo 'true' || echo 'false')" >> $GITHUB_ENV
+          echo "has_manifest=$(test -f public/manifest.json && echo 'true' || echo 'false')" >> $GITHUB_ENV
+          
+          # Check package.json for dependencies
+          if [ -f "package.json" ]; then
+            echo "=== Package.json Analysis ==="
+            cat package.json
+            echo "has_stripe=$(grep -q 'stripe' package.json && echo 'true' || echo 'false')" >> $GITHUB_ENV
+            echo "has_sentry=$(grep -q '@sentry' package.json && echo 'true' || echo 'false')" >> $GITHUB_ENV
+            echo "has_plausible=$(grep -q 'plausible' package.json && echo 'true' || echo 'false')" >> $GITHUB_ENV
+            echo "has_ga=$(grep -q 'react-ga' package.json && echo 'true' || echo 'false')" >> $GITHUB_ENV
+            echo "has_posthog=$(grep -q 'posthog' package.json && echo 'true' || echo 'false')" >> $GITHUB_ENV
+          else
+            echo "has_stripe=false" >> $GITHUB_ENV
+            echo "has_sentry=false" >> $GITHUB_ENV
+            echo "has_plausible=false" >> $GITHUB_ENV
+            echo "has_ga=false" >> $GITHUB_ENV
+            echo "has_posthog=false" >> $GITHUB_ENV
+          fi
+          
+          # Check for loading.tsx and error.tsx in app directory
+          echo "has_loading_tsx=$(find app -name 'loading.tsx' 2>/dev/null | head -1 | wc -l)" >> $GITHUB_ENV
+          echo "has_error_tsx=$(find app -name 'error.tsx' 2>/dev/null | head -1 | wc -l)" >> $GITHUB_ENV
+
+      - name: Prepare results payload
+        id: prepare
+        run: |
+          # Read JSON files and escape them properly
+          TRUFFLEHOG_JSON=$(cat trufflehog.json | jq -c . 2>/dev/null || echo "[]")
+          OSV_JSON=$(cat osv.json | jq -c . 2>/dev/null || echo "[]")
+          SEMGREP_JSON=$(cat semgrep.json | jq -c . 2>/dev/null || echo '{"results":[]}')
+          REACT_DOCTOR_JSON=$(cat react-doctor.json | jq -c . 2>/dev/null || echo '{"issues":[]}')
+          
+          # Create the payload
+          cat > scan-results.json << EOF
+          {
+            "scan_id": "${{ env.SCAN_ID }}",
+            "trufflehog": $TRUFFLEHOG_JSON,
+            "osv": $OSV_JSON,
+            "semgrep": $SEMGREP_JSON,
+            "react_doctor": $REACT_DOCTOR_JSON,
+            "file_checks": {
+              "env_example": "${{ env.has_env_example }}",
+              "robots_txt": "${{ env.has_robots }}",
+              "sitemap_xml": "${{ env.has_sitemap }}",
+              "not_found_page": "${{ env.has_404 }}",
+              "pricing_page": "${{ env.has_pricing }}",
+              "privacy_policy": "${{ env.has_privacy }}",
+              "terms_of_service": "${{ env.has_terms }}",
+              "manifest_json": "${{ env.has_manifest }}",
+              "has_stripe": "${{ env.has_stripe }}",
+              "has_sentry": "${{ env.has_sentry }}",
+              "has_plausible": "${{ env.has_plausible }}",
+              "has_google_analytics": "${{ env.has_ga }}",
+              "has_posthog": "${{ env.has_posthog }}",
+              "has_loading_tsx": "${{ env.has_loading_tsx }}",
+              "has_error_tsx": "${{ env.has_error_tsx }}"
+            },
+            "osv_skipped": ${{ env.osv_skipped }},
+            "osv_skip_reason": $(if [ "${{ env.osv_skipped }}" = "true" ]; then echo '"No lockfile found"'; else echo 'null'; fi)
+          }
+          EOF
+          
+          # Output for debugging
+          echo "Results payload prepared:"
+          cat scan-results.json | jq -c 'keys'
+
+      - name: Send results to ShipGuard API
+        run: |
+          curl -X POST "${{ env.WEBHOOK_URL }}" \
+            -H "Content-Type: application/json" \
+            -H "X-Webhook-Secret: ${{ env.WEBHOOK_SECRET }}" \
+            -d @scan-results.json \
+            --fail --silent --show-error
+          
+          echo "Results sent successfully"

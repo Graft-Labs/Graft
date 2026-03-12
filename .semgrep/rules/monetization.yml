@@ -1,0 +1,56 @@
+rules:
+  - id: shipguard-missing-stripe
+    pattern: |
+      import Stripe from 'stripe'
+      $STRIPE = new Stripe(...)
+    message: "Stripe integration detected - good for monetization!"
+    severity: INFO
+    languages:
+      - javascript
+      - typescript
+    metadata:
+      guard: monetization
+      category: payments
+      recommendation: present
+
+  - id: shipguard-missing-checkout
+    pattern: |
+      stripe.checkout.sessions.create(...)
+      stripeBillingPortal.sessions.create(...)
+    message: "Checkout flow detected"
+    severity: INFO
+    languages:
+      - javascript
+      - typescript
+    metadata:
+      guard: monetization
+      category: checkout
+      recommendation: present
+
+  - id: shipguard-missing-webhook
+    pattern: |
+      stripe.webhooks.constructEvent(...)
+      app.post('/api/webhooks/stripe', ...)
+    message: "Webhook handler detected"
+    severity: INFO
+    languages:
+      - javascript
+      - typescript
+    metadata:
+      guard: monetization
+      category: webhooks
+      recommendation: present
+
+  - id: shipguard-trial-logic
+    pattern: |
+      trial_days: $N
+      trial_period_days: $N
+    message: "Trial logic detected"
+    severity: INFO
+    languages:
+      - javascript
+      - typescript
+    metadata:
+      guard: monetization
+      category: trial
+      recommendation: present

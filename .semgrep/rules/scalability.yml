@@ -1,0 +1,39 @@
+rules:
+  - id: shipguard-console-log
+    pattern: console.log(...)
+    message: "Avoid console.log in production code - use structured logging"
+    severity: WARNING
+    languages:
+      - javascript
+      - typescript
+    metadata:
+      guard: scalability
+      category: logging
+
+  - id: shipguard-block-sync
+    pattern: |
+      await import('fs').then(m => m.readFileSync(...))
+      await import('fs').then(m => m.writeFileSync(...))
+    message: "Avoid synchronous file operations in server components"
+    severity: WARNING
+    languages:
+      - javascript
+      - typescript
+    metadata:
+      guard: scalability
+      category: performance
+
+  - id: shipguard-async-await-sync
+    pattern: |
+      async function $FUNC(...) {
+        ...
+        await import($PATH).then(m => m.readFileSync(...))
+      }
+    message: "Synchronous file read in async function - use readFile instead"
+    severity: WARNING
+    languages:
+      - javascript
+      - typescript
+    metadata:
+      guard: scalability
+      category: performance
