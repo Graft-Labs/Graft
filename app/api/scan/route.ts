@@ -174,7 +174,7 @@ export async function POST(request: NextRequest) {
     }
 
     const dispatchResponse = await fetch(
-      `https://api.github.com/repos/${githubOwner}/${githubRepo}/dispatches`,
+      `https://api.github.com/repos/${githubOwner}/${githubRepo}/actions/workflows/scan.yml/dispatches`,
       {
         method: 'POST',
         headers: {
@@ -183,12 +183,12 @@ export async function POST(request: NextRequest) {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          event_type: 'run-scan',
-          client_payload: {
-            scan_id: scan.id,
+          ref: 'main',
+          inputs: {
+            scan_id: String(scan.id),
             repo: `${repoOwner}/${repoName}`,
             branch: branch,
-            github_token: githubToken,
+            github_token: githubToken || '',
             webhook_url: `${appUrl}/api/scan/${scan.id}/results`,
             webhook_secret: webhookSecret,
           },

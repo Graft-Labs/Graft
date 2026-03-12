@@ -1,6 +1,33 @@
 name: ShipGuard Scan
 
 on:
+  workflow_dispatch:
+    inputs:
+      scan_id:
+        description: Scan ID
+        required: true
+        type: string
+      repo:
+        description: Target repository (owner/name)
+        required: true
+        type: string
+      branch:
+        description: Target branch
+        required: true
+        default: main
+        type: string
+      github_token:
+        description: Optional user GitHub token (for private repos)
+        required: false
+        type: string
+      webhook_url:
+        description: Webhook URL to post results
+        required: true
+        type: string
+      webhook_secret:
+        description: Webhook shared secret
+        required: true
+        type: string
   repository_dispatch:
     types: [run-scan]
 
@@ -10,12 +37,12 @@ jobs:
     steps:
       - name: Parse inputs
         run: |
-          echo "SCAN_ID=${{ github.event.client_payload.scan_id }}" >> $GITHUB_ENV
-          echo "REPO=${{ github.event.client_payload.repo }}" >> $GITHUB_ENV
-          echo "BRANCH=${{ github.event.client_payload.branch }}" >> $GITHUB_ENV
-          echo "GITHUB_TOKEN=${{ github.event.client_payload.github_token }}" >> $GITHUB_ENV
-          echo "WEBHOOK_URL=${{ github.event.client_payload.webhook_url }}" >> $GITHUB_ENV
-          echo "WEBHOOK_SECRET=${{ github.event.client_payload.webhook_secret }}" >> $GITHUB_ENV
+          echo "SCAN_ID=${{ github.event.inputs.scan_id || github.event.client_payload.scan_id }}" >> $GITHUB_ENV
+          echo "REPO=${{ github.event.inputs.repo || github.event.client_payload.repo }}" >> $GITHUB_ENV
+          echo "BRANCH=${{ github.event.inputs.branch || github.event.client_payload.branch }}" >> $GITHUB_ENV
+          echo "GITHUB_TOKEN=${{ github.event.inputs.github_token || github.event.client_payload.github_token }}" >> $GITHUB_ENV
+          echo "WEBHOOK_URL=${{ github.event.inputs.webhook_url || github.event.client_payload.webhook_url }}" >> $GITHUB_ENV
+          echo "WEBHOOK_SECRET=${{ github.event.inputs.webhook_secret || github.event.client_payload.webhook_secret }}" >> $GITHUB_ENV
 
       - name: Checkout target repository
         if: ${{ env.GITHUB_TOKEN != '' }}
