@@ -6,11 +6,19 @@ interface ScanPayload {
   branch?: string
 }
 
+function logScan(stage: string, meta: Record<string, unknown>) {
+  console.log(`[scan-api] ${stage}`, meta)
+}
+
 export async function POST(request: NextRequest) {
   try {
+    const traceId = crypto.randomUUID()
+    logScan('start', { traceId })
+
     const session = await getUserSession()
 
     if (!session || !session.user) {
+      logScan('unauthorized', { traceId })
       return NextResponse.json(
         { error: 'unauthorized', message: 'Please log in to start a scan' },
         { status: 401 }
@@ -20,7 +28,15 @@ export async function POST(request: NextRequest) {
     const body: ScanPayload = await request.json()
     const { repo, branch = 'main' } = body
 
+    logScan('payload_received', {
+      traceId,
+      userId: session.user.id,
+      repo,
+      branch,
+    })
+
     if (!repo) {
+      logScan('invalid_input', { traceId })
       return NextResponse.json(
         { error: 'invalid_input', message: 'Repository URL is required' },
         { status: 400 }
@@ -33,6 +49,7 @@ export async function POST(request: NextRequest) {
     const repoName = repoParts[repoParts.length - 1]
 
     const isPrivate = repoUrl.includes('github.com') && !repoUrl.includes('github.com/' + repoOwner + '/' + repoName + '/tree/')
+    logScan('repo_parsed', { traceId, repoOwner, repoName, isPrivate })
 
     let githubToken: string | null = null
 
@@ -60,6 +77,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (isPrivate && !githubToken) {
+      logScan('private_repo_without_token', { traceId })
       return NextResponse.json(
         {
           error: 'github_not_connected',
@@ -93,6 +111,7 @@ export async function POST(request: NextRequest) {
 
     if (userUpsertError) {
       console.error('Failed to upsert user record:', userUpsertError)
+      logScan('user_upsert_failed', { traceId, error: userUpsertError.message })
       return NextResponse.json(
         {
           error: 'user_sync_error',
@@ -116,6 +135,7 @@ export async function POST(request: NextRequest) {
 
     if (scanError) {
       console.error('Failed to create scan:', scanError)
+      logScan('scan_insert_failed', { traceId, error: scanError.message })
       return NextResponse.json(
         {
           error: 'database_error',
@@ -134,6 +154,14 @@ export async function POST(request: NextRequest) {
 
     if (!githubPat || !appUrl || !githubOwner || !githubRepo || !webhookSecret) {
       console.error('Missing required env vars for scan dispatch')
+      logScan('env_missing', {
+        traceId,
+        hasGithubPat: Boolean(githubPat),
+        hasAppUrl: Boolean(appUrl),
+        hasGithubOwner: Boolean(githubOwner),
+        hasGithubRepo: Boolean(githubRepo),
+        hasWebhookSecret: Boolean(webhookSecret),
+      })
       return NextResponse.json(
         {
           error: 'server_config_error',
@@ -169,6 +197,11 @@ export async function POST(request: NextRequest) {
     if (!dispatchResponse.ok) {
       const errorText = await dispatchResponse.text()
       console.error('GitHub dispatch failed:', errorText)
+      logScan('dispatch_failed', {
+        traceId,
+        status: dispatchResponse.status,
+        details: errorText,
+      })
 
       await supabase
         .from('scans')
@@ -186,10 +219,13 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    logScan('dispatch_success', { traceId, scanId: scan.id })
+
     return NextResponse.json({
       scan_id: scan.id,
       status: 'pending',
       repo: repoUrl,
+      trace_id: traceId,
     })
   } catch (error) {
     console.error('Scan API error:', error)

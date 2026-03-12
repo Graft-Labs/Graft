@@ -134,12 +134,14 @@ export default function NewScanPage() {
       const data = await response.json();
 
       if (!response.ok) {
+        console.error("Scan trigger failed", data);
         if (data.error === "github_not_connected") {
           setScanning(false);
           setShowGithubBanner(true);
           return;
         }
-        throw new Error(data.message || "Failed to start scan");
+        const details = data.details ? ` (${data.details})` : "";
+        throw new Error((data.message || "Failed to start scan") + details);
       }
 
       setScanId(data.scan_id);
