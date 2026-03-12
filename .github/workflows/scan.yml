@@ -18,11 +18,20 @@ jobs:
           echo "WEBHOOK_SECRET=${{ github.event.client_payload.webhook_secret }}" >> $GITHUB_ENV
 
       - name: Checkout target repository
+        if: ${{ env.GITHUB_TOKEN != '' }}
         uses: actions/checkout@v4
         with:
           repository: ${{ env.REPO }}
           ref: ${{ env.BRANCH }}
           token: ${{ env.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Checkout target repository (public fallback)
+        if: ${{ env.GITHUB_TOKEN == '' }}
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.REPO }}
+          ref: ${{ env.BRANCH }}
           fetch-depth: 0
 
       - name: Detect lockfiles for OSV-Scanner

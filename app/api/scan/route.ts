@@ -128,17 +128,23 @@ export async function POST(request: NextRequest) {
 
     const githubPat = process.env.GITHUB_PAT
     const appUrl = process.env.NEXT_PUBLIC_APP_URL
+    const githubOwner = process.env.GITHUB_OWNER
+    const githubRepo = process.env.GITHUB_REPO
+    const webhookSecret = process.env.WEBHOOK_SECRET
 
-    if (!githubPat || !appUrl) {
-      console.error('Missing GITHUB_PAT or NEXT_PUBLIC_APP_URL')
+    if (!githubPat || !appUrl || !githubOwner || !githubRepo || !webhookSecret) {
+      console.error('Missing required env vars for scan dispatch')
       return NextResponse.json(
-        { error: 'server_config_error', message: 'Server not configured properly' },
+        {
+          error: 'server_config_error',
+          message: 'Missing required env vars (GITHUB_PAT, GITHUB_OWNER, GITHUB_REPO, WEBHOOK_SECRET, NEXT_PUBLIC_APP_URL)',
+        },
         { status: 500 }
       )
     }
 
     const dispatchResponse = await fetch(
-      `https://api.github.com/repos/${process.env.GITHUB_OWNER || 'hanishsuri'}/${process.env.GITHUB_REPO || 'ShipGuard-AI'}/dispatches`,
+      `https://api.github.com/repos/${githubOwner}/${githubRepo}/dispatches`,
       {
         method: 'POST',
         headers: {
@@ -154,7 +160,7 @@ export async function POST(request: NextRequest) {
             branch: branch,
             github_token: githubToken,
             webhook_url: `${appUrl}/api/scan/${scan.id}/results`,
-            webhook_secret: process.env.WEBHOOK_SECRET,
+            webhook_secret: webhookSecret,
           },
         }),
       }
@@ -170,7 +176,12 @@ export async function POST(request: NextRequest) {
         .eq('id', scan.id)
 
       return NextResponse.json(
-        { error: 'dispatch_error', message: 'Failed to trigger scan workflow' },
+        {
+          error: 'dispatch_error',
+          message: 'Failed to trigger scan workflow',
+          details: errorText,
+          status_code: dispatchResponse.status,
+        },
         { status: 500 }
       )
     }
