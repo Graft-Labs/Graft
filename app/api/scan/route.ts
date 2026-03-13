@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { randomUUID } from 'node:crypto'
 import { createServerClient } from '@/lib/supabase-server'
+import { tasks } from '@trigger.dev/sdk/v3'
+import type { runScanTask } from '@/trigger/run-scan'
 
 interface ScanPayload {
   repo: string
@@ -148,80 +150,16 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const githubPat = process.env.GITHUB_PAT
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL
-    const githubOwner = process.env.GITHUB_OWNER
-    const githubRepo = process.env.GITHUB_REPO
-    const webhookSecret = process.env.WEBHOOK_SECRET
+    // Trigger the scan task via Trigger.dev (no GitHub Actions, no webhooks)
+    const handle = await tasks.trigger<typeof runScanTask>('run-scan', {
+      scanId: scan.id,
+      repoOwner,
+      repoName,
+      branch,
+      githubToken: githubToken ?? undefined,
+    })
 
-    if (!githubPat || !appUrl || !githubOwner || !githubRepo || !webhookSecret) {
-      console.error('Missing required env vars for scan dispatch')
-      logScan('env_missing', {
-        traceId,
-        hasGithubPat: Boolean(githubPat),
-        hasAppUrl: Boolean(appUrl),
-        hasGithubOwner: Boolean(githubOwner),
-        hasGithubRepo: Boolean(githubRepo),
-        hasWebhookSecret: Boolean(webhookSecret),
-      })
-      return NextResponse.json(
-        {
-          error: 'server_config_error',
-          message: 'Missing required env vars (GITHUB_PAT, GITHUB_OWNER, GITHUB_REPO, WEBHOOK_SECRET, NEXT_PUBLIC_APP_URL)',
-        },
-        { status: 500 }
-      )
-    }
-
-    const dispatchResponse = await fetch(
-      `https://api.github.com/repos/${githubOwner}/${githubRepo}/actions/workflows/scan.yml/dispatches`,
-      {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${githubPat}`,
-          Accept: 'application/vnd.github+json',
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          ref: 'main',
-          inputs: {
-            scan_id: String(scan.id),
-            repo: `${repoOwner}/${repoName}`,
-            branch: branch,
-            github_token: githubToken || '',
-            webhook_url: `${appUrl}/api/scan/${scan.id}/results`,
-            webhook_secret: webhookSecret,
-          },
-        }),
-      }
-    )
-
-    if (!dispatchResponse.ok) {
-      const errorText = await dispatchResponse.text()
-      console.error('GitHub dispatch failed:', errorText)
-      logScan('dispatch_failed', {
-        traceId,
-        status: dispatchResponse.status,
-        details: errorText,
-      })
-
-      await supabase
-        .from('scans')
-        .update({ status: 'failed' })
-        .eq('id', scan.id)
-
-      return NextResponse.json(
-        {
-          error: 'dispatch_error',
-          message: 'Failed to trigger scan workflow',
-          details: errorText,
-          status_code: dispatchResponse.status,
-        },
-        { status: 500 }
-      )
-    }
-
-    logScan('dispatch_success', { traceId, scanId: scan.id })
+    logScan('trigger_success', { traceId, scanId: scan.id, triggerId: handle.id })
 
     return NextResponse.json({
       scan_id: scan.id,

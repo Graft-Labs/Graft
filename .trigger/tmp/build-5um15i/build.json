@@ -1,0 +1,104 @@
+{
+  "build": {
+  },
+  "cliPackageVersion": "4.4.3",
+  "config": {
+    "dirs": [
+      "./trigger"
+    ],
+    "project": "proj_ldantbfoufyqhgdvgghm"
+  },
+  "configPath": "/home/hanish/ShipGuard-AI/shipguard-ai/.trigger/tmp/build-5um15i/ShipGuard-AI/shipguard-ai/trigger.config.mjs",
+  "contentHash": "a612f270f51b457441f4579e9265f6b5",
+  "customConditions": [
+  ],
+  "deploy": {
+    "env": {
+    }
+  },
+  "environment": "dev",
+  "externals": [
+    {
+      "name": "import-in-the-middle",
+      "version": "1.11.0"
+    }
+  ],
+  "files": [
+    {
+      "entry": "trigger/run-scan.ts",
+      "out": "/home/hanish/ShipGuard-AI/shipguard-ai/.trigger/tmp/build-5um15i/ShipGuard-AI/shipguard-ai/trigger/run-scan.mjs"
+    }
+  ],
+  "indexWorkerEntryPoint": "/home/hanish/ShipGuard-AI/shipguard-ai/.trigger/tmp/build-5um15i/.npm/_npx/f51a09bd0abf5f10/node_modules/trigger.dev/dist/esm/entryPoints/dev-index-worker.mjs",
+  "otelImportHook": {
+    "include": [
+    ]
+  },
+  "outputHashes": {
+    "/home/hanish/ShipGuard-AI/shipguard-ai/.trigger/tmp/build-5um15i/.npm/_npx/f51a09bd0abf5f10/node_modules/trigger.dev/dist/esm/entryPoints/dev-index-worker.mjs": "X3z7nbJ+8+c",
+    "/home/hanish/ShipGuard-AI/shipguard-ai/.trigger/tmp/build-5um15i/.npm/_npx/f51a09bd0abf5f10/node_modules/trigger.dev/dist/esm/entryPoints/dev-index-worker.mjs.map": "TH3laFqOXLQ",
+    "/home/hanish/ShipGuard-AI/shipguard-ai/.trigger/tmp/build-5um15i/.npm/_npx/f51a09bd0abf5f10/node_modules/trigger.dev/dist/esm/entryPoints/dev-run-worker.mjs": "1bMtIjeFV40",
+    "/home/hanish/ShipGuard-AI/shipguard-ai/.trigger/tmp/build-5um15i/.npm/_npx/f51a09bd0abf5f10/node_modules/trigger.dev/dist/esm/entryPoints/dev-run-worker.mjs.map": "SgZupBGOSIs",
+    "/home/hanish/ShipGuard-AI/shipguard-ai/.trigger/tmp/build-5um15i/ShipGuard-AI/shipguard-ai/trigger.config.mjs": "F0tw1ACJa74",
+    "/home/hanish/ShipGuard-AI/shipguard-ai/.trigger/tmp/build-5um15i/ShipGuard-AI/shipguard-ai/trigger.config.mjs.map": "XQOyqaPsMg8",
+    "/home/hanish/ShipGuard-AI/shipguard-ai/.trigger/tmp/build-5um15i/ShipGuard-AI/shipguard-ai/trigger/run-scan.mjs": "5nkx6VszMiE",
+    "/home/hanish/ShipGuard-AI/shipguard-ai/.trigger/tmp/build-5um15i/ShipGuard-AI/shipguard-ai/trigger/run-scan.mjs.map": "0uLUoYLM33I",
+    "/home/hanish/ShipGuard-AI/shipguard-ai/.trigger/tmp/build-5um15i/chunk-5QNIFE2Q.mjs": "2JEVa78V4Rw",
+    "/home/hanish/ShipGuard-AI/shipguard-ai/.trigger/tmp/build-5um15i/chunk-5QNIFE2Q.mjs.map": "2FIgWzk7E2s",
+    "/home/hanish/ShipGuard-AI/shipguard-ai/.trigger/tmp/build-5um15i/chunk-CKBPOYYC.mjs": "t+rDv1wcZbk",
+    "/home/hanish/ShipGuard-AI/shipguard-ai/.trigger/tmp/build-5um15i/chunk-CKBPOYYC.mjs.map": "JZmVvNwm4gI",
+    "/home/hanish/ShipGuard-AI/shipguard-ai/.trigger/tmp/build-5um15i/chunk-E5GBCNQW.mjs": "LRREO1f2TO8",
+    "/home/hanish/ShipGuard-AI/shipguard-ai/.trigger/tmp/build-5um15i/chunk-E5GBCNQW.mjs.map": "vI3thutI6Os",
+    "/home/hanish/ShipGuard-AI/shipguard-ai/.trigger/tmp/build-5um15i/chunk-G6JSPC6Q.mjs": "X/iX3WJv5rk",
+    "/home/hanish/ShipGuard-AI/shipguard-ai/.trigger/tmp/build-5um15i/chunk-G6JSPC6Q.mjs.map": "9Pwea9eleHQ",
+    "/home/hanish/ShipGuard-AI/shipguard-ai/.trigger/tmp/build-5um15i/chunk-GCQYUBQ2.mjs": "5HBO4cTI9Q0",
+    "/home/hanish/ShipGuard-AI/shipguard-ai/.trigger/tmp/build-5um15i/chunk-GCQYUBQ2.mjs.map": "922Py0nEmuE",
+    "/home/hanish/ShipGuard-AI/shipguard-ai/.trigger/tmp/build-5um15i/chunk-LRTAKWDY.mjs": "10WKRp0UoYA",
+    "/home/hanish/ShipGuard-AI/shipguard-ai/.trigger/tmp/build-5um15i/chunk-LRTAKWDY.mjs.map": "LMPzUuAiOIM",
+    "/home/hanish/ShipGuard-AI/shipguard-ai/.trigger/tmp/build-5um15i/chunk-UGD5IXHN.mjs": "nv+/4v8eKzg",
+    "/home/hanish/ShipGuard-AI/shipguard-ai/.trigger/tmp/build-5um15i/chunk-UGD5IXHN.mjs.map": "1vaaAjcIAng",
+    "/home/hanish/ShipGuard-AI/shipguard-ai/.trigger/tmp/build-5um15i/crypto.node-6CQA2CTN.mjs": "369EqR+gBDM",
+    "/home/hanish/ShipGuard-AI/shipguard-ai/.trigger/tmp/build-5um15i/crypto.node-6CQA2CTN.mjs.map": "f+DirqJ/vQY",
+    "/home/hanish/ShipGuard-AI/shipguard-ai/.trigger/tmp/build-5um15i/crypto.node-LZL4AAUR.mjs": "c+0pNrz4Lf0",
+    "/home/hanish/ShipGuard-AI/shipguard-ai/.trigger/tmp/build-5um15i/crypto.node-LZL4AAUR.mjs.map": "0b4tlwmkM3g",
+    "/home/hanish/ShipGuard-AI/shipguard-ai/.trigger/tmp/build-5um15i/esm-DEWBVSDM.mjs": "pd6boqwBZ1Y",
+    "/home/hanish/ShipGuard-AI/shipguard-ai/.trigger/tmp/build-5um15i/esm-DEWBVSDM.mjs.map": "VON93E1In1A",
+    "/home/hanish/ShipGuard-AI/shipguard-ai/.trigger/tmp/build-5um15i/esm-G4G2256P.mjs": "mK8sPAcGwuE",
+    "/home/hanish/ShipGuard-AI/shipguard-ai/.trigger/tmp/build-5um15i/esm-G4G2256P.mjs.map": "CYqZQcavdAI",
+    "/home/hanish/ShipGuard-AI/shipguard-ai/.trigger/tmp/build-5um15i/getMachineId-bsd-PBRWJ5WQ.mjs": "g1WevKdkYT0",
+    "/home/hanish/ShipGuard-AI/shipguard-ai/.trigger/tmp/build-5um15i/getMachineId-bsd-PBRWJ5WQ.mjs.map": "dIKKZ8MMNl8",
+    "/home/hanish/ShipGuard-AI/shipguard-ai/.trigger/tmp/build-5um15i/getMachineId-darwin-QKBKO7P5.mjs": "9m1giAYE0fE",
+    "/home/hanish/ShipGuard-AI/shipguard-ai/.trigger/tmp/build-5um15i/getMachineId-darwin-QKBKO7P5.mjs.map": "xJrfS7fTZLk",
+    "/home/hanish/ShipGuard-AI/shipguard-ai/.trigger/tmp/build-5um15i/getMachineId-linux-GVY65AND.mjs": "ctc25CqBOzQ",
+    "/home/hanish/ShipGuard-AI/shipguard-ai/.trigger/tmp/build-5um15i/getMachineId-linux-GVY65AND.mjs.map": "iGLn8Cz4sPg",
+    "/home/hanish/ShipGuard-AI/shipguard-ai/.trigger/tmp/build-5um15i/getMachineId-unsupported-HOPYLLBV.mjs": "llsMCAaw96s",
+    "/home/hanish/ShipGuard-AI/shipguard-ai/.trigger/tmp/build-5um15i/getMachineId-unsupported-HOPYLLBV.mjs.map": "L7KXQNW7Eqw",
+    "/home/hanish/ShipGuard-AI/shipguard-ai/.trigger/tmp/build-5um15i/getMachineId-win-FAXYYHFU.mjs": "dYrgFSsAQDg",
+    "/home/hanish/ShipGuard-AI/shipguard-ai/.trigger/tmp/build-5um15i/getMachineId-win-FAXYYHFU.mjs.map": "O6wx6Q5hFOU",
+    "/home/hanish/ShipGuard-AI/shipguard-ai/.trigger/tmp/build-5um15i/s2s-BQ4KJZFE.mjs": "zKA3BptlBO8",
+    "/home/hanish/ShipGuard-AI/shipguard-ai/.trigger/tmp/build-5um15i/s2s-BQ4KJZFE.mjs.map": "cMXIJWjI/3w"
+  },
+  "outputPath": "/home/hanish/ShipGuard-AI/shipguard-ai/.trigger/tmp/build-5um15i",
+  "packageVersion": "4.4.3",
+  "runWorkerEntryPoint": "/home/hanish/ShipGuard-AI/shipguard-ai/.trigger/tmp/build-5um15i/.npm/_npx/f51a09bd0abf5f10/node_modules/trigger.dev/dist/esm/entryPoints/dev-run-worker.mjs",
+  "runtime": "node",
+  "sources": {
+    "package.json": {
+      "contentHash": "3a001c0efd72cfaf1c9b37ec1be697b4",
+      "contents": "eJx1U01zpCAQvfsrKM8BxRkna0572N8xVYx0DBsFikYzW6n89y2RQTMZb/De649HN58ZIbkWA+QvJMc3ZbtROEmFyp9mZgKHyuiZLBln5YJapybh5xDvRggQtk5Zj/kL+cwIISSXMM1RGq6ezOenBb6MqpeJWG6RQi+cT9Ryi1SvdGAAwykj5CtUlWBBS9Ctgk3p305IdaWjKhyI1lPRtsbJaOPMWcV4dct8r5VK9KaLQs54vSt0xkrzoekAegz6ataf9vTWmc4BYkr9a0+JvfGp0+OeyovLmosfdmXG9F7ZlG+tiqMVF4FQILpAl6yJA/5OxwP9i9Fm0zCedN6prgPHJExFGu75yI7s8FCD8v2nou3xur7hDX11YgBHB+PT7Cp2qFkaXj+2SgINTqOF+vl5NTEv0ozzE+PstEWpf4MBMAYdVzLl4g2r1gbjzM3wk/JC9R9KSzqA68I3Oh9Yzcrtlk5/Hi/qLbZFLKxB38b9WKfu/1nAQhu5ZK7KO2b1zptH1K3nDR0/0QzeYbQ1+lV19PG7bZr93mQoF/5/wOvgPPvK/gOcxi3M"
+    },
+    "trigger.config.ts": {
+      "contentHash": "328558313b3ab6bb219ecfb184c213a0",
+      "contents": "eJxtkM1qwzAQhO9+isGnBEJsGtqDcmlpoOTQW28hFMVaK9vYkiut05Tgdy92nP5AL0LMzux+u1w3PgjOMFSyo0fvSrboUAZfI72XwNZSmBs6ZtEcsuMiXSZ8zehGnkj+d+9arkxGJyEX2buYFT5QukwSOg1pQ6VuK/kzd3JOgCb4NypEIe1/r5XRTnalb8vP9701R2v3dTpLAMMhKmzSeTaOTbe9XOvTqg1a2DuFuzzvtYFFoe8O/CApbAYFyDKwi6KrCpYF0eODUGiHovKOEKjxsXewIcieIDoeUHgnmh2FscnlGpMzGl0ctKWBzrKkW3TT2WAaCLv+CSSBe8sI5fSuIrN2KzoqlLqKdEmMZ7r6hv0eRKhuJCrczK4quxeuybeyds9R4Ta/bD4m/tQW+a9iqQvx4btTNwJ202XyBU/jqDA="
+    },
+    "trigger/run-scan.ts": {
+      "contentHash": "1d9f453dad944d1dca77ec9ebb901be7",
+      "contents": "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"
+    },
+    "tsconfig.json": {
+      "contentHash": "02fc19ad21338c2ab820a70136310db4",
+      "contents": "eJxtUU1Lw0AQvedXLHMMbaJehJ4E6cFiEfRYimyyQ7t2v9id1EjJf5fdJNVET8O892b2vdlLxhjUVjup0L84ktYEWLFLxhhjQNwfkGDFYP12d3N7D4seV7KCFduBsBoWLJZCEnpeKYw9BoMtwX5Qc6Xs5yauJd/gAIaTdM+yejxifZox5GVNU8zYtZYzDMPWikbhkyH01k1JnajofDAzwV8xWNXEsFFRNUYo9KPER/KMm2DNdtzya7MMVnFC0XOzVB+hjRs98pqWsRmHTO1RoyGupgNONQeZTr5LABtO36fmOkVIAQa4S3U8reN0/PkvxuChzNPPFGUO+2wc6KI8mlCNwOtbae8SzbkQBYXRap6X+d/2mqSIQyV9OQzlTNpTAs//06nVFGKS5B+wvRoCYwW+6+Gm+6zLvgEbXbUJ"
+    }
+  },
+  "target": "dev"
+}
