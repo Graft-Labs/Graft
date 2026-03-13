@@ -19,6 +19,7 @@ export interface ScanTaskPayload {
   repoName: string
   branch: string
   githubToken?: string
+  triggerRunId?: string
 }
 
 // Run a shell command and return stdout. Never throws — returns empty string on failure.
@@ -53,7 +54,7 @@ export const runScanTask = task({
   // Max 10 minutes per scan — plenty for all 4 tools
   maxDuration: 600,
   run: async (payload: ScanTaskPayload) => {
-    const { scanId, repoOwner, repoName, branch, githubToken } = payload
+    const { scanId, repoOwner, repoName, branch, githubToken, triggerRunId } = payload
 
     logger.log('scan_started', { scanId, repo: `${repoOwner}/${repoName}`, branch })
 
@@ -62,10 +63,13 @@ export const runScanTask = task({
       process.env.SUPABASE_SECRET_KEY!
     )
 
-    // Mark scan as running
+    // Mark scan as running and store the Trigger.dev run ID for progress polling
     await supabase
       .from('scans')
-      .update({ status: 'scanning' })
+      .update({
+        status: 'scanning',
+        ...(triggerRunId ? { trigger_run_id: triggerRunId } : {}),
+      })
       .eq('id', scanId)
 
     let cloneDir: string | null = null
@@ -84,6 +88,12 @@ export const runScanTask = task({
         { cwd: cloneDir, timeout: 60_000 }
       )
       logger.log('clone_complete', { cloneDir })
+
+      // Capture the commit hash
+      const commitHash = (await runTool('git rev-parse HEAD', cloneDir)).slice(0, 7) || null
+      if (commitHash) {
+        await supabase.from('scans').update({ commit_hash: commitHash }).eq('id', scanId)
+      }
 
       // ── Step 2: Detect lockfile ───────────────────────────────────────────
       const hasPackageLock = await fileExists(join(cloneDir, 'package-lock.json'))

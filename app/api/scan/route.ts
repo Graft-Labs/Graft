@@ -157,7 +157,14 @@ export async function POST(request: NextRequest) {
       repoName,
       branch,
       githubToken: githubToken ?? undefined,
+      triggerRunId: undefined, // will be updated by the task itself using context.run.id
     })
+
+    // Store the Trigger.dev run ID so the progress API can retrieve real-time status
+    await supabase
+      .from('scans')
+      .update({ trigger_run_id: handle.id })
+      .eq('id', scan.id)
 
     logScan('trigger_success', { traceId, scanId: scan.id, triggerId: handle.id })
 

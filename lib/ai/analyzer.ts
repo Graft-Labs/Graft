@@ -97,31 +97,39 @@ async function callOpenRouter(prompt: string, retries = 3): Promise<string> {
 function parseTruffleHog(trufflehog: unknown): EnrichedIssue[] {
   const issues: EnrichedIssue[] = []
 
-  const findings = Array.isArray(trufflehog)
-    ? trufflehog
-    : trufflehog && typeof trufflehog === 'object' && 'results' in trufflehog
-    ? (trufflehog as { results: unknown[] }).results
-    : []
+  // TruffleHog v3 outputs NDJSON — we already parse each line into an array upstream
+  const findings = Array.isArray(trufflehog) ? trufflehog : []
 
   for (const finding of findings) {
+    // TruffleHog v3 NDJSON schema:
+    // { DetectorName, Raw, Verified, SourceMetadata: { Data: { Filesystem: { file, line } } } }
     const f = finding as {
-      detector_name?: string
-      matched_on?: string
-      Source?: { file?: string; line?: number }
-      metadata?: { description?: string }
+      DetectorName?: string
+      Verified?: boolean
+      SourceMetadata?: {
+        Data?: {
+          Filesystem?: { file?: string; line?: number }
+          Git?: { file?: string; line?: number }
+        }
+      }
     }
 
-    if (!f.detector_name) continue
+    if (!f.DetectorName) continue
+
+    const loc = f.SourceMetadata?.Data?.Filesystem ?? f.SourceMetadata?.Data?.Git
+    const fileName = loc?.file ?? null
+    const lineNum = loc?.line ?? null
+    const verified = f.Verified === true
 
     issues.push({
       guard: 'security',
       category: 'secrets',
       severity: 'critical',
-      title: `Exposed ${f.detector_name.replace(/_/g, ' ')}`,
-      description: `A ${f.detector_name.replace(/_/g, ' ')} was found in ${f.Source?.file || 'your code'}. This could allow attackers to access external services.`,
-      fix_suggestion: 'Remove the exposed secret from your code. Use environment variables instead and reference them via process.env.VARIABLE_NAME.',
-      file_path: f.Source?.file,
-      line_number: f.Source?.line,
+      title: `Exposed ${f.DetectorName.replace(/_/g, ' ')} credential`,
+      description: `A ${f.DetectorName.replace(/_/g, ' ')} secret was found${fileName ? ` in \`${fileName}\`` : ' in your code'}${verified ? ' and is **verified active**' : ''}. This allows attackers to access external services directly.`,
+      fix_suggestion: 'Remove the secret immediately. Rotate it in the service dashboard, then reference it via process.env.YOUR_SECRET_NAME instead.',
+      file_path: fileName ?? undefined,
+      line_number: lineNum ?? undefined,
     })
   }
 
@@ -131,26 +139,60 @@ function parseTruffleHog(trufflehog: unknown): EnrichedIssue[] {
 function parseOSV(osv: unknown): EnrichedIssue[] {
   const issues: EnrichedIssue[] = []
 
-  const vulnerabilities = osv && typeof osv === 'object' && 'vulnerabilities' in osv
-    ? (osv as { vulnerabilities: unknown[] }).vulnerabilities
-    : []
+  // OSV-Scanner JSON output schema:
+  // { results: [{ packages: [{ package: { name, version, ecosystem }, vulnerabilities: [{ id, summary, severity, affected }] }] }] }
+  const osvData = osv as {
+    results?: Array<{
+      packages?: Array<{
+        package?: { name?: string; version?: string; ecosystem?: string }
+        vulnerabilities?: Array<{
+          id?: string
+          summary?: string
+          severity?: Array<{ type?: string; score?: string }>
+          affected?: Array<{
+            ranges?: Array<{
+              events?: Array<{ fixed?: string }>
+            }>
+          }>
+        }>
+      }>
+    }>
+  }
 
-  for (const vuln of vulnerabilities) {
-    const v = vuln as {
-      id?: string
-      summary?: string
-      details?: string
-      affected?: Array<{ package?: { name?: string } }>
+  const results = osvData?.results ?? []
+
+  for (const result of results) {
+    for (const pkg of result.packages ?? []) {
+      const pkgName = pkg.package?.name ?? 'unknown'
+      const pkgVersion = pkg.package?.version ?? '?'
+
+      for (const vuln of pkg.vulnerabilities ?? []) {
+        // Extract fix version from the first affected range
+        const fixVersion = vuln.affected?.[0]?.ranges?.[0]?.events
+          ?.find((e: { fixed?: string }) => e.fixed)?.fixed ?? null
+
+        // Map CVSS severity to our scale
+        const cvssScore = vuln.severity?.[0]?.score?.toUpperCase() ?? ''
+        let severity: 'critical' | 'high' | 'medium' | 'low' = 'high'
+        if (cvssScore === 'CRITICAL') severity = 'critical'
+        else if (cvssScore === 'HIGH') severity = 'high'
+        else if (cvssScore === 'MEDIUM') severity = 'medium'
+        else if (cvssScore === 'LOW') severity = 'low'
+
+        const fix = fixVersion
+          ? `Update ${pkgName} to v${fixVersion}: npm install ${pkgName}@${fixVersion}`
+          : `Update ${pkgName} to the latest version: npm update ${pkgName}`
+
+        issues.push({
+          guard: 'security',
+          category: 'vulnerabilities',
+          severity,
+          title: `${vuln.id ?? 'CVE'} in ${pkgName}@${pkgVersion}`,
+          description: `${vuln.summary ?? 'A known vulnerability'} in \`${pkgName}\` v${pkgVersion}.${fixVersion ? ` Fixed in v${fixVersion}.` : ''}`,
+          fix_suggestion: fix,
+        })
+      }
     }
-
-    issues.push({
-      guard: 'security',
-      category: 'vulnerabilities',
-      severity: 'high',
-      title: `CVE: ${v.id || 'Unknown vulnerability'}`,
-      description: `${v.summary || 'A known vulnerability in your dependencies.'} Affected package: ${v.affected?.[0]?.package?.name || 'unknown'}`,
-      fix_suggestion: `Update the affected package to the latest version. Run: npm update ${v.affected?.[0]?.package?.name}`,
-    })
   }
 
   return issues
@@ -166,36 +208,57 @@ function parseSemgrep(semgrep: unknown): EnrichedIssue[] {
   for (const result of results) {
     const r = result as {
       check_id?: string
-      message?: string
-      severity?: string
+      extra?: {
+        message?: string
+        lines?: string
+        severity?: string
+        metadata?: { guard?: string; category?: string }
+      }
       path?: string
       start?: { line?: number }
     }
 
     if (!r.check_id) continue
 
+    // Derive guard from check_id prefix: "shipguard.distribution.xxx" → "distribution"
+    // Also handles "shipguard-console-log" style legacy IDs
+    let guard = 'security'
+    const checkParts = r.check_id.toLowerCase().replace(/^shipguard[-.]/, '').split(/[.-]/)
+    if (checkParts[0] === 'distribution' || r.check_id.includes('distribution') || r.check_id.includes('og') || r.check_id.includes('seo') || r.check_id.includes('meta') || r.check_id.includes('cookie')) {
+      guard = 'distribution'
+    } else if (checkParts[0] === 'monetization' || r.check_id.includes('monetization') || r.check_id.includes('stripe') || r.check_id.includes('checkout') || r.check_id.includes('webhook') || r.check_id.includes('trial')) {
+      guard = 'monetization'
+    } else if (checkParts[0] === 'scalability' || r.check_id.includes('scalability') || r.check_id.includes('console') || r.check_id.includes('sync') || r.check_id.includes('performance')) {
+      guard = 'scalability'
+    }
+    // Override with explicit metadata if present
+    if (r.extra?.metadata?.guard) {
+      guard = r.extra.metadata.guard
+    }
+
     const severityMap: Record<string, 'critical' | 'high' | 'medium' | 'low'> = {
       ERROR: 'critical',
       WARNING: 'high',
       INFO: 'low',
     }
+    const severity = severityMap[r.extra?.severity?.toUpperCase() ?? 'WARNING'] ?? 'medium'
 
-    let category = 'security'
-    if (r.check_id.includes('cors')) category = 'security'
-    else if (r.check_id.includes('sql')) category = 'security'
-    else if (r.check_id.includes('xss')) category = 'security'
-    else if (r.check_id.includes('auth')) category = 'security'
-    else if (r.check_id.includes('console')) category = 'scalability'
+    // Use extra.message (full message) when available, fall back to check_id
+    const message = r.extra?.message || r.check_id.replace(/[_.-]/g, ' ')
+    const codeLines = r.extra?.lines?.trim()
 
     issues.push({
-      guard: category === 'console' ? 'scalability' : 'security',
-      category,
-      severity: severityMap[r.severity || 'WARNING'] || 'medium',
-      title: r.check_id.replace(/_/g, ' ').replace(/\./g, ' - '),
-      description: r.message || `Security issue detected in ${r.path}`,
-      fix_suggestion: 'Review and fix the code pattern identified by the rule.',
+      guard,
+      category: r.extra?.metadata?.category ?? guard,
+      severity,
+      title: r.check_id.split('.').pop()?.replace(/[-_]/g, ' ') ?? r.check_id,
+      description: message,
+      fix_suggestion: codeLines
+        ? `Found in \`${r.path}\`:${r.start?.line ? ` line ${r.start.line}` : ''}\n\`\`\`\n${codeLines}\n\`\`\``
+        : 'Review and fix the pattern identified by this rule.',
       file_path: r.path,
       line_number: r.start?.line,
+      code_snippet: codeLines,
     })
   }
 

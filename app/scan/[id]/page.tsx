@@ -464,6 +464,14 @@ export default function ScanReportPage() {
               {(Object.entries(report.scores) as [Guard, { score: number; label: string }][]).map(([key, val]) => {
                 const cfg = guardConfig[key];
                 const Icon = cfg.icon;
+                const guardIssues = issues.filter(i => i.guard === key);
+                const criticals = guardIssues.filter(i => i.severity === "critical").length;
+                const highs = guardIssues.filter(i => i.severity === "high").length;
+                const meds = guardIssues.filter(i => i.severity === "medium").length;
+                const breakdown: string[] = [];
+                if (criticals > 0) breakdown.push(`${criticals} critical`);
+                if (highs > 0) breakdown.push(`${highs} high`);
+                if (meds > 0) breakdown.push(`${meds} medium`);
                 return (
                   <button
                     key={key}
@@ -484,6 +492,16 @@ export default function ScanReportPage() {
                     <p style={{ fontSize: "11px", color: cfg.color, fontFamily: "var(--font-label)" }}>
                       {val.label}
                     </p>
+                    {breakdown.length > 0 && (
+                      <p style={{ fontSize: "10px", color: "var(--text-tertiary)", fontFamily: "var(--font-label)", marginTop: 4 }}>
+                        {breakdown.join(" · ")}
+                      </p>
+                    )}
+                    {breakdown.length === 0 && guardIssues.length === 0 && (
+                      <p style={{ fontSize: "10px", color: "var(--guard-monetize)", fontFamily: "var(--font-label)", marginTop: 4 }}>
+                        No issues
+                      </p>
+                    )}
                   </button>
                 );
               })}
