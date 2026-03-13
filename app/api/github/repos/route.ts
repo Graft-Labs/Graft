@@ -45,6 +45,20 @@ async function fetchGitHub(url: string, token: string) {
   return res.json()
 }
 
+// Returns null on 403 (missing scope) instead of throwing
+async function fetchGitHubSafe<T>(url: string, token: string): Promise<T | null> {
+  const res = await fetch(url, {
+    headers: {
+      Accept: 'application/vnd.github+json',
+      Authorization: `Bearer ${token}`,
+      'X-GitHub-Api-Version': '2022-11-28',
+    },
+  })
+  if (res.status === 403 || res.status === 401) return null
+  if (!res.ok) throw new Error(`GitHub API error ${res.status}: ${url}`)
+  return res.json() as Promise<T>
+}
+
 export async function GET(_req: NextRequest) {
   try {
     const supabase = await createServerClient()
@@ -58,16 +72,20 @@ export async function GET(_req: NextRequest) {
       return NextResponse.json({ error: 'github_not_connected', message: 'Connect your GitHub account in Settings to use the repo picker.' }, { status: 400 })
     }
 
-    // Fetch user profile + personal repos in parallel
-    const [userProfile, personalRepos, orgs]: [
+    // Fetch user profile + personal repos in parallel; orgs may 403 if read:org scope is missing
+    const [userProfile, personalRepos, orgsOrNull]: [
       { login: string; avatar_url: string },
       GitHubRepo[],
-      GitHubOrg[]
+      GitHubOrg[] | null
     ] = await Promise.all([
       fetchGitHub('https://api.github.com/user', token),
       fetchGitHub('https://api.github.com/user/repos?sort=pushed&per_page=100&affiliation=owner', token),
-      fetchGitHub('https://api.github.com/user/orgs?per_page=100', token),
+      fetchGitHubSafe<GitHubOrg[]>('https://api.github.com/user/orgs?per_page=100', token),
     ])
+
+    // null means token is missing read:org scope — surface a reauth hint to the frontend
+    const needsReauth = orgsOrNull === null
+    const orgs: GitHubOrg[] = orgsOrNull ?? []
 
     // Fetch org repos in parallel (up to 5 orgs to avoid rate limits)
     const orgRepoGroups = await Promise.all(
@@ -108,7 +126,7 @@ export async function GET(_req: NextRequest) {
       })),
     ]
 
-    return NextResponse.json({ namespaces: result })
+    return NextResponse.json({ namespaces: result, needs_reauth: needsReauth })
   } catch (error) {
     const msg = error instanceof Error ? error.message : 'Unknown error'
     return NextResponse.json({ error: 'internal_error', message: msg }, { status: 500 })

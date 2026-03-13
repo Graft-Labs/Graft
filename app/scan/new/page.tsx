@@ -108,6 +108,7 @@ export default function NewScanPage() {
   const [currentStep, setCurrentStep] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showGithubBanner, setShowGithubBanner] = useState(false);
+  const [needsReauth, setNeedsReauth] = useState(false);
 
   const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const branchDropdownRef = useRef<HTMLDivElement>(null);
@@ -136,6 +137,7 @@ export default function NewScanPage() {
         }
         const data = await res.json();
         setNamespaces(data.namespaces ?? []);
+        if (data.needs_reauth) setNeedsReauth(true);
         if (data.namespaces?.length > 0) {
           setActiveNamespace(data.namespaces[0].namespace);
         }
@@ -493,8 +495,25 @@ export default function NewScanPage() {
                 </div>
               ) : (
                 /* Repo picker: namespace sidebar + repo list */
-                <div className="rounded-xl overflow-hidden"
-                  style={{ border: "1px solid var(--border)", background: "var(--surface-2)" }}>
+                <div>
+                  {/* Reauth banner — shown when token is missing read:org scope */}
+                  {needsReauth && (
+                    <div className="flex items-start gap-3 p-3 rounded-xl mb-3"
+                      style={{ background: "rgba(251,191,36,0.08)", border: "1px solid rgba(251,191,36,0.25)" }}>
+                      <AlertTriangle size={15} className="flex-shrink-0 mt-0.5" style={{ color: "#f59e0b" }} />
+                      <div className="flex-1 min-w-0">
+                        <p style={{ fontSize: "12px", color: "var(--text-secondary)", fontFamily: "var(--font-label)", lineHeight: 1.5 }}>
+                          Organization repos are hidden because your GitHub token is missing the <code style={{ fontSize: "11px" }}>read:org</code> scope.
+                          {" "}<Link href="/dashboard/settings" className="underline" style={{ color: "#f59e0b" }}>Reconnect GitHub in Settings</Link> to see org repos.
+                        </p>
+                      </div>
+                      <button onClick={() => setNeedsReauth(false)} style={{ color: "var(--text-tertiary)", lineHeight: 1 }}>
+                        <X size={13} />
+                      </button>
+                    </div>
+                  )}
+                  <div className="rounded-xl overflow-hidden"
+                    style={{ border: "1px solid var(--border)", background: "var(--surface-2)" }}>
                   <div className="flex" style={{ minHeight: 320 }}>
                     {/* Namespace sidebar */}
                     <div className="flex flex-col gap-0.5 p-2 border-r overflow-y-auto"
@@ -622,6 +641,7 @@ export default function NewScanPage() {
                       </div>
                     </div>
                   )}
+                  </div>
                 </div>
               )}
             </div>

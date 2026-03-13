@@ -68,7 +68,7 @@ export default function SettingsPage() {
       provider: "github",
       options: {
         redirectTo: getAuthRedirectUrl(),
-        scopes: "repo user:email",
+        scopes: "repo read:org user:email",
       },
     });
 

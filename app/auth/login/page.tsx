@@ -280,6 +280,7 @@ export default function LoginPage() {
                 provider: "github",
                 options: {
                   redirectTo: getAuthRedirectUrl(),
+                  scopes: "repo read:org user:email",
                 },
               });
             }}
