@@ -96,12 +96,25 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Rate limiting ────────────────────────────────────────────────────────
-    // Max 3 concurrent scans (pending/scanning) per user
+    // First, auto-expire any pending/scanning rows older than 15 minutes —
+    // these are stale rows the task never cleaned up (e.g. Trigger.dev run
+    // expired, crashed before our catch block, etc.)
+    const staleWindow = new Date(Date.now() - 15 * 60 * 1000).toISOString()
+    await supabase
+      .from('scans')
+      .update({ status: 'failed' })
+      .eq('user_id', user.id)
+      .in('status', ['pending', 'scanning'])
+      .lt('created_at', staleWindow)
+
+    // Max 3 concurrent scans (pending/scanning) in the last 15 minutes
+    const activeWindow = new Date(Date.now() - 15 * 60 * 1000).toISOString()
     const { count: activeCount } = await supabase
       .from('scans')
       .select('id', { count: 'exact', head: true })
       .eq('user_id', user.id)
       .in('status', ['pending', 'scanning'])
+      .gte('created_at', activeWindow)
 
     if ((activeCount ?? 0) >= 3) {
       logScan('rate_limit_concurrent', { traceId, userId: user.id, activeCount })
