@@ -18,10 +18,10 @@ import {
   AlertTriangle,
   Info,
   ChevronDown,
-  ChevronRight,
   Lock,
   ExternalLink,
   FileCode,
+  Code,
 } from "lucide-react";
 import DashboardSidebar from "@/components/layout/DashboardSidebar";
 import { createClient } from "@/lib/supabase";
@@ -43,6 +43,7 @@ type Scan = {
   medium_count: number;
   low_count: number;
   created_at: string;
+  framework: string | null;
 };
 
 type Issue = {
@@ -52,21 +53,70 @@ type Issue = {
   severity: string;
   title: string;
   description: string;
-  file: string;
+  file: string | null;
   line: number | null;
   fix: string;
+  confidence: "confirmed" | "likely" | "possible" | null;
+  code_snippet: string | null;
 };
-
-
 
 type Guard = "security" | "scalability" | "monetization" | "distribution";
 
 const guardConfig: Record<Guard, { label: string; icon: typeof Shield; color: string; glow: string }> = {
-  security: { label: "Security Guard", icon: Lock, color: "var(--guard-security)", glow: "var(--guard-security-glow)" },
-  scalability: { label: "Scalability Guard", icon: Zap, color: "var(--guard-scale)", glow: "var(--guard-scale-glow)" },
+  security:     { label: "Security Guard",     icon: Lock,       color: "var(--guard-security)", glow: "var(--guard-security-glow)" },
+  scalability:  { label: "Scalability Guard",  icon: Zap,        color: "var(--guard-scale)",    glow: "var(--guard-scale-glow)" },
   monetization: { label: "Monetization Guard", icon: DollarSign, color: "var(--guard-monetize)", glow: "var(--guard-monetize-glow)" },
-  distribution: { label: "Distribution Guard", icon: Globe, color: "var(--guard-distrib)", glow: "var(--guard-distrib-glow)" },
+  distribution: { label: "Distribution Guard", icon: Globe,      color: "var(--guard-distrib)",  glow: "var(--guard-distrib-glow)" },
 };
+
+// Human-readable framework labels
+const FRAMEWORK_LABELS: Record<string, string> = {
+  nextjs:     "Next.js",
+  sveltekit:  "SvelteKit",
+  nuxt:       "Nuxt.js",
+  "react-vite": "React + Vite",
+  express:    "Express",
+  nestjs:     "NestJS",
+  fastify:    "Fastify",
+  react:      "React",
+  unknown:    "Unknown",
+};
+
+function FrameworkBadge({ framework }: { framework: string | null }) {
+  if (!framework || framework === "unknown") return null;
+  const label = FRAMEWORK_LABELS[framework] ?? framework;
+  return (
+    <span
+      className="text-xs px-2 py-0.5 rounded-full font-medium"
+      style={{
+        background: "rgba(139,92,246,0.12)",
+        color: "#a78bfa",
+        border: "1px solid rgba(139,92,246,0.3)",
+        fontFamily: "var(--font-label)",
+      }}
+    >
+      {label}
+    </span>
+  );
+}
+
+function ConfidenceBadge({ confidence }: { confidence: Issue["confidence"] }) {
+  if (!confidence) return null;
+  const styles = {
+    confirmed: { bg: "rgba(64,200,122,0.1)",  color: "var(--guard-monetize)", border: "rgba(64,200,122,0.3)",  label: "confirmed" },
+    likely:    { bg: "rgba(251,191,36,0.1)",  color: "var(--accent)",          border: "rgba(251,191,36,0.3)", label: "likely" },
+    possible:  { bg: "rgba(107,103,98,0.15)", color: "var(--text-tertiary)",   border: "rgba(107,103,98,0.3)", label: "possible" },
+  };
+  const s = styles[confidence];
+  return (
+    <span
+      className="text-xs px-1.5 py-0.5 rounded"
+      style={{ background: s.bg, color: s.color, border: `1px solid ${s.border}`, fontFamily: "var(--font-label)" }}
+    >
+      {s.label}
+    </span>
+  );
+}
 
 function ScoreRing({ score, color, size = 90 }: { score: number; color: string; size?: number }) {
   const radius = 36;
@@ -92,20 +142,31 @@ function ScoreRing({ score, color, size = 90 }: { score: number; color: string; 
 
 function SeverityIcon({ severity }: { severity: string }) {
   if (severity === "critical") return <XCircle size={14} style={{ color: "var(--sev-critical)" }} />;
-  if (severity === "high") return <AlertTriangle size={14} style={{ color: "var(--sev-high)" }} />;
-  if (severity === "medium") return <AlertTriangle size={14} style={{ color: "var(--sev-medium)" }} />;
+  if (severity === "high")     return <AlertTriangle size={14} style={{ color: "var(--sev-high)" }} />;
+  if (severity === "medium")   return <AlertTriangle size={14} style={{ color: "var(--sev-medium)" }} />;
   return <Info size={14} style={{ color: "var(--sev-low)" }} />;
 }
 
-function IssueCard({ issue }: { issue: Issue }) {
+function IssueCard({ issue, repo, branch, commitHash }: {
+  issue: Issue;
+  repo: string;
+  branch: string;
+  commitHash: string;
+}) {
   const [expanded, setExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [snippetExpanded, setSnippetExpanded] = useState(false);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(issue.fix);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
+
+  // Build GitHub link if we have file + line
+  const githubFileUrl = issue.file
+    ? `https://github.com/${repo}/blob/${commitHash || branch}/${issue.file}${issue.line ? `#L${issue.line}` : ""}`
+    : null;
 
   return (
     <div
@@ -135,13 +196,28 @@ function IssueCard({ issue }: { issue: Issue }) {
             >
               {issue.severity}
             </span>
+            <ConfidenceBadge confidence={issue.confidence} />
           </div>
           {issue.file && (
             <div className="flex items-center gap-1.5">
               <FileCode size={11} style={{ color: "var(--text-tertiary)" }} />
-              <span style={{ fontSize: "11px", color: "var(--text-tertiary)", fontFamily: "var(--font-mono)", letterSpacing: 0 }}>
-                {issue.file}{issue.line ? `:${issue.line}` : ""}
-              </span>
+              {githubFileUrl ? (
+                <a
+                  href={githubFileUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  className="flex items-center gap-1 hover:underline"
+                  style={{ fontSize: "11px", color: "var(--accent)", fontFamily: "var(--font-mono)", letterSpacing: 0 }}
+                >
+                  {issue.file}{issue.line ? `:${issue.line}` : ""}
+                  <ExternalLink size={9} />
+                </a>
+              ) : (
+                <span style={{ fontSize: "11px", color: "var(--text-tertiary)", fontFamily: "var(--font-mono)", letterSpacing: 0 }}>
+                  {issue.file}{issue.line ? `:${issue.line}` : ""}
+                </span>
+              )}
             </div>
           )}
         </div>
@@ -159,10 +235,7 @@ function IssueCard({ issue }: { issue: Issue }) {
       {/* Expanded */}
       {expanded && (
         <div className="px-4 pb-4 pt-0">
-          <div
-            className="h-px mb-4"
-            style={{ background: "var(--border)" }}
-          />
+          <div className="h-px mb-4" style={{ background: "var(--border)" }} />
 
           {/* Description */}
           <p
@@ -171,6 +244,32 @@ function IssueCard({ issue }: { issue: Issue }) {
           >
             {issue.description}
           </p>
+
+          {/* Code snippet (collapsible) */}
+          {issue.code_snippet && (
+            <div className="mb-5">
+              <button
+                onClick={() => setSnippetExpanded(!snippetExpanded)}
+                className="flex items-center gap-2 text-xs mb-2 transition-colors"
+                style={{ color: "var(--text-tertiary)", fontFamily: "var(--font-label)" }}
+              >
+                <Code size={11} />
+                Matched code
+                <ChevronDown
+                  size={11}
+                  style={{ transform: snippetExpanded ? "rotate(180deg)" : "rotate(0)", transition: "transform 0.15s" }}
+                />
+              </button>
+              {snippetExpanded && (
+                <pre
+                  className="code-block overflow-x-auto"
+                  style={{ fontSize: "11px", color: "var(--sev-medium)", background: "rgba(251,191,36,0.04)", borderLeft: "2px solid rgba(251,191,36,0.3)" }}
+                >
+                  <code>{issue.code_snippet}</code>
+                </pre>
+              )}
+            </div>
+          )}
 
           {/* Fix suggestion */}
           <div>
@@ -220,14 +319,12 @@ export default function ScanReportPage() {
     async function fetchScanData() {
       const supabase = createClient();
       
-      // Get current user
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         window.location.href = "/auth/login";
         return;
       }
 
-      // Fetch scan by ID
       const { data: scanData } = await supabase
         .from("scans")
         .select("*")
@@ -235,7 +332,6 @@ export default function ScanReportPage() {
         .eq("user_id", user.id)
         .single();
 
-      // Fetch issues for this scan
       const { data: issuesData } = await supabase
         .from("issues")
         .select("*")
@@ -250,7 +346,6 @@ export default function ScanReportPage() {
     fetchScanData();
   }, [scanId]);
 
-  // Show loading
   if (loading) {
     return (
       <div className="flex min-h-screen" style={{ background: "var(--obsidian)" }}>
@@ -262,7 +357,6 @@ export default function ScanReportPage() {
     );
   }
 
-  // Show empty state if no scan found
   if (!scan) {
     return (
       <div className="flex min-h-screen" style={{ background: "var(--obsidian)" }}>
@@ -286,20 +380,20 @@ export default function ScanReportPage() {
     : issues.filter((i) => i.guard === activeGuard);
 
   const criticalCount = issues.filter((i) => i.severity === "critical").length;
-  const highCount = issues.filter((i) => i.severity === "high").length;
-  const mediumCount = issues.filter((i) => i.severity === "medium").length;
+  const highCount     = issues.filter((i) => i.severity === "high").length;
+  const mediumCount   = issues.filter((i) => i.severity === "medium").length;
 
-  // Map scan data to the format expected by the UI
   const report = {
-    repo: scan.repo,
-    branch: scan.branch,
-    commitHash: scan.commit_hash,
-    status: scan.status,
-    createdAt: scan.created_at,
+    repo:         scan.repo,
+    branch:       scan.branch,
+    commitHash:   scan.commit_hash,
+    status:       scan.status,
+    createdAt:    scan.created_at,
     overallScore: scan.overall_score,
+    framework:    scan.framework,
     scores: {
-      security: { score: scan.security_score, label: scan.security_score < 50 ? "Needs Work" : "Good" },
-      scalability: { score: scan.scalability_score, label: scan.scalability_score < 50 ? "Needs Work" : "Good" },
+      security:     { score: scan.security_score,     label: scan.security_score < 50     ? "Needs Work" : "Good" },
+      scalability:  { score: scan.scalability_score,  label: scan.scalability_score < 50  ? "Needs Work" : "Good" },
       monetization: { score: scan.monetization_score, label: scan.monetization_score < 50 ? "Needs Work" : "Good" },
       distribution: { score: scan.distribution_score, label: scan.distribution_score < 50 ? "Needs Work" : "Good" },
     },
@@ -384,16 +478,19 @@ export default function ScanReportPage() {
                       >
                         {report.repo}
                       </h1>
-                      <div className="flex items-center gap-3 mt-0.5">
+                      <div className="flex items-center gap-3 mt-0.5 flex-wrap">
                         <span style={{ fontSize: "12px", color: "var(--text-tertiary)", fontFamily: "var(--font-label)" }}>
                           {report.branch}
                         </span>
-                        <span
-                          className="font-mono"
-                          style={{ fontSize: "11px", color: "var(--text-tertiary)", fontFamily: "var(--font-mono)" }}
-                        >
-                          #{report.commitHash}
-                        </span>
+                        {report.commitHash && (
+                          <span
+                            className="font-mono"
+                            style={{ fontSize: "11px", color: "var(--text-tertiary)", fontFamily: "var(--font-mono)" }}
+                          >
+                            #{report.commitHash}
+                          </span>
+                        )}
+                        <FrameworkBadge framework={report.framework} />
                         <span
                           className="text-xs px-2 py-0.5 rounded-full font-medium"
                           style={{
@@ -435,8 +532,8 @@ export default function ScanReportPage() {
                     <p style={{ fontSize: "11px", color: "var(--text-tertiary)", fontFamily: "var(--font-label)", marginBottom: 2 }}>
                       Overall Score
                     </p>
-                    <p style={{ fontSize: "11px", color: "var(--sev-medium)", fontFamily: "var(--font-label)" }}>
-                      Needs Work
+                    <p style={{ fontSize: "11px", color: report.overallScore < 50 ? "var(--sev-medium)" : "var(--guard-monetize)", fontFamily: "var(--font-label)" }}>
+                      {report.overallScore < 50 ? "Needs Work" : "Good"}
                     </p>
                   </div>
                   <div
@@ -446,7 +543,6 @@ export default function ScanReportPage() {
                     <span
                       style={{
                         fontFamily: "var(--font-ui)",
-                        
                         fontSize: "28px",
                         color: "var(--accent)",
                         lineHeight: 1,
@@ -466,12 +562,12 @@ export default function ScanReportPage() {
                 const Icon = cfg.icon;
                 const guardIssues = issues.filter(i => i.guard === key);
                 const criticals = guardIssues.filter(i => i.severity === "critical").length;
-                const highs = guardIssues.filter(i => i.severity === "high").length;
-                const meds = guardIssues.filter(i => i.severity === "medium").length;
+                const highs     = guardIssues.filter(i => i.severity === "high").length;
+                const meds      = guardIssues.filter(i => i.severity === "medium").length;
                 const breakdown: string[] = [];
                 if (criticals > 0) breakdown.push(`${criticals} critical`);
-                if (highs > 0) breakdown.push(`${highs} high`);
-                if (meds > 0) breakdown.push(`${meds} medium`);
+                if (highs > 0)     breakdown.push(`${highs} high`);
+                if (meds > 0)      breakdown.push(`${meds} medium`);
                 return (
                   <button
                     key={key}
@@ -510,9 +606,7 @@ export default function ScanReportPage() {
             {/* Issues List */}
             <div>
               {/* Filter tabs */}
-              <div
-                className="flex items-center gap-2 mb-4 overflow-x-auto pb-1"
-              >
+              <div className="flex items-center gap-2 mb-4 overflow-x-auto pb-1">
                 <button
                   onClick={() => setActiveGuard("all")}
                   className="flex-shrink-0 flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
@@ -524,10 +618,7 @@ export default function ScanReportPage() {
                   }}
                 >
                   All Issues
-                  <span
-                    className="px-1.5 py-0.5 rounded text-xs"
-                    style={{ background: "var(--obsidian-4)", color: "var(--text-secondary)" }}
-                  >
+                  <span className="px-1.5 py-0.5 rounded text-xs" style={{ background: "var(--obsidian-4)", color: "var(--text-secondary)" }}>
                     {issues.length}
                   </span>
                 </button>
@@ -558,7 +649,13 @@ export default function ScanReportPage() {
 
               <div className="flex flex-col gap-3">
                 {filteredIssues.map((issue) => (
-                  <IssueCard key={issue.id} issue={issue} />
+                  <IssueCard
+                    key={issue.id}
+                    issue={issue}
+                    repo={scan.repo}
+                    branch={scan.branch}
+                    commitHash={scan.commit_hash}
+                  />
                 ))}
               </div>
 

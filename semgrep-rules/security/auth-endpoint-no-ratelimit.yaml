@@ -1,0 +1,85 @@
+rules:
+  - id: shipguard.security.auth-endpoint-no-ratelimit
+    message: >
+      This authentication route (login/register/password reset) does not appear
+      to use a rate limiter. Without rate limiting, attackers can brute-force
+      passwords or enumerate accounts at will. Add rate limiting with upstash
+      ratelimit, express-rate-limit, or similar before this handler runs.
+    languages: [js, ts]
+    severity: ERROR
+    metadata:
+      guard: security
+      category: auth
+      confidence: likely
+      cwe: CWE-307
+      owasp: A07:2021
+    patterns:
+      - pattern-either:
+          # Next.js App Router
+          - pattern: |
+              export async function POST(req: $T) {
+                ...
+              }
+          - pattern: |
+              export async function POST(request: $T) {
+                ...
+              }
+      - pattern-not-inside: |
+          ...
+          rateLimit(...)
+          ...
+      - pattern-not-inside: |
+          ...
+          rateLimiter(...)
+          ...
+      - pattern-not-inside: |
+          ...
+          limiter.limit(...)
+          ...
+      - pattern-not-inside: |
+          ...
+          checkRateLimit(...)
+          ...
+    paths:
+      include:
+        - "**/login/**"
+        - "**/signin/**"
+        - "**/register/**"
+        - "**/signup/**"
+        - "**/forgot-password/**"
+        - "**/reset-password/**"
+        - "**/auth/**"
+
+  - id: shipguard.security.pages-router-auth-no-ratelimit
+    message: >
+      This Next.js Pages Router authentication API route does not use a rate
+      limiter. Brute-force attacks against login endpoints are trivial without
+      rate limiting.
+    languages: [js, ts]
+    severity: ERROR
+    metadata:
+      guard: security
+      category: auth
+      confidence: likely
+      cwe: CWE-307
+      owasp: A07:2021
+    patterns:
+      - pattern: |
+          export default async function handler(req, res) {
+            ...
+          }
+      - pattern-not-inside: |
+          ...
+          rateLimit(...)
+          ...
+      - pattern-not-inside: |
+          ...
+          limiter.limit(...)
+          ...
+    paths:
+      include:
+        - "pages/api/auth/**"
+        - "pages/api/login*"
+        - "pages/api/signin*"
+        - "pages/api/register*"
+        - "pages/api/signup*"

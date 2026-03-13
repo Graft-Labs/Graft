@@ -1,0 +1,185 @@
+rules:
+  # ── Stripe ────────────────────────────────────────────────────────────────────
+  - id: shipguard.monetization.stripe-webhook-no-verify
+    message: >
+      This Stripe webhook handler does not call stripe.webhooks.constructEvent().
+      Without signature verification, anyone can send fake webhook events to your
+      endpoint (e.g. fake "payment_succeeded") and trigger provisioning, upgrades,
+      or refunds without paying. Always verify the Stripe-Signature header before
+      processing any webhook event.
+    languages: [js, ts]
+    severity: ERROR
+    metadata:
+      guard: monetization
+      category: webhooks
+      confidence: confirmed
+      cwe: CWE-345
+      owasp: A08:2021
+    patterns:
+      - pattern-either:
+          - pattern: |
+              import Stripe from 'stripe'
+              ...
+          - pattern: |
+              const stripe = new Stripe(...)
+              ...
+          - pattern: |
+              require('stripe')
+      - pattern-not-inside: |
+          ...
+          stripe.webhooks.constructEvent(...)
+          ...
+      - pattern-not-inside: |
+          ...
+          stripe.webhooks.constructEventAsync(...)
+          ...
+    paths:
+      include:
+        - "**/webhook*"
+        - "**/webhooks*"
+        - "**/stripe*"
+        - "**/payment*"
+
+  # ── Paddle ────────────────────────────────────────────────────────────────────
+  - id: shipguard.monetization.paddle-webhook-no-verify
+    message: >
+      This Paddle webhook handler does not verify the webhook signature.
+      Without verification, attackers can send fake subscription events to
+      provision paid features for free. Call paddle.webhooks.unmarshal() or
+      verifyWebhookSignature() on every incoming request.
+    languages: [js, ts]
+    severity: ERROR
+    metadata:
+      guard: monetization
+      category: webhooks
+      confidence: confirmed
+      cwe: CWE-345
+      owasp: A08:2021
+    patterns:
+      - pattern-either:
+          - pattern: |
+              import { Paddle } from '@paddle/paddle-node-sdk'
+              ...
+          - pattern: |
+              require('@paddle/paddle-node-sdk')
+          - pattern: |
+              import Paddle from 'paddle'
+              ...
+      - pattern-not-inside: |
+          ...
+          paddle.webhooks.unmarshal(...)
+          ...
+      - pattern-not-inside: |
+          ...
+          verifyWebhookSignature(...)
+          ...
+    paths:
+      include:
+        - "**/webhook*"
+        - "**/webhooks*"
+        - "**/paddle*"
+
+  # ── LemonSqueezy ──────────────────────────────────────────────────────────────
+  - id: shipguard.monetization.lemonsqueezy-webhook-no-verify
+    message: >
+      This LemonSqueezy webhook handler does not verify the X-Signature header
+      using HMAC-SHA256. Without verification, anyone can spoof subscription
+      events and get free access. Compute HMAC-SHA256 of the raw request body
+      with your signing secret and compare against the X-Signature header.
+    languages: [js, ts]
+    severity: ERROR
+    metadata:
+      guard: monetization
+      category: webhooks
+      confidence: confirmed
+      cwe: CWE-345
+      owasp: A08:2021
+    patterns:
+      - pattern-either:
+          - pattern: |
+              import { ... } from '@lemonsqueezy/lemonsqueezy.js'
+              ...
+          - pattern: |
+              require('@lemonsqueezy/lemonsqueezy.js')
+          - pattern: |
+              lemonSqueezySetup(...)
+      - pattern-not-inside: |
+          ...
+          createHmac(...)
+          ...
+      - pattern-not-inside: |
+          ...
+          X-Signature
+          ...
+    paths:
+      include:
+        - "**/webhook*"
+        - "**/webhooks*"
+        - "**/lemonsqueezy*"
+        - "**/lemon*"
+
+  # ── Razorpay ──────────────────────────────────────────────────────────────────
+  - id: shipguard.monetization.razorpay-webhook-no-verify
+    message: >
+      This Razorpay webhook handler does not call
+      razorpay.webhooks.validateWebhookSignature(). Fake payment events can
+      trigger order fulfillment without actual payment.
+    languages: [js, ts]
+    severity: ERROR
+    metadata:
+      guard: monetization
+      category: webhooks
+      confidence: confirmed
+      cwe: CWE-345
+      owasp: A08:2021
+    patterns:
+      - pattern-either:
+          - pattern: |
+              import Razorpay from 'razorpay'
+              ...
+          - pattern: |
+              require('razorpay')
+          - pattern: |
+              new Razorpay(...)
+      - pattern-not-inside: |
+          ...
+          validateWebhookSignature(...)
+          ...
+    paths:
+      include:
+        - "**/webhook*"
+        - "**/razorpay*"
+
+  # ── Svix (generic webhook platform) ──────────────────────────────────────────
+  - id: shipguard.monetization.svix-webhook-no-verify
+    message: >
+      This Svix webhook handler does not call wh.verify(). Without verification,
+      any request can impersonate a legitimate webhook event.
+    languages: [js, ts]
+    severity: ERROR
+    metadata:
+      guard: monetization
+      category: webhooks
+      confidence: confirmed
+      cwe: CWE-345
+      owasp: A08:2021
+    patterns:
+      - pattern-either:
+          - pattern: |
+              import { Webhook } from 'svix'
+              ...
+          - pattern: |
+              require('svix')
+          - pattern: |
+              new Webhook(...)
+      - pattern-not-inside: |
+          ...
+          wh.verify(...)
+          ...
+      - pattern-not-inside: |
+          ...
+          webhook.verify(...)
+          ...
+    paths:
+      include:
+        - "**/webhook*"

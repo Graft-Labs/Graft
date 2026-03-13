@@ -39,6 +39,7 @@ type Scan = {
   medium_count: number;
   low_count: number;
   created_at: string;
+  framework: string | null;
 };
 
 type User = {
@@ -56,6 +57,35 @@ const guards = [
   { key: "monetization", label: "Monetization", icon: DollarSign, color: "var(--guard-monetize)" },
   { key: "distribution", label: "Distribution", icon: Globe, color: "var(--guard-distrib)" },
 ];
+
+const FRAMEWORK_LABELS: Record<string, string> = {
+  nextjs:       "Next.js",
+  sveltekit:    "SvelteKit",
+  nuxt:         "Nuxt.js",
+  "react-vite": "React+Vite",
+  express:      "Express",
+  nestjs:       "NestJS",
+  fastify:      "Fastify",
+  react:        "React",
+};
+
+function FrameworkPill({ framework }: { framework: string | null }) {
+  if (!framework || framework === "unknown") return null;
+  const label = FRAMEWORK_LABELS[framework] ?? framework;
+  return (
+    <span
+      className="text-xs px-1.5 py-0.5 rounded-full font-medium"
+      style={{
+        background: "rgba(139,92,246,0.12)",
+        color: "#a78bfa",
+        border: "1px solid rgba(139,92,246,0.25)",
+        fontFamily: "var(--font-label)",
+      }}
+    >
+      {label}
+    </span>
+  );
+}
 
 function ScorePill({ score }: { score: number }) {
   const color = getScoreColor(score);
@@ -315,14 +345,15 @@ export default function DashboardPage() {
                           </div>
                           <div className="min-w-0">
                             <div className="flex items-center gap-2 mb-0.5">
-                              <p
-                                className="font-medium text-sm truncate"
-                                style={{ fontFamily: "var(--font-ui)", letterSpacing: "-0.01em" }}
-                              >
-                                {scan.repo}
-                              </p>
-                              <StatusBadge status={scan.status} />
-                            </div>
+                               <p
+                                 className="font-medium text-sm truncate"
+                                 style={{ fontFamily: "var(--font-ui)", letterSpacing: "-0.01em" }}
+                               >
+                                 {scan.repo}
+                               </p>
+                               <StatusBadge status={scan.status} />
+                               <FrameworkPill framework={scan.framework} />
+                             </div>
                             <p style={{ fontSize: "12px", color: "var(--text-tertiary)", fontFamily: "var(--font-label)" }}>
                               {scan.branch} · {formatRelativeTime(scan.created_at)}
                             </p>

@@ -7,6 +7,7 @@ import type { runScanTask } from '@/trigger/run-scan'
 interface ScanPayload {
   repo: string
   branch?: string
+  framework?: string
 }
 
 function logScan(stage: string, meta: Record<string, unknown>) {
@@ -35,13 +36,14 @@ export async function POST(request: NextRequest) {
     const { data: { session } } = await supabase.auth.getSession()
 
     const body: ScanPayload = await request.json()
-    const { repo, branch = 'main' } = body
+    const { repo, branch = 'main', framework } = body
 
     logScan('payload_received', {
       traceId,
       userId: user.id,
       repo,
       branch,
+      framework,
     })
 
     if (!repo) {
@@ -93,6 +95,39 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // ── Rate limiting ────────────────────────────────────────────────────────
+    // Max 3 concurrent scans (pending/scanning) per user
+    const { count: activeCount } = await supabase
+      .from('scans')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+      .in('status', ['pending', 'scanning'])
+
+    if ((activeCount ?? 0) >= 3) {
+      logScan('rate_limit_concurrent', { traceId, userId: user.id, activeCount })
+      return NextResponse.json(
+        { error: 'rate_limited', message: 'You already have 3 scans in progress. Please wait for them to complete.' },
+        { status: 429 }
+      )
+    }
+
+    // Max 10 scans in the last 24 hours per user
+    const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+    const { count: dailyCount } = await supabase
+      .from('scans')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+      .gte('created_at', since24h)
+
+    if ((dailyCount ?? 0) >= 10) {
+      logScan('rate_limit_daily', { traceId, userId: user.id, dailyCount })
+      return NextResponse.json(
+        { error: 'rate_limited', message: 'Daily scan limit reached (10 per day). Try again tomorrow.' },
+        { status: 429 }
+      )
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
     const userName =
       (user.user_metadata?.full_name as string | undefined) ||
       (user.user_metadata?.name as string | undefined) ||
@@ -129,10 +164,11 @@ export async function POST(request: NextRequest) {
     const { data: scan, error: scanError } = await supabase
       .from('scans')
       .insert({
-        user_id: user.id,
-        repo: repoUrl,
-        branch: branch,
-        status: 'pending',
+        user_id:   user.id,
+        repo:      repoUrl,
+        branch:    branch,
+        framework: framework ?? null,
+        status:    'pending',
       })
       .select()
       .single()
@@ -152,11 +188,12 @@ export async function POST(request: NextRequest) {
 
     // Trigger the scan task via Trigger.dev (no GitHub Actions, no webhooks)
     const handle = await tasks.trigger<typeof runScanTask>('run-scan', {
-      scanId: scan.id,
+      scanId:       scan.id,
       repoOwner,
       repoName,
       branch,
-      githubToken: githubToken ?? undefined,
+      framework:    framework ?? undefined,
+      githubToken:  githubToken ?? undefined,
       triggerRunId: undefined, // will be updated by the task itself using context.run.id
     })
 

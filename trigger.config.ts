@@ -1,5 +1,5 @@
 import { defineConfig } from "@trigger.dev/sdk/v3";
-import { aptGet, syncEnvVars } from "@trigger.dev/build/extensions/core";
+import { additionalFiles, aptGet, syncEnvVars } from "@trigger.dev/build/extensions/core";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -23,8 +23,13 @@ export default defineConfig({
   project: "proj_ldantbfoufyqhgdvgghm",
   dirs: ["./trigger"],
   maxDuration: 600,
+  // Set to false so process.cwd() in tasks points to the build dir (/app),
+  // which is where additionalFiles are deployed. This matches production behaviour.
+  legacyDevProcessCwdBehaviour: false,
   build: {
     extensions: [
+      // Ship our custom semgrep YAML rules alongside the task bundle
+      additionalFiles({ files: ["./semgrep-rules/**"] }),
       // install git so we can clone repos inside the task container
       aptGet({ packages: ["git"] }),
       // sync env vars from process.env into Trigger.dev cloud on deploy

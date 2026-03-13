@@ -1,0 +1,20 @@
+rules:
+  - id: shipguard.scalability.use-client-directive
+    message: >
+      "use client" directive detected. Each "use client" boundary forces React to
+      send that component's entire dependency tree to the browser, increasing your
+      JavaScript bundle. This is a signal to audit — not all components need to be
+      client components. Prefer Server Components where possible and only use
+      "use client" for interactivity (event handlers, useState, useEffect).
+      This finding is informational — high counts (10+) indicate over-use.
+    languages: [js, ts, tsx, jsx]
+    severity: INFO
+    metadata:
+      guard: scalability
+      category: performance
+      confidence: confirmed
+      cwe: CWE-400
+      owasp: A05:2021
+    patterns:
+      - pattern: |
+          "use client"

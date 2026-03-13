@@ -1,0 +1,33 @@
+rules:
+  - id: shipguard.security.supabase-service-role-frontend
+    message: >
+      Supabase service_role key detected in a client-side file ("use client"
+      directive present). The service_role key bypasses Row Level Security and
+      grants full database access. It must only be used in server-side code
+      (API routes, Server Components, Trigger.dev tasks). Exposing it here
+      allows any user to read or delete all data in your database.
+    languages: [js, ts, tsx, jsx]
+    severity: ERROR
+    metadata:
+      guard: security
+      category: secrets
+      confidence: confirmed
+      cwe: CWE-284
+      owasp: A01:2021
+    patterns:
+      - pattern-inside: |
+          "use client"
+          ...
+      - pattern-either:
+          - pattern: |
+              process.env.SUPABASE_SERVICE_ROLE_KEY
+          - pattern: |
+              process.env.$KEY
+          - pattern: |
+              "$SECRET"
+      - metavariable-regex:
+          metavariable: $KEY
+          regex: (?i)(service_role|supabase.*service)
+      - metavariable-regex:
+          metavariable: $SECRET
+          regex: ^eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$

@@ -1,0 +1,46 @@
+rules:
+  - id: shipguard.security.file-upload-no-mime-check
+    message: >
+      File upload detected without MIME type or file extension validation.
+      Attackers can upload executable files (PHP, JS, HTML) disguised as
+      images, leading to remote code execution or stored XSS. Always validate
+      the MIME type server-side and restrict allowed extensions before saving
+      any uploaded file.
+    languages: [js, ts]
+    severity: ERROR
+    metadata:
+      guard: security
+      category: file-upload
+      confidence: likely
+      cwe: CWE-434
+      owasp: A04:2021
+    patterns:
+      - pattern-either:
+          - pattern: |
+              req.files.$FIELD
+          - pattern: |
+              formData.get($FILE)
+          - pattern: |
+              file.arrayBuffer()
+          - pattern: |
+              multer(...)
+      - pattern-not-inside: |
+          ...
+          mimetype
+          ...
+      - pattern-not-inside: |
+          ...
+          fileTypeFromBuffer(...)
+          ...
+      - pattern-not-inside: |
+          ...
+          fileType(...)
+          ...
+      - pattern-not-inside: |
+          ...
+          allowedTypes
+          ...
+      - pattern-not-inside: |
+          ...
+          allowedMimeTypes
+          ...

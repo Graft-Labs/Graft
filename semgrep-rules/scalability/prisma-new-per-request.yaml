@@ -1,0 +1,30 @@
+rules:
+  - id: shipguard.scalability.prisma-new-per-request
+    message: >
+      new PrismaClient() is called outside of a global singleton pattern. In
+      serverless environments (Vercel, AWS Lambda), each function invocation can
+      instantiate a new client, quickly exhausting your database connection pool
+      (default max_connections is 5–10 for hobby Postgres plans). This causes
+      "too many connections" errors at modest traffic levels. Use the standard
+      singleton pattern: declare a global prisma variable and reuse it across
+      invocations.
+    languages: [js, ts]
+    severity: ERROR
+    metadata:
+      guard: scalability
+      category: database
+      confidence: confirmed
+      cwe: CWE-400
+      owasp: A05:2021
+    patterns:
+      - pattern: |
+          new PrismaClient()
+      - pattern-not-inside: |
+          const globalForPrisma = ...
+          ...
+      - pattern-not-inside: |
+          global.$VAR = ...
+          ...
+      - pattern-not-inside: |
+          globalThis.$VAR = ...
+          ...

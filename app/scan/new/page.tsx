@@ -24,6 +24,31 @@ import {
 import DashboardSidebar from "@/components/layout/DashboardSidebar";
 import { createClient } from "@/lib/supabase";
 
+// ─── Framework options ────────────────────────────────────────────────────────
+
+const FRAMEWORK_OPTIONS = [
+  { value: "nextjs",     label: "Next.js" },
+  { value: "react-vite", label: "React + Vite" },
+  { value: "express",    label: "Node.js / Express" },
+  { value: "nestjs",     label: "NestJS" },
+  { value: "sveltekit",  label: "SvelteKit" },
+  { value: "nuxt",       label: "Nuxt.js" },
+  { value: "react",      label: "React (other)" },
+  { value: "unknown",    label: "Other / Unknown" },
+] as const
+
+function detectFrameworkFromDeps(deps: Record<string, unknown>): string {
+  const has = (pkg: string) => pkg in deps
+  if (has("next"))                                           return "nextjs"
+  if (has("@sveltejs/kit"))                                  return "sveltekit"
+  if (has("nuxt") || has("@nuxt/core"))                      return "nuxt"
+  if (has("react") && (has("vite") || has("@vitejs/plugin-react"))) return "react-vite"
+  if (has("express"))                                        return "express"
+  if (has("@nestjs/core"))                                   return "nestjs"
+  if (has("react"))                                          return "react"
+  return "unknown"
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface Repo {
@@ -96,6 +121,11 @@ export default function NewScanPage() {
   const [branchOpen, setBranchOpen] = useState(false);
   const [loadingBranches, setLoadingBranches] = useState(false);
 
+  // Framework detection + selection
+  const [framework, setFramework] = useState<string>("unknown");
+  const [frameworkDetected, setFrameworkDetected] = useState(false);
+  const [detectingFramework, setDetectingFramework] = useState(false);
+
   // Manual URL fallback
   const [manualUrl, setManualUrl] = useState("");
   const [useManual, setUseManual] = useState(false);
@@ -162,14 +192,17 @@ export default function NewScanPage() {
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
-  // ── Fetch branches when repo is selected ──────────────────────────────────
+  // ── Fetch branches + detect framework when repo is selected ──────────────
 
   useEffect(() => {
     if (!selectedRepo) return;
     setSelectedBranch(selectedRepo.default_branch ?? "main");
     setBranches([]);
+    setFramework("unknown");
+    setFrameworkDetected(false);
 
     const [owner, repo] = selectedRepo.full_name.split("/");
+
     setLoadingBranches(true);
     fetch(`/api/github/branches/${owner}/${repo}`)
       .then(r => r.json())
@@ -179,6 +212,25 @@ export default function NewScanPage() {
       })
       .catch(() => setBranches([selectedRepo.default_branch ?? "main"]))
       .finally(() => setLoadingBranches(false));
+
+    // Detect framework from package.json via GitHub API
+    setDetectingFramework(true);
+    fetch(`https://api.github.com/repos/${owner}/${repo}/contents/package.json`, {
+      headers: { Accept: "application/vnd.github.raw+json" },
+    })
+      .then(async r => {
+        if (!r.ok) return;
+        const text = await r.text();
+        try {
+          const pkg = JSON.parse(text);
+          const allDeps = { ...(pkg.dependencies ?? {}), ...(pkg.devDependencies ?? {}) };
+          const detected = detectFrameworkFromDeps(allDeps);
+          setFramework(detected);
+          setFrameworkDetected(true);
+        } catch { /* ignore parse errors */ }
+      })
+      .catch(() => { /* network error — leave as unknown */ })
+      .finally(() => setDetectingFramework(false));
   }, [selectedRepo]);
 
   // ── Poll progress once scanning ───────────────────────────────────────────
@@ -237,7 +289,7 @@ export default function NewScanPage() {
       const response = await fetch("/api/scan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ repo: repoUrl, branch: selectedBranch }),
+        body: JSON.stringify({ repo: repoUrl, branch: selectedBranch, framework }),
       });
 
       const data = await response.json();
@@ -643,6 +695,50 @@ export default function NewScanPage() {
                   )}
                   </div>
                 </div>
+              )}
+            </div>
+
+            {/* ── Framework selector ───────────────────────────────────────── */}
+            <div className="mb-5">
+              <div className="flex items-center gap-2 mb-2">
+                <p className="text-xs font-semibold uppercase tracking-widest"
+                  style={{ color: "var(--text-tertiary)", fontFamily: "var(--font-label)" }}>
+                  Framework
+                </p>
+                {frameworkDetected && (
+                  <span className="text-xs px-2 py-0.5 rounded-full"
+                    style={{ background: "rgba(251,191,36,0.08)", color: "#f59e0b", border: "1px solid rgba(251,191,36,0.25)", fontFamily: "var(--font-label)" }}>
+                    auto-detected
+                  </span>
+                )}
+                {detectingFramework && (
+                  <div className="w-3.5 h-3.5 rounded-full border-2 border-t-transparent animate-spin"
+                    style={{ borderColor: "var(--accent)", borderTopColor: "transparent" }} />
+                )}
+              </div>
+              <div className="relative">
+                <select
+                  value={framework}
+                  onChange={e => { setFramework(e.target.value); setFrameworkDetected(false); }}
+                  className="w-full px-4 py-3 rounded-xl text-sm appearance-none cursor-pointer"
+                  style={{
+                    background: "var(--surface-2)",
+                    border: "1px solid var(--border)",
+                    color: "var(--text-primary)",
+                    fontFamily: "var(--font-label)",
+                    outline: "none",
+                  }}>
+                  {FRAMEWORK_OPTIONS.map(opt => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+                <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none"
+                  style={{ color: "var(--text-tertiary)" }} />
+              </div>
+              {framework === "unknown" && (
+                <p className="text-xs mt-1.5" style={{ color: "var(--text-tertiary)", fontFamily: "var(--font-label)" }}>
+                  Framework-specific checks will be skipped. Universal checks (secrets, CVEs, OWASP) still run.
+                </p>
               )}
             </div>
 

@@ -1,0 +1,32 @@
+rules:
+  - id: shipguard.monetization.stripe-missing-idempotency
+    message: >
+      Stripe API call without an idempotency key. Network retries or double-clicks
+      can trigger this code path multiple times, creating duplicate charges,
+      duplicate subscriptions, or duplicate invoices. Pass an idempotency key
+      (e.g. derived from the order ID) in the options object to make this
+      operation safe to retry.
+    languages: [js, ts]
+    severity: WARNING
+    metadata:
+      guard: monetization
+      category: checkout
+      confidence: likely
+      cwe: CWE-691
+      owasp: A08:2021
+    patterns:
+      - pattern-either:
+          - pattern: |
+              stripe.paymentIntents.create($PARAMS)
+          - pattern: |
+              stripe.subscriptions.create($PARAMS)
+          - pattern: |
+              stripe.invoices.create($PARAMS)
+          - pattern: |
+              stripe.charges.create($PARAMS)
+          - pattern: |
+              stripe.customers.create($PARAMS)
+      - pattern-not: |
+          stripe.$METHOD.create($PARAMS, { idempotencyKey: ... })
+      - pattern-not: |
+          stripe.$METHOD.create($PARAMS, { idempotency_key: ... })

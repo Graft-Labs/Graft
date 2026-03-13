@@ -1,0 +1,33 @@
+rules:
+  - id: shipguard.monetization.middleware-only-plan-check
+    message: >
+      Subscription plan check found in Next.js middleware but not in the
+      corresponding API route. Middleware can be bypassed in some deployment
+      configurations (edge caching, direct function invocation). Always enforce
+      authorization checks in the API route itself, not only in middleware.
+    languages: [js, ts]
+    severity: ERROR
+    metadata:
+      guard: monetization
+      category: auth
+      confidence: likely
+      cwe: CWE-284
+      owasp: A01:2021
+    patterns:
+      - pattern-either:
+          - pattern: |
+              subscription_tier
+          - pattern: |
+              plan_type
+          - pattern: |
+              isPro
+          - pattern: |
+              isPaid
+          - pattern: |
+              hasAccess
+    paths:
+      include:
+        - "middleware.ts"
+        - "middleware.js"
+        - "**/middleware.ts"
+        - "**/middleware.js"
