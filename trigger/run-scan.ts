@@ -73,7 +73,7 @@ function detectFramework(pkgJson: Record<string, unknown>): string {
 
 // ── LLM semantic analysis ──────────────────────────────────────────────────────
 
-const LLM_MODEL = 'google/gemini-flash-1.5'
+const LLM_MODEL = 'qwen/qwen3-coder:free'
 
 // Dirs/extensions to skip when selecting files for LLM analysis
 const SKIP_DIRS = new Set([

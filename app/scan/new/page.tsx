@@ -213,14 +213,13 @@ export default function NewScanPage() {
       .catch(() => setBranches([selectedRepo.default_branch ?? "main"]))
       .finally(() => setLoadingBranches(false));
 
-    // Detect framework from package.json via GitHub API
+    // Detect framework from package.json via server proxy (supports private repos)
     setDetectingFramework(true);
-    fetch(`https://api.github.com/repos/${owner}/${repo}/contents/package.json`, {
-      headers: { Accept: "application/vnd.github.raw+json" },
-    })
+    fetch(`/api/github/package-json/${owner}/${repo}`)
       .then(async r => {
         if (!r.ok) return;
-        const text = await r.text();
+        const data = await r.json();
+        const text: string = data.content;
         try {
           const pkg = JSON.parse(text);
           const allDeps = { ...(pkg.dependencies ?? {}), ...(pkg.devDependencies ?? {}) };

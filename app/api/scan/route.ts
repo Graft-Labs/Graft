@@ -59,9 +59,26 @@ export async function POST(request: NextRequest) {
     const repoOwner = repoParts[repoParts.length - 2]
     const repoName = repoParts[repoParts.length - 1]
 
-    // Detect privacy by calling GitHub API — don't assume based on URL shape
+    // Resolve GitHub token: prefer the live provider_token from the current session,
+    // fall back to the persisted token in the users table (survives session refresh).
     let isPrivate = false
     let githubToken: string | null = session?.provider_token ?? null
+
+    if (githubToken) {
+      // Persist the fresh token so future requests can use it
+      await supabase
+        .from('users')
+        .update({ github_token: githubToken })
+        .eq('id', user.id)
+    } else {
+      // Fall back to the persisted token
+      const { data: userRow } = await supabase
+        .from('users')
+        .select('github_token')
+        .eq('id', user.id)
+        .single()
+      githubToken = userRow?.github_token ?? null
+    }
 
     const repoCheckRes = await fetch(
       `https://api.github.com/repos/${repoOwner}/${repoName}`,
