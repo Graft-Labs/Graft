@@ -73,7 +73,17 @@ function detectFramework(pkgJson: Record<string, unknown>): string {
 
 // ── LLM semantic analysis ──────────────────────────────────────────────────────
 
-const LLM_MODEL = 'meta-llama/llama-3.3-70b-instruct:free'
+// Mistral direct API is used first (own key, separate quota, no shared rate limits).
+// OpenRouter free models are fallback when Mistral is unavailable.
+
+// OpenRouter free models — fallback when Mistral is unavailable
+const OPENROUTER_FREE_MODELS = [
+  'meta-llama/llama-3.3-70b-instruct:free',
+  'google/gemma-3-27b-it:free',
+  'mistralai/mistral-small-3.1-24b-instruct:free',
+]
+
+const MAX_RATE_LIMIT_RETRIES_PER_MODEL = 2  // fast-fail per model to keep scan bounded
 
 // Dirs/extensions to skip when selecting files for LLM analysis
 const SKIP_DIRS = new Set([
@@ -203,9 +213,11 @@ async function runLlmAnalysis(
   framework: string,
   _allDeps: Record<string, unknown>,
 ): Promise<EnrichedIssue[]> {
-  const apiKey = process.env.OPENROUTER_API_KEY
-  if (!apiKey) {
-    logger.warn('llm_skipped', { reason: 'OPENROUTER_API_KEY not set' })
+  const openRouterKey = process.env.OPENROUTER_API_KEY
+  const mistralKey    = process.env.MISTRAL_API_KEY
+
+  if (!openRouterKey && !mistralKey) {
+    logger.warn('llm_skipped', { reason: 'No LLM API keys set' })
     return []
   }
   if (files.length === 0) {
@@ -242,47 +254,62 @@ No explanation, no markdown wrapper, just the JSON object.`
 
   const userMessage = `Analyze the following codebase files for production-readiness issues.\n\n${fileBlocks}`
 
-  let lastError: Error | null = null
-  let rateLimitRetries = 0
-  const MAX_RATE_LIMIT_RETRIES = 5
-  for (let attempt = 1; attempt <= 3; attempt++) {
+  // ── 1. Try Mistral direct API first (own key, separate quota, no shared rate limits) ──
+  if (mistralKey) {
+    const result = await tryMistral(mistralKey, systemPrompt, userMessage)
+    if (result !== null) return result
+  }
+
+  // ── 2. Fall back to OpenRouter free models ────────────────────────────────────────────
+  if (openRouterKey) {
+    for (const model of OPENROUTER_FREE_MODELS) {
+      logger.log('llm_trying_model', { model })
+      const result = await tryOpenRouterModel(openRouterKey, model, systemPrompt, userMessage)
+      if (result !== null) return result
+      logger.warn('llm_model_exhausted', { model })
+    }
+  }
+
+  logger.warn('llm_failed_all_models')
+  return []  // graceful degradation — grep/file checks still produce a full report
+}
+
+// ── Mistral direct API call ────────────────────────────────────────────────────
+
+async function tryMistral(
+  apiKey: string,
+  system: string,
+  user:   string,
+): Promise<EnrichedIssue[] | null> {
+  logger.log('llm_trying_model', { model: 'mistral-small-latest' })
+  for (let attempt = 1; attempt <= 2; attempt++) {
     try {
-      const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      const res = await fetch('https://api.mistral.ai/v1/chat/completions', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-          'HTTP-Referer': 'https://shipguard-ai.vercel.app',
-          'X-Title': 'ShipGuard AI',
+          'Content-Type':  'application/json',
         },
         body: JSON.stringify({
-          model: LLM_MODEL,
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user',   content: userMessage },
-          ],
+          model:           'mistral-small-latest',
+          messages:        [{ role: 'system', content: system }, { role: 'user', content: user }],
           response_format: { type: 'json_object' },
-          temperature: 0.1,
-          max_tokens: 8192,
+          temperature:     0.1,
+          max_tokens:      8192,
         }),
-        signal: AbortSignal.timeout(120_000),
+        signal: AbortSignal.timeout(90_000),
       })
 
       if (res.status === 429) {
-        rateLimitRetries++
-        // Exponential backoff: 15s, 30s, 60s, 90s, 120s
-        const wait = Math.min(rateLimitRetries * 30_000, 120_000)
-        logger.warn('llm_rate_limited', { rateLimitRetries, waitMs: wait })
-        await new Promise(r => setTimeout(r, wait))
-        if (rateLimitRetries < MAX_RATE_LIMIT_RETRIES) {
-          attempt-- // don't count rate limit as a failed attempt
-        }
+        logger.warn('llm_rate_limited', { model: 'mistral', attempt })
+        await new Promise(r => setTimeout(r, 30_000))
         continue
       }
 
       if (!res.ok) {
         const body = await res.text()
-        throw new Error(`OpenRouter ${res.status}: ${body.slice(0, 300)}`)
+        logger.warn('llm_model_failed', { model: 'mistral', status: res.status, body: body.slice(0, 200) })
+        return null
       }
 
       const data = await res.json() as {
@@ -290,49 +317,119 @@ No explanation, no markdown wrapper, just the JSON object.`
         error?:   { message?: string }
       }
 
-      if (data.error) throw new Error(`LLM error: ${data.error.message}`)
-
-      const raw = data.choices?.[0]?.message?.content ?? ''
-      if (!raw.trim()) throw new Error('LLM returned empty response')
-
-      // Parse and validate
-      let parsed: unknown
-      try { parsed = JSON.parse(raw) }
-      catch { throw new Error(`LLM returned non-JSON: ${raw.slice(0, 200)}`) }
-
-      const validated = LlmOutputSchema.safeParse(parsed)
-      if (!validated.success) {
-        logger.warn('llm_schema_invalid', { issues: validated.error.issues.slice(0, 3) })
-        // Best-effort: try to extract whatever issues parsed correctly
-        const rawIssues = (parsed as { issues?: unknown[] })?.issues ?? []
-        const goodIssues: EnrichedIssue[] = []
-        for (const raw of rawIssues) {
-          const single = LlmIssueSchema.safeParse(raw)
-          if (single.success) {
-            goodIssues.push({ ...single.data, category: single.data.guard })
-          }
-        }
-        logger.log('llm_partial_parse', { count: goodIssues.length })
-        return goodIssues
+      if (data.error) {
+        logger.warn('llm_model_error', { model: 'mistral', error: data.error.message })
+        return null
       }
 
-      const issues: EnrichedIssue[] = validated.data.issues.map(i => ({
-        ...i,
-        category: i.guard,
-      }))
+      const raw = data.choices?.[0]?.message?.content ?? ''
+      if (!raw.trim()) { logger.warn('llm_empty_response', { model: 'mistral' }); return null }
 
-      logger.log('llm_analysis_done', { model: LLM_MODEL, issueCount: issues.length })
-      return issues
+      return parseLlmResponse(raw, 'mistral-small-latest')
 
     } catch (err) {
-      lastError = err instanceof Error ? err : new Error(String(err))
-      logger.warn('llm_attempt_failed', { attempt, error: lastError.message.slice(0, 200) })
-      if (attempt < 3) await new Promise(r => setTimeout(r, attempt * 5_000))
+      const msg = err instanceof Error ? err.message : String(err)
+      logger.warn('llm_attempt_failed', { model: 'mistral', attempt, error: msg.slice(0, 200) })
+      if (attempt < 2) await new Promise(r => setTimeout(r, 5_000))
+    }
+  }
+  return null
+}
+
+// ── OpenRouter model call ──────────────────────────────────────────────────────
+
+async function tryOpenRouterModel(
+  apiKey: string,
+  model:  string,
+  system: string,
+  user:   string,
+): Promise<EnrichedIssue[] | null> {
+  let rateLimitRetries = 0
+
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type':  'application/json',
+          'HTTP-Referer':  'https://shipguard-ai.vercel.app',
+          'X-Title':       'ShipGuard AI',
+        },
+        body: JSON.stringify({
+          model,
+          messages:        [{ role: 'system', content: system }, { role: 'user', content: user }],
+          response_format: { type: 'json_object' },
+          temperature:     0.1,
+          max_tokens:      8192,
+        }),
+        signal: AbortSignal.timeout(90_000),
+      })
+
+      if (res.status === 429) {
+        rateLimitRetries++
+        const wait = Math.min(rateLimitRetries * 30_000, 60_000)
+        logger.warn('llm_rate_limited', { model, rateLimitRetries, waitMs: wait })
+        await new Promise(r => setTimeout(r, wait))
+        if (rateLimitRetries < MAX_RATE_LIMIT_RETRIES_PER_MODEL) attempt--
+        continue
+      }
+
+      if (!res.ok) {
+        const body = await res.text()
+        logger.warn('llm_model_failed', { model, status: res.status, body: body.slice(0, 200) })
+        return null
+      }
+
+      const data = await res.json() as {
+        choices?: Array<{ message?: { content?: string } }>
+        error?:   { message?: string }
+      }
+
+      if (data.error) { logger.warn('llm_model_error', { model, error: data.error.message }); return null }
+
+      const raw = data.choices?.[0]?.message?.content ?? ''
+      if (!raw.trim()) { logger.warn('llm_empty_response', { model }); return null }
+
+      return parseLlmResponse(raw, model)
+
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      logger.warn('llm_attempt_failed', { model, attempt, error: msg.slice(0, 200) })
+      if (attempt < 2) await new Promise(r => setTimeout(r, 5_000))
     }
   }
 
-  logger.warn('llm_failed_all_attempts', { error: lastError?.message?.slice(0, 200) })
-  return []  // graceful degradation
+  return null
+}
+
+// ── Shared LLM response parser ─────────────────────────────────────────────────
+
+function parseLlmResponse(raw: string, model: string): EnrichedIssue[] | null {
+  let parsed: unknown
+  try { parsed = JSON.parse(raw) }
+  catch {
+    logger.warn('llm_non_json', { model, preview: raw.slice(0, 100) })
+    return null
+  }
+
+  const validated = LlmOutputSchema.safeParse(parsed)
+  if (!validated.success) {
+    logger.warn('llm_schema_invalid', { model, issues: validated.error.issues.slice(0, 3) })
+    // Best-effort: extract whatever issues parsed correctly
+    const rawIssues = (parsed as { issues?: unknown[] })?.issues ?? []
+    const goodIssues: EnrichedIssue[] = []
+    for (const ri of rawIssues) {
+      const single = LlmIssueSchema.safeParse(ri)
+      if (single.success) goodIssues.push({ ...single.data, category: single.data.guard })
+    }
+    logger.log('llm_partial_parse', { model, count: goodIssues.length })
+    return goodIssues.length > 0 ? goodIssues : null
+  }
+
+  const issues: EnrichedIssue[] = validated.data.issues.map(i => ({ ...i, category: i.guard }))
+  logger.log('llm_analysis_done', { model, issueCount: issues.length })
+  return issues
 }
 
 // ── Grep-based source code checks ─────────────────────────────────────────────
