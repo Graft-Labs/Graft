@@ -141,21 +141,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Max 10 scans in the last 24 hours per user
-    const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
-    const { count: dailyCount } = await supabase
-      .from('scans')
-      .select('id', { count: 'exact', head: true })
-      .eq('user_id', user.id)
-      .gte('created_at', since24h)
-
-    if ((dailyCount ?? 0) >= 10) {
-      logScan('rate_limit_daily', { traceId, userId: user.id, dailyCount })
-      return NextResponse.json(
-        { error: 'rate_limited', message: 'Daily scan limit reached (10 per day). Try again tomorrow.' },
-        { status: 429 }
-      )
-    }
+    // Daily scan limit disabled for testing
     // ─────────────────────────────────────────────────────────────────────────
 
     const userName =
