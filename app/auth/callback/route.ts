@@ -8,9 +8,19 @@ export async function GET(request: Request) {
 
   if (code) {
     const supabase = await createServerClient()
-    const { error } = await supabase.auth.exchangeCodeForSession(code)
+    const { data, error } = await supabase.auth.exchangeCodeForSession(code)
 
     if (!error) {
+      // Persist the provider_token immediately — it disappears after session refresh
+      const providerToken = data.session?.provider_token
+      const userId = data.session?.user?.id
+      if (providerToken && userId) {
+        await supabase
+          .from('users')
+          .update({ github_token: providerToken })
+          .eq('id', userId)
+      }
+
       return NextResponse.redirect(new URL(next, requestUrl.origin))
     }
   }
