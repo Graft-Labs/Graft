@@ -1,5 +1,46 @@
 // ── Types ──────────────────────────────────────────────────────────────────────
 
+// Results from the grep-based source code checks.
+// Each field is either the raw grep output (non-empty string = match found)
+// or a boolean/count serialized as string.
+export interface GrepCheckResults {
+  // Security
+  vite_secret_env_vars:    string  // VITE_* prefix on DB URLs, API keys, tokens
+  next_public_secret_vars: string  // NEXT_PUBLIC_* on secret-looking vars
+  hardcoded_api_keys:      string  // Literal API key patterns in source
+  client_side_db_import:   string  // ORM/DB client imported in src/ (browser code)
+  console_log_secrets:     string  // console.log(env/key/token/password)
+  hardcoded_default_creds: string  // admin123, change-me, "secret" in source
+  user_id_from_body:       string  // userId from request body without verification
+  sql_template_literal:    string  // SQL keyword in template literal with ${
+  eval_usage:              string  // eval() in non-test source
+  dangerous_inner_html:    string  // dangerouslySetInnerHTML without sanitize
+  cors_wildcard:           string  // CORS allow_origins: * in source
+  debug_mode_enabled:      string  // DEBUG=true / debug: true in non-dev config
+  window_node_polyfill:    string  // window.Buffer / window.process polyfills
+  // Scalability
+  find_many_no_pagination: string  // .findMany() without take:/limit:
+  n_plus_one_query:        string  // await db call inside map/forEach/for loop
+  select_no_where:         string  // .select().from() with no .where()
+  img_tag_not_next_image:  string  // <img> instead of next/image
+  images_unoptimized:      string  // images.unoptimized: true in next.config
+  sync_file_io:            string  // readFileSync/writeFileSync in API handlers
+  interval_not_cleared:    string  // setInterval() never cleared
+  console_log_count:       string  // count of console.log lines in source
+  // Distribution
+  default_app_title:       string  // "Vite App" / "Create React App" title still set
+  // Monetization
+  price_from_body:         string  // price/amount taken from request body
+  float_money:             string  // floating point arithmetic for money values
+  // Auth
+  api_routes_without_auth: string  // Next.js API routes with no auth check
+  // Dep-based flags
+  has_rate_limiting:       string  // 'true' | 'false'
+  has_auth_library:        string  // 'true' | 'false'
+  has_middleware:          string  // 'true' | 'false'
+  framework:               string
+}
+
 export interface ToolOutputs {
   scan_id?: string
   framework?: string
@@ -8,12 +49,10 @@ export interface ToolOutputs {
   gitleaks_git: unknown[]
   // OSV-Scanner
   osv:          unknown
-  // Semgrep (fixed config: p/nodejs + p/react + p/nextjs + custom rules)
+  // Semgrep (local custom rules only)
   semgrep:      unknown
-  // Bearer CLI (OWASP Top 10, PII, data flow)
-  bearer:       unknown
-  // njsscan (Node.js-specific: eval, prototype pollution, JWT none-alg)
-  njsscan:      unknown
+  // Grep-based source code checks
+  grep_checks:  GrepCheckResults
   // File-based checks
   file_checks: {
     env_example:          string
@@ -234,129 +273,397 @@ function parseSemgrep(semgrep: unknown): EnrichedIssue[] {
   return issues
 }
 
-// ── Bearer parser ──────────────────────────────────────────────────────────────
-// Schema: { critical: [...], high: [...], medium: [...], low: [...] }
-// Each finding: { id, title, line_number, full_filename, snippet, description }
+// ── Grep-checks parser ─────────────────────────────────────────────────────────
+//
+// Each check: if the grep output is non-empty → issue found.
+// We extract the first matching line as the code_snippet / file hint where relevant.
 
-function parseBearer(bearer: unknown): EnrichedIssue[] {
+function parseGrepChecks(g: GrepCheckResults): EnrichedIssue[] {
   const issues: EnrichedIssue[] = []
+  const framework = g.framework ?? 'unknown'
+  const isNextJs  = framework === 'nextjs'
+  const isVite    = framework === 'react-vite'
 
-  const data = bearer as Partial<Record<
-    'critical' | 'high' | 'medium' | 'low',
-    Array<{
-      id?:            string
-      title?:         string
-      line_number?:   number
-      full_filename?: string
-      snippet?:       string
-      description?:   string
-    }>
-  >>
+  // Helper: first line of grep output → used as snippet
+  const firstLine = (raw: string) => raw.split('\n')[0]?.trim() ?? ''
+  // Helper: extract file:line from grep output like "src/db.ts:5:import..."
+  const extractFile = (raw: string): { file?: string; line?: number } => {
+    const match = raw.match(/^([^:]+):(\d+):/)
+    if (match) return { file: match[1], line: parseInt(match[2], 10) }
+    return {}
+  }
 
-  const SEVERITY_LEVELS: Array<'critical' | 'high' | 'medium' | 'low'> = ['critical', 'high', 'medium', 'low']
+  // ── S1.1 VITE_ secret env vars ────────────────────────────────────────────────
+  if (g.vite_secret_env_vars && isVite) {
+    const { file, line } = extractFile(g.vite_secret_env_vars)
+    issues.push({
+      guard: 'security', category: 'secrets', severity: 'critical', confidence: 'confirmed',
+      title: 'VITE_ prefix exposes secrets to the browser',
+      description: 'Environment variables prefixed with `VITE_` are embedded into the JavaScript bundle at build time and are visible to anyone who opens DevTools. Database URLs, API keys, and tokens with this prefix are fully exposed to end users.',
+      fix_suggestion: 'Move all secret env vars (DB URLs, API keys, tokens) to a backend API route. Only `VITE_APP_TITLE`, `VITE_PUBLIC_URL`, and similar non-secret vars should use the `VITE_` prefix.\n\nCreate an API endpoint:\n```ts\n// src/api/data.ts (server-side only)\nimport { db } from "./db" // uses DATABASE_URL (no VITE_ prefix)\n```',
+      code_snippet: firstLine(g.vite_secret_env_vars),
+      file_path: file,
+      line_number: line,
+    })
+  }
 
-  for (const level of SEVERITY_LEVELS) {
-    for (const finding of data[level] ?? []) {
-      if (!finding.title && !finding.id) continue
+  // ── S1.2 NEXT_PUBLIC_ secret vars ─────────────────────────────────────────────
+  if (g.next_public_secret_vars && isNextJs) {
+    const { file, line } = extractFile(g.next_public_secret_vars)
+    issues.push({
+      guard: 'security', category: 'secrets', severity: 'critical', confidence: 'likely',
+      title: 'NEXT_PUBLIC_ prefix exposes secret to browser',
+      description: 'Variables prefixed `NEXT_PUBLIC_` are inlined into the client-side bundle. A secret-looking variable (API key, token, password) with this prefix is visible to all users in the browser.',
+      fix_suggestion: 'Remove the `NEXT_PUBLIC_` prefix from any secret variable. Access it only in Server Components, API routes (`app/api/`), or server actions — never in client components.',
+      code_snippet: firstLine(g.next_public_secret_vars),
+      file_path: file,
+      line_number: line,
+    })
+  }
 
-      // Derive guard from Bearer rule ID prefix
-      const id = (finding.id ?? '').toLowerCase()
-      let guard = 'security'
-      if (id.includes('ruby') || id.includes('python')) guard = 'security'
-      // Bearer's OWASP mapping — most findings are security
-      // A few patterns go to scalability (e.g. logging PII)
+  // ── S1.3 Hardcoded API key pattern in source ───────────────────────────────────
+  if (g.hardcoded_api_keys) {
+    const { file, line } = extractFile(g.hardcoded_api_keys)
+    issues.push({
+      guard: 'security', category: 'secrets', severity: 'critical', confidence: 'likely',
+      title: 'API key hardcoded in source code',
+      description: 'A raw API key or token pattern was found directly in source code (not via an environment variable). Anyone with read access to the repository — including public GitHub — can use this key.',
+      fix_suggestion: '1. Rotate the key immediately in the service dashboard — assume it is compromised.\n2. Replace the hardcoded value with `process.env.YOUR_KEY_NAME`.\n3. Add `.env` to `.gitignore` and use `.env.example` with placeholder values.',
+      code_snippet: firstLine(g.hardcoded_api_keys),
+      file_path: file,
+      line_number: line,
+    })
+  }
 
-      const title = finding.title ?? finding.id ?? 'Unknown Bearer finding'
-      const desc  = finding.description
-        ? `${finding.description}${finding.full_filename ? ` Found in \`${finding.full_filename}\`.` : ''}`
-        : `${title}${finding.full_filename ? ` in \`${finding.full_filename}\`` : ''}.`
+  // ── S1.6 DB client imported in frontend/browser source ─────────────────────────
+  if (g.client_side_db_import) {
+    const { file, line } = extractFile(g.client_side_db_import)
+    issues.push({
+      guard: 'security', category: 'secrets', severity: 'critical', confidence: 'confirmed',
+      title: 'Database client imported in browser-side code',
+      description: 'A database ORM or client (`drizzle-orm`, `@neondatabase/serverless`, `@prisma/client`, `pg`) is imported in `src/` — code that runs in the browser. This means any user can execute arbitrary database queries directly from DevTools using your connection credentials.',
+      fix_suggestion: 'Move ALL database access to a server-side API route or server action:\n```ts\n// app/api/data/route.ts (server only)\nimport { db } from "@/lib/db"\nexport async function GET() {\n  const rows = await db.select().from(table)\n  return Response.json(rows)\n}\n```\nThe `src/` directory should never import database clients.',
+      code_snippet: firstLine(g.client_side_db_import),
+      file_path: file,
+      line_number: line,
+    })
+  }
 
+  // ── S1.7 console.log printing secrets ──────────────────────────────────────────
+  if (g.console_log_secrets) {
+    const { file, line } = extractFile(g.console_log_secrets)
+    issues.push({
+      guard: 'security', category: 'secrets', severity: 'high', confidence: 'likely',
+      title: 'console.log printing sensitive values',
+      description: 'A `console.log` statement appears to print env vars, API keys, tokens, or passwords. In browser code this is visible in DevTools; in server code it may appear in log aggregation services accessible to attackers.',
+      fix_suggestion: 'Remove all `console.log` statements that print secret values. Use a structured logger (e.g. `pino`) that can redact sensitive fields, and never log full credentials — at most log truncated prefixes for debugging.',
+      code_snippet: firstLine(g.console_log_secrets),
+      file_path: file,
+      line_number: line,
+    })
+  }
+
+  // ── S2.3 Hardcoded default credentials ──────────────────────────────────────────
+  if (g.hardcoded_default_creds) {
+    const { file, line } = extractFile(g.hardcoded_default_creds)
+    issues.push({
+      guard: 'security', category: 'authentication', severity: 'critical', confidence: 'likely',
+      title: 'Hardcoded default credentials in source',
+      description: 'Default credentials such as `admin123`, `password123`, `change-me`, or `"secret"` were found hardcoded in config or source files. If no environment variable overrides these at deploy time, production runs with known-bad credentials.',
+      fix_suggestion: 'Replace all default credential values with environment variables and throw an error at startup if they are not set:\n```ts\nif (!process.env.JWT_SECRET) throw new Error("JWT_SECRET is required")\n```\nNever ship fallback credential values in code.',
+      code_snippet: firstLine(g.hardcoded_default_creds),
+      file_path: file,
+      line_number: line,
+    })
+  }
+
+  // ── S2.6 userId from request body ───────────────────────────────────────────────
+  if (g.user_id_from_body && isNextJs) {
+    const { file, line } = extractFile(g.user_id_from_body)
+    issues.push({
+      guard: 'security', category: 'authentication', severity: 'high', confidence: 'likely',
+      title: 'userId taken from request body (IDOR risk)',
+      description: '`userId` or `user_id` is being read from the request body. Any user can send any userId value and act as another user — a classic Insecure Direct Object Reference (IDOR) vulnerability.',
+      fix_suggestion: 'Never trust client-supplied identity. Extract the authenticated user ID from your session/JWT on the server side:\n```ts\n// Next.js App Router\nconst { userId } = await auth() // Clerk\n// or\nconst session = await getServerSession(authOptions) // NextAuth\nconst userId = session.user.id\n```',
+      code_snippet: firstLine(g.user_id_from_body),
+      file_path: file,
+      line_number: line,
+    })
+  }
+
+  // ── S3.1 SQL template literal injection ──────────────────────────────────────────
+  if (g.sql_template_literal) {
+    const { file, line } = extractFile(g.sql_template_literal)
+    issues.push({
+      guard: 'security', category: 'injection', severity: 'critical', confidence: 'confirmed',
+      title: 'SQL query built with string interpolation',
+      description: 'A SQL query is constructed using a template literal with `${...}` interpolation. If any interpolated value comes from user input, this is a SQL injection vulnerability — attackers can exfiltrate or destroy your entire database.',
+      fix_suggestion: 'Use parameterized queries or an ORM instead:\n```ts\n// Drizzle (safe)\nconst rows = await db.select().from(users).where(eq(users.id, userId))\n\n// Raw SQL with params (safe)\nconst rows = await sql`SELECT * FROM users WHERE id = ${userId}`\n\n// NEVER do this:\nconst rows = await db.execute(`SELECT * FROM users WHERE id = ${userId}`)\n```',
+      code_snippet: firstLine(g.sql_template_literal),
+      file_path: file,
+      line_number: line,
+    })
+  }
+
+  // ── S3.2 eval() usage ────────────────────────────────────────────────────────────
+  if (g.eval_usage) {
+    const { file, line } = extractFile(g.eval_usage)
+    issues.push({
+      guard: 'security', category: 'injection', severity: 'critical', confidence: 'confirmed',
+      title: 'eval() used in source code',
+      description: '`eval()` executes arbitrary JavaScript code. If the argument includes any user-controlled data, it is a code injection vulnerability that can be exploited to steal data, bypass auth, or perform actions as the current user/server.',
+      fix_suggestion: 'Replace `eval()` with safe alternatives:\n- For JSON: use `JSON.parse()`\n- For math expressions: use a safe expression parser like `mathjs`\n- For dynamic requires: use a static import map\n\nThere is almost no legitimate use of `eval()` in production web apps.',
+      code_snippet: firstLine(g.eval_usage),
+      file_path: file,
+      line_number: line,
+    })
+  }
+
+  // ── S3.3 dangerouslySetInnerHTML without sanitization ────────────────────────────
+  if (g.dangerous_inner_html) {
+    const { file, line } = extractFile(g.dangerous_inner_html)
+    issues.push({
+      guard: 'security', category: 'xss', severity: 'high', confidence: 'likely',
+      title: 'dangerouslySetInnerHTML without sanitization',
+      description: '`dangerouslySetInnerHTML` is used without a nearby `DOMPurify.sanitize()` call. If the HTML content comes from user input or an external source, this is a stored or reflected XSS vulnerability.',
+      fix_suggestion: 'Sanitize HTML before rendering:\n```tsx\nimport DOMPurify from "dompurify"\n\n<div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(userContent) }} />\n```\nInstall: `npm install dompurify @types/dompurify`',
+      code_snippet: firstLine(g.dangerous_inner_html),
+      file_path: file,
+      line_number: line,
+    })
+  }
+
+  // ── S4.1/S4.2 CORS wildcard * ────────────────────────────────────────────────────
+  if (g.cors_wildcard) {
+    const { file, line } = extractFile(g.cors_wildcard)
+    issues.push({
+      guard: 'security', category: 'configuration', severity: 'high', confidence: 'likely',
+      title: 'CORS wildcard (*) allows all origins',
+      description: 'The CORS configuration allows requests from any origin (`*`). Combined with cookies or auth tokens, this lets any malicious website make authenticated requests to your API on behalf of logged-in users (CSRF-style).',
+      fix_suggestion: 'Restrict CORS to your specific frontend domain(s):\n```ts\n// Next.js API route\nresponse.headers.set("Access-Control-Allow-Origin", "https://yourapp.com")\n\n// FastAPI\napp.add_middleware(CORSMiddleware, allow_origins=["https://yourapp.com"])\n```\nNever use `*` in production if your API uses cookies or auth headers.',
+      code_snippet: firstLine(g.cors_wildcard),
+      file_path: file,
+      line_number: line,
+    })
+  }
+
+  // ── S4.4 DEBUG=true in production config ──────────────────────────────────────────
+  if (g.debug_mode_enabled) {
+    const { file, line } = extractFile(g.debug_mode_enabled)
+    issues.push({
+      guard: 'security', category: 'configuration', severity: 'medium', confidence: 'likely',
+      title: 'Debug mode enabled in production config',
+      description: '`DEBUG=true` or `debug: true` found in a non-dev config file. Debug mode typically enables full stack traces in HTTP error responses, verbose logging, and sometimes disables auth checks — all useful to attackers.',
+      fix_suggestion: 'Ensure debug mode is disabled in production:\n```python\n# Python / FastAPI\nDEBUG=False  # in .env or config\n```\n```ts\n// Node.js\nconst isDev = process.env.NODE_ENV === "development"\n```\nNever commit `DEBUG=true` to `.env.example`.',
+      code_snippet: firstLine(g.debug_mode_enabled),
+      file_path: file,
+      line_number: line,
+    })
+  }
+
+  // ── S4.6 Node.js globals polyfilled onto window ───────────────────────────────────
+  if (g.window_node_polyfill) {
+    const { file, line } = extractFile(g.window_node_polyfill)
+    issues.push({
+      guard: 'security', category: 'configuration', severity: 'medium', confidence: 'confirmed',
+      title: 'Node.js globals (Buffer/process) polyfilled onto window',
+      description: '`window.Buffer` or `window.process` is being set globally. This means any third-party script, browser extension, or XSS payload can read `window.process.env` — potentially exposing all environment variables that were bundled at build time.',
+      fix_suggestion: 'Remove the global polyfill. Instead, import `Buffer` directly where needed:\n```ts\nimport { Buffer } from "buffer"\n// Use it locally, not via window\n```\nIf a library requires `Buffer` globally, use Vite\'s `define` config instead:\n```ts\n// vite.config.ts\ndefine: { global: "globalThis" }\n```',
+      code_snippet: firstLine(g.window_node_polyfill),
+      file_path: file,
+      line_number: line,
+    })
+  }
+
+  // ── SC1.2 findMany() with no pagination ────────────────────────────────────────────
+  if (g.find_many_no_pagination) {
+    const { file, line } = extractFile(g.find_many_no_pagination)
+    issues.push({
+      guard: 'scalability', category: 'database', severity: 'high', confidence: 'likely',
+      title: 'Database query with no pagination limit',
+      description: '`.findMany()` is called without a `take:` or `limit:` clause. As your data grows, this query will return every row in the table — potentially millions — on every request, causing OOM errors and timeouts.',
+      fix_suggestion: 'Always paginate database queries:\n```ts\nconst rows = await prisma.post.findMany({\n  take: 20,\n  skip: page * 20,\n  orderBy: { createdAt: "desc" },\n})\n```\nFor cursor-based pagination (more efficient at scale):\n```ts\nconst rows = await prisma.post.findMany({\n  take: 20,\n  cursor: cursor ? { id: cursor } : undefined,\n  orderBy: { id: "asc" },\n})\n```',
+      code_snippet: firstLine(g.find_many_no_pagination),
+      file_path: file,
+      line_number: line,
+    })
+  }
+
+  // ── SC1.4 N+1 query pattern ──────────────────────────────────────────────────────
+  if (g.n_plus_one_query) {
+    const { file, line } = extractFile(g.n_plus_one_query)
+    issues.push({
+      guard: 'scalability', category: 'database', severity: 'high', confidence: 'likely',
+      title: 'N+1 database query pattern detected',
+      description: 'A database call (`await prisma.*` or `await db.*`) appears inside a loop (`.map()`, `.forEach()`, `for`). With 100 items this makes 100 separate DB round-trips — turning a 10ms operation into 1000ms+.',
+      fix_suggestion: 'Batch related queries using `include` (Prisma) or a single `WHERE IN` query:\n```ts\n// Instead of looping:\nconst posts = await prisma.post.findMany({\n  include: { author: true }, // fetches authors in 1 query\n})\n\n// Or use Promise.all only for truly independent operations:\nconst results = await Promise.all(ids.map(id => prisma.post.findUnique({ where: { id } })))\n```',
+      code_snippet: firstLine(g.n_plus_one_query),
+      file_path: file,
+      line_number: line,
+    })
+  }
+
+  // ── SC1.5 select() with no .where() ─────────────────────────────────────────────
+  if (g.select_no_where) {
+    const { file, line } = extractFile(g.select_no_where)
+    issues.push({
+      guard: 'scalability', category: 'database', severity: 'high', confidence: 'possible',
+      title: 'Full table scan: select() without .where()',
+      description: 'A `db.select().from(table)` query with no `.where()` clause performs a full table scan on every call. At scale, this means reading millions of rows on every request.',
+      fix_suggestion: 'Add appropriate filters:\n```ts\nconst rows = await db.select().from(users).where(eq(users.active, true)).limit(50)\n```',
+      code_snippet: firstLine(g.select_no_where),
+      file_path: file,
+      line_number: line,
+    })
+  }
+
+  // ── SC2.1 <img> instead of next/image ────────────────────────────────────────────
+  if (g.img_tag_not_next_image && isNextJs) {
+    const { file, line } = extractFile(g.img_tag_not_next_image)
+    // Count occurrences for context
+    const count = g.img_tag_not_next_image.split('\n').filter(Boolean).length
+    issues.push({
+      guard: 'scalability', category: 'performance', severity: 'medium', confidence: 'confirmed',
+      title: `Raw <img> tags instead of next/image (${count} found)`,
+      description: `${count} raw \`<img>\` tag(s) found. Next.js \`<Image>\` from \`next/image\` automatically optimizes images (WebP/AVIF conversion, responsive sizes, lazy loading, blur placeholder). Using raw \`<img>\` ships full-size PNGs/JPEGs, significantly slowing load times.`,
+      fix_suggestion: '```tsx\nimport Image from "next/image"\n\n// Replace:\n<img src="/hero.png" width={800} height={400} alt="Hero" />\n\n// With:\n<Image src="/hero.png" width={800} height={400} alt="Hero" />\n```',
+      code_snippet: firstLine(g.img_tag_not_next_image),
+      file_path: file,
+      line_number: line,
+    })
+  }
+
+  // ── SC2.6 images.unoptimized: true ────────────────────────────────────────────────
+  if (g.images_unoptimized && isNextJs) {
+    issues.push({
+      guard: 'scalability', category: 'performance', severity: 'medium', confidence: 'confirmed',
+      title: 'Image optimization disabled (images.unoptimized: true)',
+      description: '`images.unoptimized: true` is set in `next.config`. This disables Next.js image optimization globally — all images ship as full-size originals with no WebP conversion, no responsive sizes, and no lazy loading optimization.',
+      fix_suggestion: 'Remove `unoptimized: true` from `next.config.ts`. If you are deploying to a static export, use a CDN or image optimization service instead.',
+      code_snippet: firstLine(g.images_unoptimized),
+    })
+  }
+
+  // ── SC3.2 Synchronous file I/O in request handlers ────────────────────────────────
+  if (g.sync_file_io) {
+    const { file, line } = extractFile(g.sync_file_io)
+    issues.push({
+      guard: 'scalability', category: 'performance', severity: 'high', confidence: 'confirmed',
+      title: 'Synchronous file I/O in API handler',
+      description: '`readFileSync` or `writeFileSync` is used in an API route. Synchronous I/O blocks Node.js\'s event loop — while the file is being read, no other requests can be processed. Under load this causes all requests to queue up.',
+      fix_suggestion: 'Use async file I/O:\n```ts\nimport { readFile, writeFile } from "node:fs/promises"\n\nconst content = await readFile(path, "utf-8")\n```',
+      code_snippet: firstLine(g.sync_file_io),
+      file_path: file,
+      line_number: line,
+    })
+  }
+
+  // ── SC3.6 setInterval not cleared ────────────────────────────────────────────────
+  if (g.interval_not_cleared) {
+    const { file, line } = extractFile(g.interval_not_cleared)
+    issues.push({
+      guard: 'scalability', category: 'performance', severity: 'medium', confidence: 'likely',
+      title: 'setInterval() without clearInterval() (memory leak)',
+      description: '`setInterval()` is used without a corresponding `clearInterval()`. In React components, this creates a new interval on every render and never clears old ones — causing memory leaks and duplicate callbacks that accumulate over the session.',
+      fix_suggestion: 'Always clean up intervals in a useEffect cleanup:\n```ts\nuseEffect(() => {\n  const id = setInterval(() => { /* ... */ }, 1000)\n  return () => clearInterval(id) // cleanup on unmount\n}, [])\n```',
+      code_snippet: firstLine(g.interval_not_cleared),
+      file_path: file,
+      line_number: line,
+    })
+  }
+
+  // ── SC3.3 Excessive console.log ──────────────────────────────────────────────────
+  const consoleLogCount = parseInt(g.console_log_count ?? '0', 10)
+  if (consoleLogCount >= 20) {
+    issues.push({
+      guard: 'scalability', category: 'performance', severity: 'low', confidence: 'confirmed',
+      title: `Excessive console.log usage (${consoleLogCount} statements)`,
+      description: `${consoleLogCount} \`console.log\` statements found in source. In production, these add noise to server logs (making real errors harder to find), slow down hot paths with string serialization, and may accidentally log sensitive data to browser consoles.`,
+      fix_suggestion: 'Remove debug `console.log` statements before deploying. Use a structured logger:\n```ts\nimport pino from "pino"\nconst logger = pino()\nlogger.info({ userId }, "user logged in") // structured, filterable\n```\nOr set `console.log = () => {}` in production as a last resort.',
+    })
+  }
+
+  // ── D1.6 Default app title ───────────────────────────────────────────────────────
+  if (g.default_app_title) {
+    const { file, line } = extractFile(g.default_app_title)
+    issues.push({
+      guard: 'distribution', category: 'seo', severity: 'medium', confidence: 'confirmed',
+      title: 'Default framework title still set ("Vite App" / "React App")',
+      description: 'The page title is still set to the scaffolded default ("Vite App", "Create React App", etc.). This appears in browser tabs, search engine results, and social shares — making the app look unfinished and hurting SEO.',
+      fix_suggestion: 'Update the `<title>` in `index.html` (Vite) or the metadata in `app/layout.tsx` (Next.js) to your actual app name and a short value proposition.',
+      code_snippet: firstLine(g.default_app_title),
+      file_path: file,
+      line_number: line,
+    })
+  }
+
+  // ── M1.2 Price/amount from request body ──────────────────────────────────────────
+  if (g.price_from_body) {
+    const { file, line } = extractFile(g.price_from_body)
+    issues.push({
+      guard: 'monetization', category: 'payments', severity: 'critical', confidence: 'confirmed',
+      title: 'Payment amount taken from request body',
+      description: '`amount` or `price` is being read directly from the request body to charge the user. Any user can send `{ "amount": 1 }` and pay 1 cent for anything in your store.',
+      fix_suggestion: 'Never trust client-supplied prices. Always look up the price from your database by product/plan ID:\n```ts\nexport async function POST(req: Request) {\n  const { planId } = await req.json() // only accept an ID\n  const plan = await db.plans.findUnique({ where: { id: planId } })\n  const session = await stripe.checkout.sessions.create({\n    line_items: [{ price: plan.stripePriceId, quantity: 1 }],\n  })\n}\n```',
+      code_snippet: firstLine(g.price_from_body),
+      file_path: file,
+      line_number: line,
+    })
+  }
+
+  // ── M1.5 Floating point for money ─────────────────────────────────────────────────
+  if (g.float_money) {
+    const { file, line } = extractFile(g.float_money)
+    issues.push({
+      guard: 'monetization', category: 'payments', severity: 'high', confidence: 'possible',
+      title: 'Floating point arithmetic used for money',
+      description: 'Floating point multiplication/division found in payment-related code without `Math.round`. `0.1 + 0.2 === 0.30000000000000004` in JavaScript — this causes incorrect charge amounts, rounding errors in totals, and accounting mismatches.',
+      fix_suggestion: 'Work in integer cents throughout, and only convert to dollars for display:\n```ts\n// Store prices as cents in DB (e.g. 999 = $9.99)\nconst amountCents = Math.round(price * 100) // convert once, at input\nconst charge = quantity * priceInCents // integer arithmetic only\n// Display:\nconst display = (charge / 100).toFixed(2)\n```\nOr use the `dinero.js` library for safe money arithmetic.',
+      code_snippet: firstLine(g.float_money),
+      file_path: file,
+      line_number: line,
+    })
+  }
+
+  // ── Auth: API routes without any auth check ───────────────────────────────────────
+  if (g.api_routes_without_auth && isNextJs) {
+    const unauthedRoutes = g.api_routes_without_auth.split('\n').filter(Boolean)
+    // Only report if we have routes AND an auth library is present
+    // (if no auth library at all, the file_checks rule already covers it)
+    if (unauthedRoutes.length > 0 && g.has_auth_library === 'true') {
+      const fileList = unauthedRoutes.slice(0, 5).join(', ')
       issues.push({
-        guard,
-        category:   'owasp',
-        severity:   level,
-        confidence: 'likely',
-        title,
-        description: desc,
-        fix_suggestion: finding.snippet
-          ? `Vulnerable code:\n\`\`\`\n${finding.snippet}\n\`\`\`\nReview and remediate this pattern.`
-          : 'Review and remediate this pattern per OWASP guidelines.',
-        file_path:   finding.full_filename,
-        line_number: finding.line_number,
-        code_snippet: finding.snippet,
+        guard: 'security', category: 'authentication', severity: 'high', confidence: 'likely',
+        title: `API routes missing auth checks (${unauthedRoutes.length} found)`,
+        description: `${unauthedRoutes.length} Next.js API route file(s) have no authentication check: \`${fileList}\`${unauthedRoutes.length > 5 ? `, and ${unauthedRoutes.length - 5} more` : ''}. Any unauthenticated user can call these endpoints directly.`,
+        fix_suggestion: 'Add an auth check at the top of each API route:\n```ts\n// Clerk\nconst { userId } = await auth()\nif (!userId) return new Response("Unauthorized", { status: 401 })\n\n// NextAuth\nconst session = await getServerSession(authOptions)\nif (!session) return new Response("Unauthorized", { status: 401 })\n\n// Supabase\nconst { data: { user } } = await supabase.auth.getUser()\nif (!user) return new Response("Unauthorized", { status: 401 })\n```',
+        file_path: unauthedRoutes[0],
       })
     }
   }
 
-  return issues
-}
-
-// ── njsscan parser ─────────────────────────────────────────────────────────────
-// Schema: { nodejs: { rule_id: { files: [{ file_path, match_lines, match_string }], metadata: { severity, description, owasp, cwe } } }, errors: [] }
-
-function parseNjsscan(njsscan: unknown): EnrichedIssue[] {
-  const issues: EnrichedIssue[] = []
-
-  const data = njsscan as {
-    nodejs?: Record<string, {
-      files?: Array<{ file_path?: string; match_lines?: number[]; match_string?: string }>
-      metadata?: { severity?: string; description?: string; owasp?: string; cwe?: string }
-    }>
+  // ── SC: No rate limiting ───────────────────────────────────────────────────────────
+  if (g.has_rate_limiting === 'false' && isNextJs) {
+    issues.push({
+      guard: 'scalability', category: 'performance', severity: 'high', confidence: 'confirmed',
+      title: 'No rate limiting on API endpoints',
+      description: 'No rate limiting library detected (`@upstash/ratelimit`, `rate-limiter-flexible`, `express-rate-limit`). Without rate limiting, a single user can make unlimited requests — crashing your server, running up API bills, or brute-forcing auth endpoints.',
+      fix_suggestion: 'Add rate limiting with Upstash (works on Vercel edge/serverless):\n```ts\nnpm install @upstash/ratelimit @upstash/redis\n```\n```ts\nimport { Ratelimit } from "@upstash/ratelimit"\nimport { Redis } from "@upstash/redis"\n\nconst ratelimit = new Ratelimit({\n  redis: Redis.fromEnv(),\n  limiter: Ratelimit.slidingWindow(10, "10 s"),\n})\n\nexport async function POST(req: Request) {\n  const ip = req.headers.get("x-forwarded-for") ?? "127.0.0.1"\n  const { success } = await ratelimit.limit(ip)\n  if (!success) return new Response("Too Many Requests", { status: 429 })\n  // ...\n}\n```',
+    })
   }
 
-  const nodeRules = data?.nodejs ?? {}
-
-  for (const [ruleId, ruleData] of Object.entries(nodeRules)) {
-    const meta       = ruleData.metadata ?? {}
-    const desc       = meta.description ?? ruleId.replace(/_/g, ' ')
-    const cwe        = meta.cwe ?? ''
-    const owasp      = meta.owasp ?? ''
-
-    const rawSev = (meta.severity ?? 'WARNING').toUpperCase()
-    let severity: EnrichedIssue['severity'] = 'high'
-    if (rawSev === 'ERROR' || rawSev === 'CRITICAL') severity = 'critical'
-    else if (rawSev === 'WARNING')                   severity = 'high'
-    else if (rawSev === 'INFO')                      severity = 'low'
-
-    // Map specific njsscan rules to guards
-    let guard = 'security'
-    const idLower = ruleId.toLowerCase()
-    if (idLower.includes('console') || idLower.includes('sync') || idLower.includes('blocking')) {
-      guard = 'scalability'
-    }
-
-    const fixHint = buildNjsscanFix(ruleId)
-
-    for (const file of ruleData.files ?? []) {
-      issues.push({
-        guard,
-        category:   'nodejs-security',
-        severity,
-        confidence: 'confirmed',
-        title: ruleId.replace(/_/g, ' '),
-        description: `${desc}${cwe ? ` (${cwe})` : ''}${owasp ? ` — OWASP ${owasp}` : ''}${file.file_path ? `. Found in \`${file.file_path}\`` : ''}.`,
-        fix_suggestion: fixHint,
-        file_path:    file.file_path,
-        line_number:  file.match_lines?.[0],
-        code_snippet: file.match_string,
-      })
-    }
+  // ── Security: No auth library + no middleware ──────────────────────────────────────
+  // (Complement to file_checks.has_auth_library — covers the React-Vite SPA case)
+  if (g.has_auth_library === 'false' && isVite) {
+    issues.push({
+      guard: 'security', category: 'authentication', severity: 'high', confidence: 'confirmed',
+      title: 'No authentication library detected (Vite SPA)',
+      description: 'No auth library (`@clerk/react`, `firebase`, `@supabase/supabase-js`, `lucia`, `@auth0/auth0-react`) found in dependencies. A public SPA with no auth means any user can access all routes and any backend calls are unauthenticated.',
+      fix_suggestion: 'Add an auth provider. For a Vite React SPA, Clerk or Supabase Auth are easiest:\n```bash\nnpm install @clerk/react\n```\nWrap your app in `<ClerkProvider>` and protect routes with `<SignedIn>` / `<SignedOut>` components.',
+    })
   }
 
   return issues
-}
-
-function buildNjsscanFix(ruleId: string): string {
-  const id = ruleId.toLowerCase()
-  if (id.includes('eval'))           return 'Remove eval() — use JSON.parse() for data, or a proper AST parser for code. eval() allows arbitrary code execution.'
-  if (id.includes('prototype'))      return 'Validate and sanitize user input before merging into objects. Use Object.create(null) for dictionaries or a library like deepmerge with prototype pollution protection.'
-  if (id.includes('jwt_none'))       return 'Reject JWTs with algorithm "none". Always specify allowed algorithms explicitly: jwt.verify(token, secret, { algorithms: ["HS256"] })'
-  if (id.includes('sqli') || id.includes('sql_injection')) return 'Use parameterized queries or an ORM (Prisma, Drizzle) instead of string concatenation in SQL queries.'
-  if (id.includes('path_traversal')) return 'Sanitize file paths with path.resolve() and verify the result starts with your expected base directory.'
-  if (id.includes('nosqli'))         return 'Sanitize MongoDB query operators. Use mongoose-sanitize or express-mongo-sanitize middleware.'
-  if (id.includes('xxe'))            return 'Disable external entity processing in your XML parser: parser.resolveExternalEntities = false.'
-  if (id.includes('hardcoded'))      return 'Move the hardcoded secret to an environment variable: process.env.YOUR_SECRET_NAME'
-  return 'Review this security pattern and follow OWASP guidelines for secure Node.js development.'
 }
 
 // ── File-checks parser ─────────────────────────────────────────────────────────
@@ -566,14 +873,11 @@ export async function analyzeToolOutputs(outputs: ToolOutputs): Promise<Enriched
     allIssues.push(...parseOSV(outputs.osv))
   }
 
-  // SAST — Semgrep (p/nodejs + p/react + p/nextjs + custom rules)
+  // SAST — Semgrep (local custom rules only)
   allIssues.push(...parseSemgrep(outputs.semgrep))
 
-  // OWASP / PII / data flow — Bearer
-  allIssues.push(...parseBearer(outputs.bearer))
-
-  // Node.js-specific patterns — njsscan
-  allIssues.push(...parseNjsscan(outputs.njsscan))
+  // Grep-based source code checks — vibe-coded SPA patterns
+  allIssues.push(...parseGrepChecks(outputs.grep_checks))
 
   // File-based checks (always run — no tool required)
   allIssues.push(...parseFileChecks(outputs.file_checks))

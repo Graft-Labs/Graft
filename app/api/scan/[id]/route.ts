@@ -20,12 +20,11 @@ export async function POST(
     const body: ToolOutputs = await request.json()
     console.log('[scan-results] payload_received', {
       scanId,
-      hasGitleaks:  Boolean(body.gitleaks_fs),
-      hasOSV:       Boolean(body.osv),
-      hasSemgrep:   Boolean(body.semgrep),
-      hasBearer:    Boolean(body.bearer),
-      hasNjsscan:   Boolean(body.njsscan),
-      osvSkipped:   body.osv_skipped,
+      hasGitleaks:    Boolean(body.gitleaks_fs),
+      hasOSV:         Boolean(body.osv),
+      hasSemgrep:     Boolean(body.semgrep),
+      hasGrepChecks:  Boolean(body.grep_checks),
+      osvSkipped:     body.osv_skipped,
     })
 
     if (!body.scan_id || body.scan_id !== scanId) {

@@ -1,0 +1,24 @@
+rules:
+  - id: shipguard.security.sql-template-literal
+    pattern-either:
+      - pattern: |
+          `SELECT ... ${...} ...`
+      - pattern: |
+          `INSERT ... ${...} ...`
+      - pattern: |
+          `UPDATE ... ${...} ...`
+      - pattern: |
+          `DELETE ... ${...} ...`
+      - pattern: |
+          `... WHERE ... ${...} ...`
+    message: >
+      SQL query constructed with template literal string interpolation.
+      If any interpolated value (`${...}`) comes from user input, this is a SQL injection
+      vulnerability — attackers can exfiltrate or destroy your entire database.
+      Use parameterized queries or an ORM (Prisma, Drizzle) instead.
+    languages: [typescript, javascript]
+    severity: ERROR
+    metadata:
+      guard: security
+      category: injection
+      confidence: confirmed

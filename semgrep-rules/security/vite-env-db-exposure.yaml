@@ -1,0 +1,17 @@
+rules:
+  - id: shipguard.security.vite-env-db-exposure
+    patterns:
+      - pattern: import.meta.env.$VAR
+      - metavariable-regex:
+          metavariable: $VAR
+          regex: ^VITE_(DATABASE|DB|POSTGRES|MYSQL|MONGO|REDIS|SUPABASE|NEON|PLANETSCALE|TURSO|SQLITE|PG)
+    message: >
+      `import.meta.env.$VAR` exposes a database connection string to the browser.
+      All VITE_ variables are inlined into the JavaScript bundle at build time and are
+      visible to any user who opens DevTools. Move database access to a backend API route.
+    languages: [typescript, javascript]
+    severity: ERROR
+    metadata:
+      guard: security
+      category: secrets
+      confidence: confirmed
