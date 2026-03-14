@@ -1,15 +1,17 @@
 import { task, logger } from '@trigger.dev/sdk/v3'
 import { exec } from 'node:child_process'
 import { promisify } from 'node:util'
-import { mkdtemp, rm, readFile, access } from 'node:fs/promises'
+import { mkdtemp, rm, readFile, access, readdir, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, extname, relative } from 'node:path'
 import { createClient } from '@supabase/supabase-js'
+import { z } from 'zod'
 import {
   analyzeToolOutputs,
   calculateScores,
   type ToolOutputs,
   type GrepCheckResults,
+  type EnrichedIssue,
 } from '@/lib/ai/analyzer'
 
 const execAsync = promisify(exec)
@@ -69,6 +71,263 @@ function detectFramework(pkgJson: Record<string, unknown>): string {
   return 'unknown'
 }
 
+// ── LLM semantic analysis ──────────────────────────────────────────────────────
+
+const LLM_MODEL = 'google/gemini-flash-1.5'
+
+// Dirs/extensions to skip when selecting files for LLM analysis
+const SKIP_DIRS = new Set([
+  'node_modules', '.git', '.next', '.turbo', 'dist', 'build', 'out',
+  '.vercel', 'coverage', '__pycache__', '.pytest_cache', '.mypy_cache',
+])
+const SKIP_EXTENSIONS = new Set([
+  '.css', '.scss', '.less', '.sass', '.svg', '.png', '.jpg', '.jpeg',
+  '.gif', '.webp', '.ico', '.woff', '.woff2', '.ttf', '.eot', '.pdf',
+  '.mp4', '.mp3', '.zip', '.tar', '.gz', '.lock',
+])
+// Files/patterns that are relevant for LLM analysis (by path substring)
+const RELEVANT_PATTERNS = [
+  // API routes
+  /app\/api\//i, /pages\/api\//i,
+  // Auth
+  /middleware\.(ts|js)$/i, /lib\/auth/i, /utils\/auth/i, /helpers\/auth/i,
+  /auth\.(ts|js|tsx|jsx)$/i,
+  // DB / query
+  /lib\/db/i, /lib\/database/i, /lib\/supabase/i, /lib\/prisma/i,
+  /lib\/drizzle/i, /lib\/mongo/i, /query\.(ts|js)$/i, /schema\.(ts|js)$/i,
+  /models\//i, /repositories\//i,
+  // Payment
+  /payment/i, /checkout/i, /stripe/i, /billing/i, /webhook/i, /subscription/i,
+  /paddle/i, /lemonsqueezy/i, /razorpay/i,
+  // Config / entry points
+  /next\.config\./i, /vite\.config\./i,
+  /app\/layout\.(tsx|jsx)$/i, /app\/page\.(tsx|jsx)$/i,
+  /src\/main\.(tsx|jsx|ts|js)$/i, /src\/App\.(tsx|jsx)$/i,
+  /src\/index\.(tsx|jsx|ts|js)$/i,
+]
+
+interface RelevantFile {
+  path:     string  // relative path from repo root
+  category: string
+  content:  string
+}
+
+async function selectRelevantFiles(
+  cloneDir: string,
+  _framework: string,
+): Promise<RelevantFile[]> {
+  const files: RelevantFile[] = []
+  const MAX_TOTAL_CHARS = 400_000
+  let totalChars = 0
+
+  // Always include package.json and .env.example
+  const always = ['package.json', '.env.example', 'tsconfig.json']
+  for (const name of always) {
+    const fullPath = join(cloneDir, name)
+    const content  = await readFileSafe(fullPath)
+    if (content) {
+      const rel = name
+      files.push({ path: rel, category: 'config', content })
+      totalChars += content.length
+    }
+  }
+
+  // Walk repo recursively, collect relevant files
+  async function walk(dir: string): Promise<void> {
+    let entries: string[]
+    try { entries = await readdir(dir) } catch { return }
+
+    for (const entry of entries) {
+      const fullPath = join(dir, entry)
+      const rel      = relative(cloneDir, fullPath)
+
+      // Skip hidden dirs and known junk dirs
+      if (entry.startsWith('.') && entry !== '.env.example') continue
+      const topDir = rel.split('/')[0]
+      if (SKIP_DIRS.has(topDir) || SKIP_DIRS.has(entry)) continue
+
+      let s: Awaited<ReturnType<typeof stat>>
+      try { s = await stat(fullPath) } catch { continue }
+
+      if (s.isDirectory()) {
+        await walk(fullPath)
+        continue
+      }
+
+      const ext = extname(entry).toLowerCase()
+      if (SKIP_EXTENSIONS.has(ext)) continue
+      if (!(['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.py', '.rb', '.go', '.rs'].includes(ext))) continue
+
+      // Check if this file matches any relevant pattern
+      const isRelevant = RELEVANT_PATTERNS.some(p => p.test(rel))
+      if (!isRelevant) continue
+
+      // Determine category
+      let category = 'source'
+      if (/app\/api\/|pages\/api\//i.test(rel)) category = 'api-route'
+      else if (/middleware/i.test(rel) || /lib\/auth/i.test(rel)) category = 'auth'
+      else if (/lib\/db|supabase|prisma|drizzle|mongo/i.test(rel)) category = 'database'
+      else if (/payment|checkout|stripe|billing|webhook/i.test(rel)) category = 'payment'
+
+      if (totalChars >= MAX_TOTAL_CHARS) continue
+      const content = await readFileSafe(fullPath)
+      if (!content || content.length > 80_000) continue  // skip huge files
+
+      files.push({ path: rel, category, content })
+      totalChars += content.length
+    }
+  }
+
+  await walk(cloneDir)
+  logger.log('relevant_files_selected', { count: files.length, totalChars })
+  return files
+}
+
+// ── Zod schema for LLM output ──────────────────────────────────────────────────
+
+const LlmIssueSchema = z.object({
+  guard:          z.enum(['security', 'scalability', 'monetization', 'distribution']),
+  severity:       z.enum(['critical', 'high', 'medium', 'low']),
+  confidence:     z.enum(['confirmed', 'likely', 'possible']),
+  title:          z.string().max(200),
+  description:    z.string().max(1000),
+  fix_suggestion: z.string().max(2000),
+  file_path:      z.string().optional(),
+  line_number:    z.number().int().positive().optional(),
+  code_snippet:   z.string().max(800).optional(),
+})
+const LlmOutputSchema = z.object({ issues: z.array(LlmIssueSchema) })
+
+async function runLlmAnalysis(
+  files: RelevantFile[],
+  framework: string,
+  _allDeps: Record<string, unknown>,
+): Promise<EnrichedIssue[]> {
+  const apiKey = process.env.OPENROUTER_API_KEY
+  if (!apiKey) {
+    logger.warn('llm_skipped', { reason: 'OPENROUTER_API_KEY not set' })
+    return []
+  }
+  if (files.length === 0) {
+    logger.warn('llm_skipped', { reason: 'no relevant files selected' })
+    return []
+  }
+
+  const systemPrompt = `You are a production-readiness auditor for shipped web apps. Framework: ${framework}.
+
+You audit ONLY for these 3 guards:
+- security: auth flaws (missing auth checks, IDOR, userId from body), injection (SQL, eval, XSS via dangerouslySetInnerHTML), CORS wildcard, hardcoded credentials in code
+- scalability: N+1 queries (db call inside loop), unbounded fetches (findMany/select with no limit/where), sync I/O blocking the event loop
+- monetization: price/amount taken from client request body (instead of looking up server-side), float arithmetic for money without rounding, missing Stripe webhook signature verification
+
+Rules:
+- Only flag issues that would cause REAL harm to a live app with real users and real money
+- Every issue MUST cite a specific file path from the provided code
+- Line numbers are helpful but not required
+- Do NOT flag missing features, style issues, or theoretical problems
+- Do NOT flag things that need secrets/env vars to be hardcoded strings — Gitleaks handles those
+- Do NOT flag commented-out code
+- Do NOT flag things that look like test files (*.test.*, *.spec.*, __tests__)
+- Confidence: "confirmed" = exact problem clearly visible in code, "likely" = strong indicator present, "possible" = needs verification
+- Severity: "critical" = exploitable now / loss of money/data, "high" = significant risk, "medium" = moderate, "low" = minor
+- Be conservative — 5 high-confidence real issues is better than 20 speculative ones
+
+Return ONLY valid JSON: { "issues": [...] }
+No explanation, no markdown wrapper, just the JSON object.`
+
+  // Build file contents block
+  const fileBlocks = files
+    .map(f => `### FILE: ${f.path}\n\`\`\`\n${f.content.slice(0, 60_000)}\n\`\`\``)
+    .join('\n\n')
+
+  const userMessage = `Analyze the following codebase files for production-readiness issues.\n\n${fileBlocks}`
+
+  let lastError: Error | null = null
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': 'https://shipguard-ai.vercel.app',
+          'X-Title': 'ShipGuard AI',
+        },
+        body: JSON.stringify({
+          model: LLM_MODEL,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user',   content: userMessage },
+          ],
+          response_format: { type: 'json_object' },
+          temperature: 0.1,
+          max_tokens: 8192,
+        }),
+        signal: AbortSignal.timeout(120_000),
+      })
+
+      if (res.status === 429) {
+        const wait = attempt * 15_000
+        logger.warn('llm_rate_limited', { attempt, waitMs: wait })
+        await new Promise(r => setTimeout(r, wait))
+        continue
+      }
+
+      if (!res.ok) {
+        const body = await res.text()
+        throw new Error(`OpenRouter ${res.status}: ${body.slice(0, 300)}`)
+      }
+
+      const data = await res.json() as {
+        choices?: Array<{ message?: { content?: string } }>
+        error?:   { message?: string }
+      }
+
+      if (data.error) throw new Error(`LLM error: ${data.error.message}`)
+
+      const raw = data.choices?.[0]?.message?.content ?? ''
+      if (!raw.trim()) throw new Error('LLM returned empty response')
+
+      // Parse and validate
+      let parsed: unknown
+      try { parsed = JSON.parse(raw) }
+      catch { throw new Error(`LLM returned non-JSON: ${raw.slice(0, 200)}`) }
+
+      const validated = LlmOutputSchema.safeParse(parsed)
+      if (!validated.success) {
+        logger.warn('llm_schema_invalid', { issues: validated.error.issues.slice(0, 3) })
+        // Best-effort: try to extract whatever issues parsed correctly
+        const rawIssues = (parsed as { issues?: unknown[] })?.issues ?? []
+        const goodIssues: EnrichedIssue[] = []
+        for (const raw of rawIssues) {
+          const single = LlmIssueSchema.safeParse(raw)
+          if (single.success) {
+            goodIssues.push({ ...single.data, category: single.data.guard })
+          }
+        }
+        logger.log('llm_partial_parse', { count: goodIssues.length })
+        return goodIssues
+      }
+
+      const issues: EnrichedIssue[] = validated.data.issues.map(i => ({
+        ...i,
+        category: i.guard,
+      }))
+
+      logger.log('llm_analysis_done', { model: LLM_MODEL, issueCount: issues.length })
+      return issues
+
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err))
+      logger.warn('llm_attempt_failed', { attempt, error: lastError.message.slice(0, 200) })
+      if (attempt < 3) await new Promise(r => setTimeout(r, attempt * 5_000))
+    }
+  }
+
+  logger.warn('llm_failed_all_attempts', { error: lastError?.message?.slice(0, 200) })
+  return []  // graceful degradation
+}
+
 // ── Grep-based source code checks ─────────────────────────────────────────────
 //
 // Each check runs a grep command and returns the raw match lines (or empty string).
@@ -105,29 +364,11 @@ async function runGrepChecks(
     clientSideDbImport,
     // S1.7 console.log printing env vars or secrets
     consoleLogSecrets,
-    // S2.3 Hardcoded default credentials in config/source
-    hardcodedDefaultCreds,
-    // S2.6 userId/user_id taken from request body without server-side verification
-    userIdFromBody,
-    // S3.1 SQL string interpolation (template literals with SQL keywords + ${)
-    sqlTemplateLiteral,
-    // S3.2 eval() usage in non-test source
-    evalUsage,
-    // S3.3 dangerouslySetInnerHTML without nearby sanitization
-    dangerousInnerHtml,
-    // S4.1/S4.2 CORS wildcard * 
-    corsWildcard,
     // S4.4 DEBUG=true in non-.env files
     debugModeEnabled,
     // S4.6 Node.js globals polyfilled onto window (exposes attack surface)
     windowNodePolyfill,
-    // ── Scalability: Database & Query Performance ──────────────────────────────
-    // SC1.2 findMany() / select() with no limit/pagination
-    findManyNoPagination,
-    // SC1.4 N+1 query pattern (db query inside a loop)
-    nPlusOneQuery,
-    // SC1.5 Full table scan: select() with no .where()
-    selectNoWhere,
+    // ── Scalability: Performance checks ────────────────────────────────────────
     // SC2.1 <img> tags instead of next/image
     imgTagNotNextImage,
     // SC2.6 images.unoptimized: true in next.config
@@ -141,14 +382,6 @@ async function runGrepChecks(
     // ── Distribution: SEO & titles ─────────────────────────────────────────────
     // D1.6 Default Vite/CRA title still in index.html
     defaultAppTitle,
-    // ── Monetization: Payment security ────────────────────────────────────────
-    // M1.2 Price/amount taken from request body
-    priceFromBody,
-    // M1.5 Floating point arithmetic for money
-    floatMoney,
-    // ── Auth: API routes without auth check ───────────────────────────────────
-    // Count of Next.js API route files that have NO auth-related call
-    apiRoutesWithoutAuth,
   ] = await Promise.all([
     // S1.1
     g(`grep -rn "VITE_.*KEY\\|VITE_.*URL\\|VITE_.*SECRET\\|VITE_.*TOKEN\\|VITE_.*PASSWORD\\|VITE_.*DATABASE" ${allSrcFiles} ${srcDirs} 2>/dev/null | head -20 || true`),
@@ -160,28 +393,10 @@ async function runGrepChecks(
     g(`grep -rn "from 'drizzle-orm\\|from \"drizzle-orm\\|from '@neondatabase\\|from \"@neondatabase\\|from '@prisma/client\\|from \"@prisma/client\\|require('pg')\\|require(\"pg\")\\|from 'pg'\\|from \"pg\"" ${allSrcFiles} ${srcDirs} 2>/dev/null | head -20 || true`),
     // S1.7
     g(`grep -rn "console\\.log.*env\\|console\\.log.*key\\|console\\.log.*token\\|console\\.log.*password\\|console\\.log.*secret" ${allSrcFiles} . 2>/dev/null | grep -v "node_modules\\|test\\|spec" | head -10 || true`),
-    // S2.3
-    g(`grep -rn "admin123\\|password123\\|change-me\\|changeme\\|\"secret\"\\|'secret'\\|your-secret\\|supersecret\\|default_password" --include="*.py" --include="*.ts" --include="*.js" --include="*.tsx" --include="*.env.example" . 2>/dev/null | grep -v "node_modules\\|test\\|spec\\|\\.git" | head -15 || true`),
-    // S2.6
-    g(`grep -rn "req\\.body\\.userId\\|req\\.body\\.user_id\\|body\\.userId\\|body\\.user_id\\|request\\.body\\.userId" ${tsFiles} app/api 2>/dev/null | head -10 || true`),
-    // S3.1 — SQL in template literal: SQL keyword + ${ on same line
-    g(`grep -rEn "(SELECT|INSERT|UPDATE|DELETE|CREATE|DROP|ALTER).*\\$\\{|\\$\\{.*(SELECT|INSERT|UPDATE|DELETE)" ${allSrcFiles} . 2>/dev/null | grep -v "node_modules|\\.git" | head -15 || true`),
-    // S3.2
-    g(`grep -rn "\\beval(" ${allSrcFiles} . 2>/dev/null | grep -v "node_modules\\|\\.git\\|test\\|spec\\|\\.min\\.js" | head -10 || true`),
-    // S3.3
-    g(`grep -rn "dangerouslySetInnerHTML" --include="*.tsx" --include="*.jsx" . 2>/dev/null | grep -v "node_modules\\|DOMPurify\\|sanitize" | head -10 || true`),
-    // S4.1/S4.2 CORS wildcard — handles both inline allow_origins=["*"] and multi-line list form
-    g(`grep -rln "CORSMiddleware\\|allow_origins\\|allowedOrigins\\|Access-Control-Allow-Origin" --include="*.py" ${allSrcFiles} . 2>/dev/null | xargs grep -l '"\\*"\\|'"'"'\\*'"'"'' 2>/dev/null | head -5 || true`),
     // S4.4
     g(`grep -rn "DEBUG.*=.*true\\|debug.*=.*true\\|debug: true" --include="*.py" --include="*.ts" --include="*.js" --include="*.env.example" . 2>/dev/null | grep -v "node_modules\\|\\.git\\|test\\|spec\\|webpack\\|vite\\|esbuild\\|sourceMap\\|devtools" | head -10 || true`),
     // S4.6
     g(`grep -rn "window.*Buffer\\|window.*process\\s*=\\|(window as any)\\.Buffer\\|(window as any)\\.process\\|global\\.Buffer\\s*=" ${allSrcFiles} . 2>/dev/null | grep -v "node_modules\\|\\.git" | head -10 || true`),
-    // SC1.2
-    g(`grep -rn "\\.findMany(\\|\.findMany({" ${tsFiles} . 2>/dev/null | grep -v "node_modules\\|\\.git\\|take:\\|limit:\\|skip:\\|cursor:" | head -15 || true`),
-    // SC1.4 — await db/prisma call on a line that also contains map/forEach/for
-    g(`grep -rn "await.*\\(prisma\\|db\\|supabase\\|sql\\)\\." ${tsFiles} . 2>/dev/null | grep -v "node_modules\\|\\.git" | grep "map\\|forEach\\|for(" | head -10 || true`),
-    // SC1.5
-    g(`grep -rn "\\.select(\\|\.select({" ${tsFiles} . 2>/dev/null | grep -v "node_modules\\|\\.git\\|\\.where(\\|where(" | grep "from(" | head -10 || true`),
     // SC2.1
     g(`grep -rn "<img " --include="*.tsx" --include="*.jsx" . 2>/dev/null | grep -v "node_modules\\|\\.git\\|next/image\\|// " | head -15 || true`),
     // SC2.6
@@ -194,12 +409,6 @@ async function runGrepChecks(
     g(`grep -rn "console\\.log(" ${allSrcFiles} . 2>/dev/null | grep -v "node_modules\\|\\.git\\|test\\|spec\\|\\.next" | wc -l || echo "0"`),
     // D1.6
     g(`grep -rn "Vite App\\|Create React App\\|<title>React\\|<title>Vite" --include="*.html" --include="*.tsx" . 2>/dev/null | grep -v "node_modules\\|\\.git" | head -5 || true`),
-    // M1.2
-    g(`grep -rn "req\\.body\\.amount\\|req\\.body\\.price\\|body\\.amount\\|body\\.price\\|request\\.body\\.amount\\|json\\.amount\\|json\\.price" ${tsFiles} . 2>/dev/null | grep -v "node_modules\\|\\.git\\|test\\|spec" | head -10 || true`),
-    // M1.5
-    g(`grep -rn "\\* 0\\.\\|price \\* \\|amount \\* \\|total \\* " ${allSrcFiles} . 2>/dev/null | grep -v "node_modules\\|\\.git\\|Math\\.round\\|parseInt\\|Math\\.floor\\|toFixed" | head -10 || true`),
-    // Auth check: list API route files that have no auth call
-    g(`for f in $(find app/api pages/api -name "route.ts" -o -name "*.ts" 2>/dev/null | grep -v "node_modules"); do grep -lL "auth\\|getUser\\|getSession\\|currentUser\\|verifyToken\\|clerk\\|supabase.*auth\\|jwt\\.verify\\|session" "$f" 2>/dev/null; done | head -20 || true`),
   ])
 
   // Dep-based checks (no grep needed — already have allDeps)
@@ -236,18 +445,9 @@ async function runGrepChecks(
     hardcoded_api_keys:      hardcodedApiKeys,
     client_side_db_import:   clientSideDbImport,
     console_log_secrets:     consoleLogSecrets,
-    hardcoded_default_creds: hardcodedDefaultCreds,
-    user_id_from_body:       userIdFromBody,
-    sql_template_literal:    sqlTemplateLiteral,
-    eval_usage:              evalUsage,
-    dangerous_inner_html:    dangerousInnerHtml,
-    cors_wildcard:           corsWildcard,
     debug_mode_enabled:      debugModeEnabled,
     window_node_polyfill:    windowNodePolyfill,
     // Scalability
-    find_many_no_pagination: findManyNoPagination,
-    n_plus_one_query:        nPlusOneQuery,
-    select_no_where:         selectNoWhere,
     img_tag_not_next_image:  imgTagNotNextImage,
     images_unoptimized:      imagesUnoptimized,
     sync_file_io:            syncFileIo,
@@ -255,11 +455,6 @@ async function runGrepChecks(
     console_log_count:       consoleLogCount.trim(),
     // Distribution
     default_app_title:       defaultAppTitle,
-    // Monetization
-    price_from_body:         priceFromBody,
-    float_money:             floatMoney,
-    // Auth
-    api_routes_without_auth: apiRoutesWithoutAuth,
     // Dep-based
     has_rate_limiting:       String(hasRateLimiting),
     has_auth_library:        String(hasAuthLibrary),
@@ -270,12 +465,8 @@ async function runGrepChecks(
   logger.log('grep_checks_done', {
     vite_secret_env_vars:    !!viteSecretEnvVars,
     client_side_db_import:   !!clientSideDbImport,
-    sql_template_literal:    !!sqlTemplateLiteral,
-    hardcoded_default_creds: !!hardcodedDefaultCreds,
-    cors_wildcard:           !!corsWildcard,
-    eval_usage:              !!evalUsage,
-    find_many_no_pagination: !!findManyNoPagination,
-    api_routes_without_auth: !!apiRoutesWithoutAuth,
+    debug_mode_enabled:      !!debugModeEnabled,
+    img_tag_not_next_image:  !!imgTagNotNextImage,
     has_rate_limiting:       hasRateLimiting,
     has_auth_library:        hasAuthLibrary,
     has_middleware:          hasMiddleware,
@@ -337,7 +528,12 @@ export const runScanTask = task({
         pkgJson = JSON.parse(raw)
       } catch { /* no package.json — non-Node project */ }
 
-      const detectedFramework = payload.framework ?? detectFramework(pkgJson)
+      // Only use client-supplied framework if it's a real value — never trust "unknown"
+      // (the UI sends "unknown" as default when detection fails, which would suppress
+      //  all framework-specific grep checks like isNextJs / isVite)
+      const detectedFramework = (payload.framework && payload.framework !== 'unknown')
+        ? payload.framework
+        : detectFramework(pkgJson)
       logger.log('framework_detected', { framework: detectedFramework })
 
       // Store framework in DB
@@ -423,10 +619,17 @@ export const runScanTask = task({
         // Semgrep — local custom rules only
         runTool(semgrepCmd, cloneDir, 120_000),
 
-        // Grep-based source code checks — covers ~25 patterns specific to vibe-coded apps
+        // Grep-based source code checks — deterministic, unambiguous patterns
         runGrepChecks(cloneDir, detectedFramework, allDeps),
       ])
       logger.log('analysis_batch_done')
+
+      // ── Step 5.5: LLM semantic analysis ───────────────────────────────────────
+      // Select relevant files and run LLM for semantic issues grep can't catch
+      logger.log('running_llm_analysis')
+      const relevantFiles = await selectRelevantFiles(cloneDir, detectedFramework)
+      const llmIssues = await runLlmAnalysis(relevantFiles, detectedFramework, allDeps)
+      logger.log('llm_analysis_complete', { issueCount: llmIssues.length })
 
       // ── Step 6: File-based checks ──────────────────────────────────────────────
       logger.log('running_file_checks')
@@ -540,6 +743,7 @@ export const runScanTask = task({
         semgrep:          tryParseObj(semgrepRaw, { results: [] }),
         grep_checks:      grepChecks,
         file_checks:      fileChecks,
+        llm_issues:       llmIssues,
         osv_skipped:      !lockfile,
         osv_skip_reason:  lockfile ? null : 'No lockfile found',
       }
@@ -554,6 +758,10 @@ export const runScanTask = task({
       const highCount     = issues.filter(i => i.severity === 'high').length
       const mediumCount   = issues.filter(i => i.severity === 'medium').length
       const lowCount      = issues.filter(i => i.severity === 'low').length
+
+      // Delete any existing issues for this scan before inserting fresh ones.
+      // This prevents duplicate rows when the same scanId is re-run (e.g. via MCP or admin).
+      await supabase.from('issues').delete().eq('scan_id', scanId)
 
       const { error: updateError } = await supabase
         .from('scans')

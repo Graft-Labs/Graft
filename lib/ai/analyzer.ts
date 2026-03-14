@@ -10,18 +10,9 @@ export interface GrepCheckResults {
   hardcoded_api_keys:      string  // Literal API key patterns in source
   client_side_db_import:   string  // ORM/DB client imported in src/ (browser code)
   console_log_secrets:     string  // console.log(env/key/token/password)
-  hardcoded_default_creds: string  // admin123, change-me, "secret" in source
-  user_id_from_body:       string  // userId from request body without verification
-  sql_template_literal:    string  // SQL keyword in template literal with ${
-  eval_usage:              string  // eval() in non-test source
-  dangerous_inner_html:    string  // dangerouslySetInnerHTML without sanitize
-  cors_wildcard:           string  // CORS allow_origins: * in source
   debug_mode_enabled:      string  // DEBUG=true / debug: true in non-dev config
   window_node_polyfill:    string  // window.Buffer / window.process polyfills
   // Scalability
-  find_many_no_pagination: string  // .findMany() without take:/limit:
-  n_plus_one_query:        string  // await db call inside map/forEach/for loop
-  select_no_where:         string  // .select().from() with no .where()
   img_tag_not_next_image:  string  // <img> instead of next/image
   images_unoptimized:      string  // images.unoptimized: true in next.config
   sync_file_io:            string  // readFileSync/writeFileSync in API handlers
@@ -29,11 +20,6 @@ export interface GrepCheckResults {
   console_log_count:       string  // count of console.log lines in source
   // Distribution
   default_app_title:       string  // "Vite App" / "Create React App" title still set
-  // Monetization
-  price_from_body:         string  // price/amount taken from request body
-  float_money:             string  // floating point arithmetic for money values
-  // Auth
-  api_routes_without_auth: string  // Next.js API routes with no auth check
   // Dep-based flags
   has_rate_limiting:       string  // 'true' | 'false'
   has_auth_library:        string  // 'true' | 'false'
@@ -81,6 +67,8 @@ export interface ToolOutputs {
     framework:            string
     hallucinated_packages: string
   }
+  // LLM semantic analysis issues (pre-parsed, passed directly)
+  llm_issues:       EnrichedIssue[]
   osv_skipped:      boolean
   osv_skip_reason:  string | null
 }
@@ -363,89 +351,12 @@ function parseGrepChecks(g: GrepCheckResults): EnrichedIssue[] {
     })
   }
 
-  // ── S2.3 Hardcoded default credentials ──────────────────────────────────────────
-  if (g.hardcoded_default_creds) {
-    const { file, line } = extractFile(g.hardcoded_default_creds)
-    issues.push({
-      guard: 'security', category: 'authentication', severity: 'critical', confidence: 'likely',
-      title: 'Hardcoded default credentials in source',
-      description: 'Default credentials such as `admin123`, `password123`, `change-me`, or `"secret"` were found hardcoded in config or source files. If no environment variable overrides these at deploy time, production runs with known-bad credentials.',
-      fix_suggestion: 'Replace all default credential values with environment variables and throw an error at startup if they are not set:\n```ts\nif (!process.env.JWT_SECRET) throw new Error("JWT_SECRET is required")\n```\nNever ship fallback credential values in code.',
-      code_snippet: firstLine(g.hardcoded_default_creds),
-      file_path: file,
-      line_number: line,
-    })
-  }
-
-  // ── S2.6 userId from request body ───────────────────────────────────────────────
-  if (g.user_id_from_body && isNextJs) {
-    const { file, line } = extractFile(g.user_id_from_body)
-    issues.push({
-      guard: 'security', category: 'authentication', severity: 'high', confidence: 'likely',
-      title: 'userId taken from request body (IDOR risk)',
-      description: '`userId` or `user_id` is being read from the request body. Any user can send any userId value and act as another user — a classic Insecure Direct Object Reference (IDOR) vulnerability.',
-      fix_suggestion: 'Never trust client-supplied identity. Extract the authenticated user ID from your session/JWT on the server side:\n```ts\n// Next.js App Router\nconst { userId } = await auth() // Clerk\n// or\nconst session = await getServerSession(authOptions) // NextAuth\nconst userId = session.user.id\n```',
-      code_snippet: firstLine(g.user_id_from_body),
-      file_path: file,
-      line_number: line,
-    })
-  }
-
-  // ── S3.1 SQL template literal injection ──────────────────────────────────────────
-  if (g.sql_template_literal) {
-    const { file, line } = extractFile(g.sql_template_literal)
-    issues.push({
-      guard: 'security', category: 'injection', severity: 'critical', confidence: 'confirmed',
-      title: 'SQL query built with string interpolation',
-      description: 'A SQL query is constructed using a template literal with `${...}` interpolation. If any interpolated value comes from user input, this is a SQL injection vulnerability — attackers can exfiltrate or destroy your entire database.',
-      fix_suggestion: 'Use parameterized queries or an ORM instead:\n```ts\n// Drizzle (safe)\nconst rows = await db.select().from(users).where(eq(users.id, userId))\n\n// Raw SQL with params (safe)\nconst rows = await sql`SELECT * FROM users WHERE id = ${userId}`\n\n// NEVER do this:\nconst rows = await db.execute(`SELECT * FROM users WHERE id = ${userId}`)\n```',
-      code_snippet: firstLine(g.sql_template_literal),
-      file_path: file,
-      line_number: line,
-    })
-  }
-
-  // ── S3.2 eval() usage ────────────────────────────────────────────────────────────
-  if (g.eval_usage) {
-    const { file, line } = extractFile(g.eval_usage)
-    issues.push({
-      guard: 'security', category: 'injection', severity: 'critical', confidence: 'confirmed',
-      title: 'eval() used in source code',
-      description: '`eval()` executes arbitrary JavaScript code. If the argument includes any user-controlled data, it is a code injection vulnerability that can be exploited to steal data, bypass auth, or perform actions as the current user/server.',
-      fix_suggestion: 'Replace `eval()` with safe alternatives:\n- For JSON: use `JSON.parse()`\n- For math expressions: use a safe expression parser like `mathjs`\n- For dynamic requires: use a static import map\n\nThere is almost no legitimate use of `eval()` in production web apps.',
-      code_snippet: firstLine(g.eval_usage),
-      file_path: file,
-      line_number: line,
-    })
-  }
-
-  // ── S3.3 dangerouslySetInnerHTML without sanitization ────────────────────────────
-  if (g.dangerous_inner_html) {
-    const { file, line } = extractFile(g.dangerous_inner_html)
-    issues.push({
-      guard: 'security', category: 'xss', severity: 'high', confidence: 'likely',
-      title: 'dangerouslySetInnerHTML without sanitization',
-      description: '`dangerouslySetInnerHTML` is used without a nearby `DOMPurify.sanitize()` call. If the HTML content comes from user input or an external source, this is a stored or reflected XSS vulnerability.',
-      fix_suggestion: 'Sanitize HTML before rendering:\n```tsx\nimport DOMPurify from "dompurify"\n\n<div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(userContent) }} />\n```\nInstall: `npm install dompurify @types/dompurify`',
-      code_snippet: firstLine(g.dangerous_inner_html),
-      file_path: file,
-      line_number: line,
-    })
-  }
-
-  // ── S4.1/S4.2 CORS wildcard * ────────────────────────────────────────────────────
-  if (g.cors_wildcard) {
-    const { file, line } = extractFile(g.cors_wildcard)
-    issues.push({
-      guard: 'security', category: 'configuration', severity: 'high', confidence: 'likely',
-      title: 'CORS wildcard (*) allows all origins',
-      description: 'The CORS configuration allows requests from any origin (`*`). Combined with cookies or auth tokens, this lets any malicious website make authenticated requests to your API on behalf of logged-in users (CSRF-style).',
-      fix_suggestion: 'Restrict CORS to your specific frontend domain(s):\n```ts\n// Next.js API route\nresponse.headers.set("Access-Control-Allow-Origin", "https://yourapp.com")\n\n// FastAPI\napp.add_middleware(CORSMiddleware, allow_origins=["https://yourapp.com"])\n```\nNever use `*` in production if your API uses cookies or auth headers.',
-      code_snippet: firstLine(g.cors_wildcard),
-      file_path: file,
-      line_number: line,
-    })
-  }
+  // ── S2.3 Hardcoded default credentials — now handled by LLM ──────────────────
+  // ── S2.6 userId from request body — now handled by LLM ───────────────────────
+  // ── S3.1 SQL template literal injection — now handled by LLM ─────────────────
+  // ── S3.2 eval() usage — now handled by LLM ───────────────────────────────────
+  // ── S3.3 dangerouslySetInnerHTML — now handled by LLM ────────────────────────
+  // ── S4.1/S4.2 CORS wildcard — now handled by LLM ─────────────────────────────
 
   // ── S4.4 DEBUG=true in production config ──────────────────────────────────────────
   if (g.debug_mode_enabled) {
@@ -475,47 +386,9 @@ function parseGrepChecks(g: GrepCheckResults): EnrichedIssue[] {
     })
   }
 
-  // ── SC1.2 findMany() with no pagination ────────────────────────────────────────────
-  if (g.find_many_no_pagination) {
-    const { file, line } = extractFile(g.find_many_no_pagination)
-    issues.push({
-      guard: 'scalability', category: 'database', severity: 'high', confidence: 'likely',
-      title: 'Database query with no pagination limit',
-      description: '`.findMany()` is called without a `take:` or `limit:` clause. As your data grows, this query will return every row in the table — potentially millions — on every request, causing OOM errors and timeouts.',
-      fix_suggestion: 'Always paginate database queries:\n```ts\nconst rows = await prisma.post.findMany({\n  take: 20,\n  skip: page * 20,\n  orderBy: { createdAt: "desc" },\n})\n```\nFor cursor-based pagination (more efficient at scale):\n```ts\nconst rows = await prisma.post.findMany({\n  take: 20,\n  cursor: cursor ? { id: cursor } : undefined,\n  orderBy: { id: "asc" },\n})\n```',
-      code_snippet: firstLine(g.find_many_no_pagination),
-      file_path: file,
-      line_number: line,
-    })
-  }
-
-  // ── SC1.4 N+1 query pattern ──────────────────────────────────────────────────────
-  if (g.n_plus_one_query) {
-    const { file, line } = extractFile(g.n_plus_one_query)
-    issues.push({
-      guard: 'scalability', category: 'database', severity: 'high', confidence: 'likely',
-      title: 'N+1 database query pattern detected',
-      description: 'A database call (`await prisma.*` or `await db.*`) appears inside a loop (`.map()`, `.forEach()`, `for`). With 100 items this makes 100 separate DB round-trips — turning a 10ms operation into 1000ms+.',
-      fix_suggestion: 'Batch related queries using `include` (Prisma) or a single `WHERE IN` query:\n```ts\n// Instead of looping:\nconst posts = await prisma.post.findMany({\n  include: { author: true }, // fetches authors in 1 query\n})\n\n// Or use Promise.all only for truly independent operations:\nconst results = await Promise.all(ids.map(id => prisma.post.findUnique({ where: { id } })))\n```',
-      code_snippet: firstLine(g.n_plus_one_query),
-      file_path: file,
-      line_number: line,
-    })
-  }
-
-  // ── SC1.5 select() with no .where() ─────────────────────────────────────────────
-  if (g.select_no_where) {
-    const { file, line } = extractFile(g.select_no_where)
-    issues.push({
-      guard: 'scalability', category: 'database', severity: 'high', confidence: 'possible',
-      title: 'Full table scan: select() without .where()',
-      description: 'A `db.select().from(table)` query with no `.where()` clause performs a full table scan on every call. At scale, this means reading millions of rows on every request.',
-      fix_suggestion: 'Add appropriate filters:\n```ts\nconst rows = await db.select().from(users).where(eq(users.active, true)).limit(50)\n```',
-      code_snippet: firstLine(g.select_no_where),
-      file_path: file,
-      line_number: line,
-    })
-  }
+  // ── SC1.2 findMany() with no pagination — now handled by LLM ─────────────────
+  // ── SC1.4 N+1 query pattern — now handled by LLM ─────────────────────────────
+  // ── SC1.5 select() with no .where() — now handled by LLM ────────────────────
 
   // ── SC2.1 <img> instead of next/image ────────────────────────────────────────────
   if (g.img_tag_not_next_image && isNextJs) {
@@ -597,50 +470,9 @@ function parseGrepChecks(g: GrepCheckResults): EnrichedIssue[] {
     })
   }
 
-  // ── M1.2 Price/amount from request body ──────────────────────────────────────────
-  if (g.price_from_body) {
-    const { file, line } = extractFile(g.price_from_body)
-    issues.push({
-      guard: 'monetization', category: 'payments', severity: 'critical', confidence: 'confirmed',
-      title: 'Payment amount taken from request body',
-      description: '`amount` or `price` is being read directly from the request body to charge the user. Any user can send `{ "amount": 1 }` and pay 1 cent for anything in your store.',
-      fix_suggestion: 'Never trust client-supplied prices. Always look up the price from your database by product/plan ID:\n```ts\nexport async function POST(req: Request) {\n  const { planId } = await req.json() // only accept an ID\n  const plan = await db.plans.findUnique({ where: { id: planId } })\n  const session = await stripe.checkout.sessions.create({\n    line_items: [{ price: plan.stripePriceId, quantity: 1 }],\n  })\n}\n```',
-      code_snippet: firstLine(g.price_from_body),
-      file_path: file,
-      line_number: line,
-    })
-  }
-
-  // ── M1.5 Floating point for money ─────────────────────────────────────────────────
-  if (g.float_money) {
-    const { file, line } = extractFile(g.float_money)
-    issues.push({
-      guard: 'monetization', category: 'payments', severity: 'high', confidence: 'possible',
-      title: 'Floating point arithmetic used for money',
-      description: 'Floating point multiplication/division found in payment-related code without `Math.round`. `0.1 + 0.2 === 0.30000000000000004` in JavaScript — this causes incorrect charge amounts, rounding errors in totals, and accounting mismatches.',
-      fix_suggestion: 'Work in integer cents throughout, and only convert to dollars for display:\n```ts\n// Store prices as cents in DB (e.g. 999 = $9.99)\nconst amountCents = Math.round(price * 100) // convert once, at input\nconst charge = quantity * priceInCents // integer arithmetic only\n// Display:\nconst display = (charge / 100).toFixed(2)\n```\nOr use the `dinero.js` library for safe money arithmetic.',
-      code_snippet: firstLine(g.float_money),
-      file_path: file,
-      line_number: line,
-    })
-  }
-
-  // ── Auth: API routes without any auth check ───────────────────────────────────────
-  if (g.api_routes_without_auth && isNextJs) {
-    const unauthedRoutes = g.api_routes_without_auth.split('\n').filter(Boolean)
-    // Only report if we have routes AND an auth library is present
-    // (if no auth library at all, the file_checks rule already covers it)
-    if (unauthedRoutes.length > 0 && g.has_auth_library === 'true') {
-      const fileList = unauthedRoutes.slice(0, 5).join(', ')
-      issues.push({
-        guard: 'security', category: 'authentication', severity: 'high', confidence: 'likely',
-        title: `API routes missing auth checks (${unauthedRoutes.length} found)`,
-        description: `${unauthedRoutes.length} Next.js API route file(s) have no authentication check: \`${fileList}\`${unauthedRoutes.length > 5 ? `, and ${unauthedRoutes.length - 5} more` : ''}. Any unauthenticated user can call these endpoints directly.`,
-        fix_suggestion: 'Add an auth check at the top of each API route:\n```ts\n// Clerk\nconst { userId } = await auth()\nif (!userId) return new Response("Unauthorized", { status: 401 })\n\n// NextAuth\nconst session = await getServerSession(authOptions)\nif (!session) return new Response("Unauthorized", { status: 401 })\n\n// Supabase\nconst { data: { user } } = await supabase.auth.getUser()\nif (!user) return new Response("Unauthorized", { status: 401 })\n```',
-        file_path: unauthedRoutes[0],
-      })
-    }
-  }
+  // ── M1.2 Price/amount from request body — now handled by LLM ────────────────
+  // ── M1.5 Floating point for money — now handled by LLM ───────────────────────
+  // ── Auth: API routes without auth check — now handled by LLM ─────────────────
 
   // ── SC: No rate limiting ───────────────────────────────────────────────────────────
   if (g.has_rate_limiting === 'false' && isNextJs) {
@@ -876,7 +708,12 @@ export async function analyzeToolOutputs(outputs: ToolOutputs): Promise<Enriched
   // SAST — Semgrep (local custom rules only)
   allIssues.push(...parseSemgrep(outputs.semgrep))
 
-  // Grep-based source code checks — vibe-coded SPA patterns
+  // LLM semantic analysis — auth flaws, N+1, payment bugs, injection
+  if (outputs.llm_issues && outputs.llm_issues.length > 0) {
+    allIssues.push(...outputs.llm_issues)
+  }
+
+  // Grep-based source code checks — deterministic, unambiguous patterns
   allIssues.push(...parseGrepChecks(outputs.grep_checks))
 
   // File-based checks (always run — no tool required)

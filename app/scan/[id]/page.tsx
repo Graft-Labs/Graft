@@ -22,6 +22,7 @@ import {
   ExternalLink,
   FileCode,
   Code,
+  Wand2,
 } from "lucide-react";
 import DashboardSidebar from "@/components/layout/DashboardSidebar";
 import { createClient } from "@/lib/supabase";
@@ -81,6 +82,54 @@ const FRAMEWORK_LABELS: Record<string, string> = {
   react:      "React",
   unknown:    "Unknown",
 };
+
+function generateFixPrompt(
+  issues: Issue[],
+  repo: string,
+  framework: string | null,
+  date: string,
+  includeAll = false,
+): string {
+  const filtered = includeAll
+    ? issues
+    : issues.filter(i => i.severity === "critical" || i.severity === "high");
+
+  if (filtered.length === 0) return "";
+
+  const frameworkLabel = framework
+    ? ({ nextjs: "Next.js", sveltekit: "SvelteKit", nuxt: "Nuxt.js", "react-vite": "React + Vite", express: "Express", nestjs: "NestJS", fastify: "Fastify", react: "React" } as Record<string, string>)[framework] ?? framework
+    : "Unknown";
+
+  const lines: string[] = [
+    `I need you to fix the following production-readiness issues found in my codebase by ShipGuard AI.`,
+    `Please fix all of them in one pass.`,
+    ``,
+    `## Codebase: ${repo} (${frameworkLabel})`,
+    `## Scan date: ${new Date(date).toLocaleDateString()}`,
+    ``,
+    `---`,
+    ``,
+  ];
+
+  const guards = ["security", "scalability", "monetization", "distribution"] as const;
+  for (const guard of guards) {
+    const guardIssues = filtered.filter(i => i.guard === guard);
+    if (guardIssues.length === 0) continue;
+    for (const issue of guardIssues) {
+      lines.push(`### [${issue.severity.toUpperCase()} - ${guard.charAt(0).toUpperCase() + guard.slice(1)}] ${issue.title}`);
+      if (issue.file) lines.push(`File: ${issue.file}${issue.line ? `, line ${issue.line}` : ""}`);
+      lines.push(`Problem: ${issue.description}`);
+      lines.push(`Fix: ${issue.fix}`);
+      if (issue.code_snippet) lines.push(`Code:\n${issue.code_snippet}`);
+      lines.push(``);
+      lines.push(`---`);
+      lines.push(``);
+    }
+  }
+
+  lines.push(`Fix all issues above. Ask me if you need clarification on any specific fix.`);
+  return lines.join("\n");
+}
 
 function FrameworkBadge({ framework }: { framework: string | null }) {
   if (!framework || framework === "unknown") return null;
@@ -314,6 +363,9 @@ export default function ScanReportPage() {
   const [scan, setScan] = useState<Scan | null>(null);
   const [issues, setIssues] = useState<Issue[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showFixPrompt, setShowFixPrompt] = useState(false);
+  const [fixPromptCopied, setFixPromptCopied] = useState(false);
+  const [includeAllSeverities, setIncludeAllSeverities] = useState(false);
 
   useEffect(() => {
     async function fetchScanData() {
@@ -427,6 +479,19 @@ export default function ScanReportPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowFixPrompt(!showFixPrompt)}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+              style={{
+                background: showFixPrompt ? "var(--accent-glow)" : "var(--surface-3)",
+                border: `1px solid ${showFixPrompt ? "var(--border-amber)" : "var(--border)"}`,
+                color: showFixPrompt ? "var(--accent)" : "var(--text-secondary)",
+                fontFamily: "var(--font-label)",
+              }}
+            >
+              <Wand2 size={13} />
+              Fix All
+            </button>
             <button
               className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
               style={{
@@ -554,6 +619,82 @@ export default function ScanReportPage() {
                 </div>
               </div>
             </div>
+
+            {/* Fix-all Prompt Panel */}
+            {showFixPrompt && (() => {
+              const criticalHighCount = issues.filter(i => i.severity === "critical" || i.severity === "high").length;
+              const prompt = generateFixPrompt(issues, scan.repo, scan.framework, scan.created_at, includeAllSeverities);
+              return (
+                <div
+                  className="p-5 rounded-2xl mb-6"
+                  style={{ background: "var(--surface-2)", border: "1px solid var(--border-amber)" }}
+                >
+                  <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+                    <div className="flex items-center gap-2">
+                      <Wand2 size={15} style={{ color: "var(--accent)" }} />
+                      <span style={{ fontSize: "14px", fontWeight: 600, fontFamily: "var(--font-ui)", color: "var(--text-primary)" }}>
+                        Fix-all prompt
+                      </span>
+                      <span style={{ fontSize: "12px", color: "var(--text-tertiary)", fontFamily: "var(--font-label)" }}>
+                        Paste into Claude, Cursor, or any AI tool to fix everything at once
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      {/* Toggle all severities */}
+                      <label className="flex items-center gap-1.5 cursor-pointer">
+                        <div
+                          onClick={() => setIncludeAllSeverities(!includeAllSeverities)}
+                          className="w-8 h-4 rounded-full relative transition-colors cursor-pointer"
+                          style={{ background: includeAllSeverities ? "var(--accent)" : "var(--surface-3)", border: "1px solid var(--border)" }}
+                        >
+                          <div
+                            className="w-3 h-3 rounded-full absolute top-0.5 transition-transform"
+                            style={{
+                              background: "var(--text-primary)",
+                              left: includeAllSeverities ? "calc(100% - 14px)" : "2px",
+                            }}
+                          />
+                        </div>
+                        <span style={{ fontSize: "11px", color: "var(--text-tertiary)", fontFamily: "var(--font-label)" }}>
+                          Include medium &amp; low
+                        </span>
+                      </label>
+                      {/* Copy button */}
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(prompt);
+                          setFixPromptCopied(true);
+                          setTimeout(() => setFixPromptCopied(false), 2000);
+                        }}
+                        className="flex items-center gap-1.5 text-xs py-1.5 px-3 rounded-lg transition-all"
+                        style={{
+                          background: fixPromptCopied ? "var(--guard-monetize-glow)" : "var(--accent-glow)",
+                          color: fixPromptCopied ? "var(--guard-monetize)" : "var(--accent)",
+                          border: `1px solid ${fixPromptCopied ? "rgba(64,200,122,0.3)" : "var(--border-amber)"}`,
+                          fontFamily: "var(--font-label)",
+                        }}
+                      >
+                        {fixPromptCopied ? <CheckCircle size={12} /> : <Copy size={12} />}
+                        {fixPromptCopied ? "Copied!" : `Copy prompt (${includeAllSeverities ? issues.length : criticalHighCount} issues)`}
+                      </button>
+                    </div>
+                  </div>
+                  {/* Preview */}
+                  <pre
+                    className="code-block overflow-auto"
+                    style={{
+                      fontSize: "11px",
+                      color: "var(--text-secondary)",
+                      maxHeight: "240px",
+                      background: "var(--obsidian-3)",
+                      border: "1px solid var(--border)",
+                    }}
+                  >
+                    <code>{prompt || "No critical or high issues to fix."}</code>
+                  </pre>
+                </div>
+              );
+            })()}
 
             {/* Guard Score Cards */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">

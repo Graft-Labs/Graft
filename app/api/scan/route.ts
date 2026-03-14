@@ -200,12 +200,13 @@ export async function POST(request: NextRequest) {
     }
 
     // Trigger the scan task via Trigger.dev (no GitHub Actions, no webhooks)
+    // Don't forward "unknown" framework — let the task auto-detect from package.json
     const handle = await tasks.trigger<typeof runScanTask>('run-scan', {
       scanId:       scan.id,
       repoOwner,
       repoName,
       branch,
-      framework:    framework ?? undefined,
+      framework:    (framework && framework !== 'unknown') ? framework : undefined,
       githubToken:  githubToken ?? undefined,
       triggerRunId: undefined, // will be updated by the task itself using context.run.id
     })

@@ -289,7 +289,13 @@ export default function NewScanPage() {
       const response = await fetch("/api/scan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ repo: repoUrl, branch: selectedBranch, framework }),
+        body: JSON.stringify({
+          repo: repoUrl,
+          branch: selectedBranch,
+          // Only send framework if it was actually detected — never send "unknown"
+          // so the scan task always auto-detects from package.json
+          ...(framework && framework !== 'unknown' ? { framework } : {}),
+        }),
       });
 
       const data = await response.json();
