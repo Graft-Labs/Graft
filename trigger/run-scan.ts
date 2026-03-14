@@ -243,6 +243,8 @@ No explanation, no markdown wrapper, just the JSON object.`
   const userMessage = `Analyze the following codebase files for production-readiness issues.\n\n${fileBlocks}`
 
   let lastError: Error | null = null
+  let rateLimitRetries = 0
+  const MAX_RATE_LIMIT_RETRIES = 5
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
       const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -267,9 +269,14 @@ No explanation, no markdown wrapper, just the JSON object.`
       })
 
       if (res.status === 429) {
-        const wait = attempt * 15_000
-        logger.warn('llm_rate_limited', { attempt, waitMs: wait })
+        rateLimitRetries++
+        // Exponential backoff: 15s, 30s, 60s, 90s, 120s
+        const wait = Math.min(rateLimitRetries * 30_000, 120_000)
+        logger.warn('llm_rate_limited', { rateLimitRetries, waitMs: wait })
         await new Promise(r => setTimeout(r, wait))
+        if (rateLimitRetries < MAX_RATE_LIMIT_RETRIES) {
+          attempt-- // don't count rate limit as a failed attempt
+        }
         continue
       }
 
