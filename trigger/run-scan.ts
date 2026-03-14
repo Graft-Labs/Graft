@@ -73,7 +73,7 @@ function detectFramework(pkgJson: Record<string, unknown>): string {
 
 // ── LLM semantic analysis ──────────────────────────────────────────────────────
 
-const LLM_MODEL = 'qwen/qwen3-coder:free'
+const LLM_MODEL = 'meta-llama/llama-3.3-70b-instruct:free'
 
 // Dirs/extensions to skip when selecting files for LLM analysis
 const SKIP_DIRS = new Set([
