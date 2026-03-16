@@ -39,6 +39,7 @@ export default defineConfig({
         SUPABASE_SECRET_KEY: process.env.SUPABASE_SECRET_KEY!,
         OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY!,
         NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL!,
+        MISTRAL_API_KEY: process.env.MISTRAL_API_KEY!,
       })),
     ],
   },

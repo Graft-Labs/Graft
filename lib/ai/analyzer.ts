@@ -27,6 +27,19 @@ export interface GrepCheckResults {
   framework:               string
 }
 
+// Vibe issue from the in-process vibe-leak-detector
+export interface VibeIssueInput {
+  file:        string
+  line:        number
+  severity:    'critical' | 'high' | 'medium' | 'low'
+  guard:       string
+  title:       string
+  description: string
+  snippet:     string
+  fix:         string
+  confidence:  'confirmed' | 'likely' | 'possible'
+}
+
 export interface ToolOutputs {
   scan_id?: string
   framework?: string
@@ -69,6 +82,8 @@ export interface ToolOutputs {
   }
   // LLM semantic analysis issues (pre-parsed, passed directly)
   llm_issues:       EnrichedIssue[]
+  // Vibe-leak-detector issues (in-process regex/AST scanner)
+  vibe_issues?:     VibeIssueInput[]
   osv_skipped:      boolean
   osv_skip_reason:  string | null
 }
@@ -690,6 +705,23 @@ function parseFileChecks(fileChecks: ToolOutputs['file_checks']): EnrichedIssue[
   return issues
 }
 
+// ── Vibe-leak-detector parser ──────────────────────────────────────────────────
+
+function parseVibeIssues(vibeIssues: VibeIssueInput[]): EnrichedIssue[] {
+  return vibeIssues.map(v => ({
+    guard:          v.guard as EnrichedIssue['guard'],
+    category:       v.guard,
+    severity:       v.severity,
+    confidence:     v.confidence,
+    title:          v.title,
+    description:    v.description,
+    fix_suggestion: v.fix,
+    code_snippet:   v.snippet || undefined,
+    file_path:      v.file,
+    line_number:    v.line > 0 ? v.line : undefined,
+  }))
+}
+
 // ── Main analyzer ──────────────────────────────────────────────────────────────
 
 export async function analyzeToolOutputs(outputs: ToolOutputs): Promise<EnrichedIssue[]> {
@@ -707,6 +739,11 @@ export async function analyzeToolOutputs(outputs: ToolOutputs): Promise<Enriched
 
   // SAST — Semgrep (local custom rules only)
   allIssues.push(...parseSemgrep(outputs.semgrep))
+
+  // Vibe-leak-detector — in-process regex/AST scanner (new)
+  if (outputs.vibe_issues && outputs.vibe_issues.length > 0) {
+    allIssues.push(...parseVibeIssues(outputs.vibe_issues))
+  }
 
   // LLM semantic analysis — auth flaws, N+1, payment bugs, injection
   if (outputs.llm_issues && outputs.llm_issues.length > 0) {

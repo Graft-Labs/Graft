@@ -1,0 +1,33 @@
+rules:
+  - id: shipguard.security.eval-usage
+    pattern-either:
+      - pattern: eval($X)
+      - pattern: new Function($X)
+    message: >
+      eval() or new Function() with a dynamic argument. If user-supplied input ever
+      reaches this call, an attacker can execute arbitrary JavaScript. Replace with
+      JSON.parse(), a lookup table, or a safe expression evaluator.
+    languages: [javascript, typescript]
+    severity: ERROR
+    metadata:
+      guard: security
+      category: injection
+      confidence: confirmed
+      cwe: CWE-95
+      owasp: A03:2021
+
+  - id: shipguard.security.dangerous-inner-html-unsanitized
+    pattern: |
+      dangerouslySetInnerHTML={{"__html": $X}}
+    message: >
+      dangerouslySetInnerHTML with potentially unsanitized content. If $X contains
+      user input or external API data, this enables stored XSS. Sanitize with
+      DOMPurify.sanitize(html) before injecting.
+    languages: [javascript, typescript]
+    severity: WARNING
+    metadata:
+      guard: security
+      category: xss
+      confidence: likely
+      cwe: CWE-79
+      owasp: A03:2021

@@ -13,6 +13,8 @@ import {
   type GrepCheckResults,
   type EnrichedIssue,
 } from '@/lib/ai/analyzer'
+import { detectStack, type StackInfo } from './helpers/detect-stack'
+import { runVibeLeakDetector, type VibeIssue } from './helpers/vibe-leak-detector'
 
 const execAsync = promisify(exec)
 
@@ -51,8 +53,8 @@ async function fileExists(path: string): Promise<boolean> {
   }
 }
 
-// ── Framework detection ────────────────────────────────────────────────────────
-function detectFramework(pkgJson: Record<string, unknown>): string {
+// ── Framework detection (legacy fallback for payload.framework) ───────────────
+function detectFrameworkFromPkg(pkgJson: Record<string, unknown>): string {
   const deps = {
     ...((pkgJson.dependencies as Record<string, unknown>) ?? {}),
     ...((pkgJson.devDependencies as Record<string, unknown>) ?? {}),
@@ -73,8 +75,7 @@ function detectFramework(pkgJson: Record<string, unknown>): string {
 
 // ── LLM semantic analysis ──────────────────────────────────────────────────────
 
-// Mistral direct API is used first (own key, separate quota, no shared rate limits).
-// OpenRouter free models are fallback when Mistral is unavailable.
+// Mistral direct API is used — own key, separate quota, no shared rate limits.
 
 // OpenRouter free models — fallback when Mistral is unavailable
 const OPENROUTER_FREE_MODELS = [
@@ -122,13 +123,24 @@ interface RelevantFile {
   content:  string
 }
 
+// Token budget: ~8k tokens ≈ 32k chars (Mistral tokenizes ~4 chars/token)
+const MAX_TOTAL_CHARS = 32_000
+// Per-category priority caps (chars) — ensures key files aren't crowded out
+const CATEGORY_CAPS: Record<string, number> = {
+  'api-route': 12_000,
+  'auth':       8_000,
+  'payment':    8_000,
+  'database':   6_000,
+  'config':     4_000,
+  'source':     4_000,
+}
+
 async function selectRelevantFiles(
   cloneDir: string,
   _framework: string,
 ): Promise<RelevantFile[]> {
-  const files: RelevantFile[] = []
-  const MAX_TOTAL_CHARS = 400_000
-  let totalChars = 0
+  const filesByCategory: Record<string, RelevantFile[]> = {}
+  const totalCharsByCategory: Record<string, number> = {}
 
   // Always include package.json and .env.example
   const always = ['package.json', '.env.example', 'tsconfig.json']
@@ -136,13 +148,13 @@ async function selectRelevantFiles(
     const fullPath = join(cloneDir, name)
     const content  = await readFileSafe(fullPath)
     if (content) {
-      const rel = name
-      files.push({ path: rel, category: 'config', content })
-      totalChars += content.length
+      if (!filesByCategory['config']) { filesByCategory['config'] = []; totalCharsByCategory['config'] = 0 }
+      filesByCategory['config'].push({ path: name, category: 'config', content })
+      totalCharsByCategory['config'] = (totalCharsByCategory['config'] ?? 0) + content.length
     }
   }
 
-  // Walk repo recursively, collect relevant files
+  // Walk repo recursively, collect relevant files by category
   async function walk(dir: string): Promise<void> {
     let entries: string[]
     try { entries = await readdir(dir) } catch { return }
@@ -179,32 +191,71 @@ async function selectRelevantFiles(
       else if (/lib\/db|supabase|prisma|drizzle|mongo/i.test(rel)) category = 'database'
       else if (/payment|checkout|stripe|billing|webhook/i.test(rel)) category = 'payment'
 
-      if (totalChars >= MAX_TOTAL_CHARS) continue
-      const content = await readFileSafe(fullPath)
-      if (!content || content.length > 80_000) continue  // skip huge files
+      const cap = CATEGORY_CAPS[category] ?? 4_000
+      if ((totalCharsByCategory[category] ?? 0) >= cap) continue
 
-      files.push({ path: rel, category, content })
-      totalChars += content.length
+      const content = await readFileSafe(fullPath)
+      if (!content || content.length > 15_000) continue  // skip huge individual files
+
+      if (!filesByCategory[category]) { filesByCategory[category] = []; totalCharsByCategory[category] = 0 }
+      filesByCategory[category].push({ path: rel, category, content })
+      totalCharsByCategory[category] = (totalCharsByCategory[category] ?? 0) + content.length
     }
   }
 
   await walk(cloneDir)
+
+  // Flatten by priority order, respecting total budget
+  const priorityOrder = ['api-route', 'payment', 'auth', 'database', 'config', 'source']
+  const files: RelevantFile[] = []
+  let totalChars = 0
+
+  for (const cat of priorityOrder) {
+    for (const f of (filesByCategory[cat] ?? [])) {
+      if (totalChars + f.content.length > MAX_TOTAL_CHARS) continue
+      files.push(f)
+      totalChars += f.content.length
+    }
+  }
+
   logger.log('relevant_files_selected', { count: files.length, totalChars })
   return files
 }
 
 // ── Zod schema for LLM output ──────────────────────────────────────────────────
 
+// Normalize field names that different LLMs use interchangeably.
+// Called on each raw issue object before Zod validation.
+function normalizeLlmIssue(raw: unknown): unknown {
+  if (typeof raw !== 'object' || raw === null) return raw
+  const r = raw as Record<string, unknown>
+  return {
+    ...r,
+    // Field name aliases
+    fix_suggestion: r.fix_suggestion ?? r.fix ?? r.recommendation ?? r.remediation ?? r.solution ?? '',
+    file_path:      r.file_path  ?? r.file  ?? r.filepath ?? r.path ?? undefined,
+    line_number:    r.line_number ?? r.line  ?? r.lineNumber ?? r.line_num ?? undefined,
+    description:    r.description ?? r.impact ?? r.detail ?? r.details ?? r.summary ?? '',
+    confidence:     r.confidence ?? 'likely',
+  }
+}
+
 const LlmIssueSchema = z.object({
   guard:          z.enum(['security', 'scalability', 'monetization', 'distribution']),
   severity:       z.enum(['critical', 'high', 'medium', 'low']),
-  confidence:     z.enum(['confirmed', 'likely', 'possible']),
-  title:          z.string().max(200),
-  description:    z.string().max(1000),
-  fix_suggestion: z.string().max(2000),
+  confidence:     z.enum(['confirmed', 'likely', 'possible']).optional().default('likely'),
+  title:          z.string(),
+  description:    z.string(),
+  fix_suggestion: z.string().optional().default(''),
   file_path:      z.string().optional(),
-  line_number:    z.number().int().positive().optional(),
-  code_snippet:   z.string().max(800).optional(),
+  // Accept number (including 0 = unknown) or numeric string; treat 0 as absent
+  line_number:    z.union([z.number().int().nonnegative(), z.string()]).optional()
+                    .transform(v => {
+                      if (v === undefined || v === null) return undefined
+                      const n = typeof v === 'string' ? parseInt(v, 10) : v
+                      return (Number.isFinite(n) && n > 0) ? n : undefined
+                    }),
+  code_snippet:   z.string().optional(),
 })
 const LlmOutputSchema = z.object({ issues: z.array(LlmIssueSchema) })
 
@@ -212,6 +263,7 @@ async function runLlmAnalysis(
   files: RelevantFile[],
   framework: string,
   _allDeps: Record<string, unknown>,
+  stackInfo?: StackInfo,
 ): Promise<EnrichedIssue[]> {
   const openRouterKey = process.env.OPENROUTER_API_KEY
   const mistralKey    = process.env.MISTRAL_API_KEY
@@ -225,53 +277,81 @@ async function runLlmAnalysis(
     return []
   }
 
-  const systemPrompt = `You are a production-readiness auditor for shipped web apps. Framework: ${framework}.
+  // Build stack description for the prompt
+  const stackDesc = stackInfo
+    ? `Framework: ${stackInfo.framework}. Languages: ${stackInfo.languages.join(', ')}.${stackInfo.isPolyglot ? ` Polyglot repo — also has ${stackInfo.backendLangs.join('+')} backend.` : ''}${stackInfo.isMonorepo ? ' Monorepo.' : ''}`
+    : `Framework: ${framework}.`
 
-You audit ONLY for these 3 guards:
-- security: auth flaws (missing auth checks, IDOR, userId from body), injection (SQL, eval, XSS via dangerouslySetInnerHTML), CORS wildcard, hardcoded credentials in code
-- scalability: N+1 queries (db call inside loop), unbounded fetches (findMany/select with no limit/where), sync I/O blocking the event loop
-- monetization: price/amount taken from client request body (instead of looking up server-side), float arithmetic for money without rounding, missing Stripe webhook signature verification
+  const systemPrompt = `You are a production-readiness auditor for vibe-coded / AI-generated web apps.
+${stackDesc}
+
+Audit ONLY for these guards:
+- security: auth flaws (missing auth on API routes, IDOR — userId from request body), injection (SQL template literals, eval, XSS via dangerouslySetInnerHTML without sanitization), CORS wildcard + credentials, hardcoded secrets, exposed debug/admin endpoints, server actions without input validation
+- scalability: N+1 queries (DB call inside loop), unbounded fetches (findMany/select with no limit/where), sync I/O blocking event loop (readFileSync in handlers), missing rate limiting on auth endpoints, race conditions in async server actions, TypeScript any overuse
+- monetization: price/amount from client body (not server-side lookup), float math for money (use cents/Decimal), missing Stripe webhook signature verification, provisioning access on redirect instead of webhook
 
 Rules:
-- Only flag issues that would cause REAL harm to a live app with real users and real money
-- Every issue MUST cite a specific file path from the provided code
-- Line numbers are helpful but not required
-- Do NOT flag missing features, style issues, or theoretical problems
-- Do NOT flag things that need secrets/env vars to be hardcoded strings — Gitleaks handles those
-- Do NOT flag commented-out code
-- Do NOT flag things that look like test files (*.test.*, *.spec.*, __tests__)
-- Confidence: "confirmed" = exact problem clearly visible in code, "likely" = strong indicator present, "possible" = needs verification
-- Severity: "critical" = exploitable now / loss of money/data, "high" = significant risk, "medium" = moderate, "low" = minor
-- Be conservative — 5 high-confidence real issues is better than 20 speculative ones
+- Only flag issues causing REAL harm to a live app with real users and real money
+- Every high/critical issue MUST cite a specific file path AND include a code_snippet showing the problematic code
+- Do NOT flag: missing features, style issues, test files, commented-out code, placeholder values in .env.example, polyfills like window.process (these are legitimate bundler patterns)
+- Do NOT hallucinate issues for files you cannot see — only flag what is explicitly present in the provided code
+- Confidence: "confirmed" = clearly visible in the provided code, "likely" = strong indicator present, "possible" = needs verification
+- Severity: "critical" = exploitable right now, "high" = significant risk, "medium" = moderate, "low" = minor
+- Aim for 5-15 high-confidence issues; aggressively skip speculative ones
+- Be concise — short descriptions and fix_suggestions (2-3 sentences max each)
+- Estimate business impact: what breaks or costs money if this is exploited
 
-Return ONLY valid JSON: { "issues": [...] }
-No explanation, no markdown wrapper, just the JSON object.`
+Return ONLY this JSON (no markdown, no explanation):
+{"issues":[{"guard":"security","severity":"high","confidence":"confirmed","title":"...","description":"...","fix_suggestion":"...","file_path":"...","line_number":0,"code_snippet":"..."}]}`
 
   // Build file contents block
   const fileBlocks = files
-    .map(f => `### FILE: ${f.path}\n\`\`\`\n${f.content.slice(0, 60_000)}\n\`\`\``)
+    .map(f => `### FILE: ${f.path}\n\`\`\`\n${f.content.slice(0, 12_000)}\n\`\`\``)
     .join('\n\n')
 
   const userMessage = `Analyze the following codebase files for production-readiness issues.\n\n${fileBlocks}`
 
-  // ── 1. Try Mistral direct API first (own key, separate quota, no shared rate limits) ──
+  // ── 1. Try Mistral direct API first ───────────────────────────────────────────
   if (mistralKey) {
     const result = await tryMistral(mistralKey, systemPrompt, userMessage)
-    if (result !== null) return result
+    if (result !== null) return filterLlmIssues(result)
   }
 
-  // ── 2. Fall back to OpenRouter free models ────────────────────────────────────────────
+  // ── 2. Fall back to OpenRouter free models ────────────────────────────────────
   if (openRouterKey) {
     for (const model of OPENROUTER_FREE_MODELS) {
       logger.log('llm_trying_model', { model })
       const result = await tryOpenRouterModel(openRouterKey, model, systemPrompt, userMessage)
-      if (result !== null) return result
+      if (result !== null) return filterLlmIssues(result)
       logger.warn('llm_model_exhausted', { model })
     }
   }
 
   logger.warn('llm_failed_all_models')
   return []  // graceful degradation — grep/file checks still produce a full report
+}
+
+/**
+ * Post-filter: drop high/critical LLM issues with no code_snippet.
+ * These are almost always hallucinated — the LLM inferred the issue from file name,
+ * not actual code. Keeping them inflates the false positive rate significantly.
+ */
+function filterLlmIssues(issues: EnrichedIssue[]): EnrichedIssue[] {
+  const filtered = issues.filter(issue => {
+    if (issue.severity === 'critical' || issue.severity === 'high') {
+      if (!issue.code_snippet || issue.code_snippet.trim().length < 10) {
+        logger.log('llm_issue_dropped_no_snippet', {
+          title: issue.title,
+          severity: issue.severity,
+          file: issue.file_path,
+        })
+        return false
+      }
+    }
+    return true
+  })
+  logger.log('llm_filter_applied', { before: issues.length, after: filtered.length })
+  return filtered
 }
 
 // ── Mistral direct API call ────────────────────────────────────────────────────
@@ -295,7 +375,7 @@ async function tryMistral(
           messages:        [{ role: 'system', content: system }, { role: 'user', content: user }],
           response_format: { type: 'json_object' },
           temperature:     0.1,
-          max_tokens:      8192,
+          max_tokens:      4096,
         }),
         signal: AbortSignal.timeout(90_000),
       })
@@ -314,12 +394,23 @@ async function tryMistral(
 
       const data = await res.json() as {
         choices?: Array<{ message?: { content?: string } }>
+        usage?:   { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number }
         error?:   { message?: string }
       }
 
       if (data.error) {
         logger.warn('llm_model_error', { model: 'mistral', error: data.error.message })
         return null
+      }
+
+      // Log token usage so it's visible in the Trigger.dev trace
+      if (data.usage) {
+        logger.log('llm_tokens_used', {
+          model:             'mistral-small-latest',
+          prompt_tokens:     data.usage.prompt_tokens,
+          completion_tokens: data.usage.completion_tokens,
+          total_tokens:      data.usage.total_tokens,
+        })
       }
 
       const raw = data.choices?.[0]?.message?.content ?? ''
@@ -383,10 +474,21 @@ async function tryOpenRouterModel(
 
       const data = await res.json() as {
         choices?: Array<{ message?: { content?: string } }>
+        usage?:   { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number }
         error?:   { message?: string }
       }
 
       if (data.error) { logger.warn('llm_model_error', { model, error: data.error.message }); return null }
+
+      // Log token usage so it's visible in the Trigger.dev trace
+      if (data.usage) {
+        logger.log('llm_tokens_used', {
+          model,
+          prompt_tokens:     data.usage.prompt_tokens,
+          completion_tokens: data.usage.completion_tokens,
+          total_tokens:      data.usage.total_tokens,
+        })
+      }
 
       const raw = data.choices?.[0]?.message?.content ?? ''
       if (!raw.trim()) { logger.warn('llm_empty_response', { model }); return null }
@@ -407,20 +509,50 @@ async function tryOpenRouterModel(
 
 function parseLlmResponse(raw: string, model: string): EnrichedIssue[] | null {
   let parsed: unknown
-  try { parsed = JSON.parse(raw) }
+  // Strip markdown fences if present (```json ... ``` or ``` ... ```)
+  const stripped = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim()
+  try { parsed = JSON.parse(stripped) }
   catch {
-    logger.warn('llm_non_json', { model, preview: raw.slice(0, 100) })
-    return null
+    // Try to extract a JSON object from somewhere in the response
+    const match = stripped.match(/\{[\s\S]*\}/)
+    if (match) {
+      try { parsed = JSON.parse(match[0]) }
+      catch { /* fall through */ }
+    }
+    if (!parsed) {
+      logger.warn('llm_non_json', {
+        model,
+        preview_head: raw.slice(0, 300),
+        preview_tail: raw.slice(-200),
+        raw_length: raw.length,
+      })
+      return null
+    }
   }
 
-  const validated = LlmOutputSchema.safeParse(parsed)
+  // Normalize field names on each issue before full-schema validation
+  const rawIssues = (parsed as { issues?: unknown[] })?.issues ?? []
+  const normalizedParsed = typeof parsed === 'object' && parsed !== null && 'issues' in (parsed as object)
+    ? { ...(parsed as object), issues: rawIssues.map(normalizeLlmIssue) }
+    : parsed
+
+  const validated = LlmOutputSchema.safeParse(normalizedParsed)
   if (!validated.success) {
-    logger.warn('llm_schema_invalid', { model, issues: validated.error.issues.slice(0, 3) })
-    // Best-effort: extract whatever issues parsed correctly
-    const rawIssues = (parsed as { issues?: unknown[] })?.issues ?? []
+    const firstIssue = rawIssues[0] as Record<string, unknown> | undefined
+    const firstNorm  = rawIssues.length > 0 ? normalizeLlmIssue(rawIssues[0]) : undefined
+    logger.warn('llm_schema_invalid', {
+      model,
+      errors: validated.error.issues.slice(0, 5).map(e => ({ path: e.path.join('.'), msg: e.message })),
+      raw_keys: typeof parsed === 'object' && parsed !== null ? Object.keys(parsed as object) : [],
+      first_issue_keys: firstIssue ? Object.keys(firstIssue) : [],
+      first_issue_sample: firstIssue ? JSON.stringify(firstIssue).slice(0, 300) : null,
+      first_norm_sample: firstNorm ? JSON.stringify(firstNorm).slice(0, 300) : null,
+      issues_count: rawIssues.length,
+    })
+    // Best-effort: extract whatever issues parsed correctly (with normalization)
     const goodIssues: EnrichedIssue[] = []
     for (const ri of rawIssues) {
-      const single = LlmIssueSchema.safeParse(ri)
+      const single = LlmIssueSchema.safeParse(normalizeLlmIssue(ri))
       if (single.success) goodIssues.push({ ...single.data, category: single.data.guard })
     }
     logger.log('llm_partial_parse', { model, count: goodIssues.length })
@@ -637,7 +769,7 @@ export const runScanTask = task({
       //  all framework-specific grep checks like isNextJs / isVite)
       const detectedFramework = (payload.framework && payload.framework !== 'unknown')
         ? payload.framework
-        : detectFramework(pkgJson)
+        : detectFrameworkFromPkg(pkgJson)
       logger.log('framework_detected', { framework: detectedFramework })
 
       // Store framework in DB
@@ -645,6 +777,16 @@ export const runScanTask = task({
         .from('scans')
         .update({ framework: detectedFramework })
         .eq('id', scanId)
+
+      // ── Step 2b: Deep stack detection ─────────────────────────────────────────
+      const stackInfo = await detectStack(cloneDir)
+      logger.log('stack_detected', {
+        framework:    stackInfo.framework,
+        languages:    stackInfo.languages,
+        isPolyglot:   stackInfo.isPolyglot,
+        backendLangs: stackInfo.backendLangs,
+        isMonorepo:   stackInfo.isMonorepo,
+      })
 
       const allDeps = {
         ...((pkgJson.dependencies as Record<string, unknown>) ?? {}),
@@ -711,7 +853,7 @@ export const runScanTask = task({
       const semgrepCmd = `python3 -m semgrep --config=${semgrepRulesPath} --json --quiet --timeout 30 . 2>/dev/null || echo '{"results":[]}'`
 
       logger.log('running_analysis_batch')
-      const [osvRaw, semgrepRaw, grepChecks] = await Promise.all([
+      const [osvRaw, semgrepRaw, grepChecks, locCount, vibeIssues] = await Promise.all([
         // OSV-Scanner — CVEs in lockfile deps
         lockfile
           ? runTool(
@@ -725,14 +867,29 @@ export const runScanTask = task({
 
         // Grep-based source code checks — deterministic, unambiguous patterns
         runGrepChecks(cloneDir, detectedFramework, allDeps),
+
+        // LOC count for huge repo detection
+        runTool(
+          `find . -name "*.ts" -o -name "*.tsx" -o -name "*.js" -o -name "*.jsx" | grep -v node_modules | grep -v ".next" | xargs wc -l 2>/dev/null | tail -1 | awk '{print $1}' || echo "0"`,
+          cloneDir, 15_000
+        ),
+
+        // Vibe-leak-detector — in-process regex+AST scanner
+        runVibeLeakDetector(cloneDir),
       ])
-      logger.log('analysis_batch_done')
+
+      // LOC-based huge repo detection
+      const loc = parseInt(locCount.trim() || '0', 10)
+      if (loc > 20_000) {
+        logger.log('huge_repo_detected', { loc, mode: 'light' })
+      }
+      logger.log('analysis_batch_done', { loc, vibeIssuesFound: vibeIssues.length })
 
       // ── Step 5.5: LLM semantic analysis ───────────────────────────────────────
       // Select relevant files and run LLM for semantic issues grep can't catch
       logger.log('running_llm_analysis')
       const relevantFiles = await selectRelevantFiles(cloneDir, detectedFramework)
-      const llmIssues = await runLlmAnalysis(relevantFiles, detectedFramework, allDeps)
+      const llmIssues = await runLlmAnalysis(relevantFiles, detectedFramework, allDeps, stackInfo)
       logger.log('llm_analysis_complete', { issueCount: llmIssues.length })
 
       // ── Step 6: File-based checks ──────────────────────────────────────────────
@@ -848,6 +1005,7 @@ export const runScanTask = task({
         grep_checks:      grepChecks,
         file_checks:      fileChecks,
         llm_issues:       llmIssues,
+        vibe_issues:      vibeIssues,
         osv_skipped:      !lockfile,
         osv_skip_reason:  lockfile ? null : 'No lockfile found',
       }
