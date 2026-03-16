@@ -241,7 +241,8 @@ function normalizeLlmIssue(raw: unknown): unknown {
 }
 
 const LlmIssueSchema = z.object({
-  guard:          z.enum(['security', 'scalability', 'monetization', 'distribution']),
+  guard:          z.enum(['security', 'scalability', 'monetization', 'distribution', 'supply_chain'])
+                    .transform(g => g === 'supply_chain' ? 'security' : g),
   severity:       z.enum(['critical', 'high', 'medium', 'low']),
   confidence:     z.enum(['confirmed', 'likely', 'possible']).optional().default('likely'),
   title:          z.string(),
@@ -286,9 +287,10 @@ async function runLlmAnalysis(
 ${stackDesc}
 
 Audit ONLY for these guards:
-- security: auth flaws (missing auth on API routes, IDOR — userId from request body), injection (SQL template literals, eval, XSS via dangerouslySetInnerHTML without sanitization), CORS wildcard + credentials, hardcoded secrets, exposed debug/admin endpoints, server actions without input validation
-- scalability: N+1 queries (DB call inside loop), unbounded fetches (findMany/select with no limit/where), sync I/O blocking event loop (readFileSync in handlers), missing rate limiting on auth endpoints, race conditions in async server actions, TypeScript any overuse
+- security: auth flaws (missing auth on API routes, IDOR — userId from request body), injection (SQL template literals, eval, XSS via dangerouslySetInnerHTML without sanitization), CORS wildcard + credentials, hardcoded secrets, exposed debug/admin endpoints, server actions without input validation (no Zod/yup/joi), auth endpoints without rate limiting, console.log() of process.env secrets or NEXT_PUBLIC_ vars
+- scalability: N+1 queries (DB call inside loop), unbounded fetches (findMany/select with no limit/where), sync I/O blocking event loop (readFileSync in handlers), missing rate limiting on auth endpoints, race conditions in async server actions (multiple sequential DB writes without a transaction), TypeScript any overuse, missing error.tsx in App Router route segments (unhandled async errors show raw crash pages)
 - monetization: price/amount from client body (not server-side lookup), float math for money (use cents/Decimal), missing Stripe webhook signature verification, provisioning access on redirect instead of webhook
+- supply_chain: imported npm packages that appear AI-hallucinated or do not exist (wrong package names, packages that are not on npm, or packages with subtly wrong names like "nextjs" instead of "next")
 
 Rules:
 - Only flag issues causing REAL harm to a live app with real users and real money
@@ -302,7 +304,9 @@ Rules:
 - Estimate business impact: what breaks or costs money if this is exploited
 
 Return ONLY this JSON (no markdown, no explanation):
-{"issues":[{"guard":"security","severity":"high","confidence":"confirmed","title":"...","description":"...","fix_suggestion":"...","file_path":"...","line_number":0,"code_snippet":"..."}]}`
+{"issues":[{"guard":"security","severity":"high","confidence":"confirmed","title":"...","description":"...","fix_suggestion":"...","file_path":"...","line_number":0,"code_snippet":"..."}]}
+
+Valid guard values: "security", "scalability", "monetization", "distribution", "supply_chain"`
 
   // Build file contents block
   const fileBlocks = files

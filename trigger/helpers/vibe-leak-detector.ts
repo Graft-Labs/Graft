@@ -600,6 +600,259 @@ function checkNPlusOneQuery(f: FileResult): VibeIssue[] {
   return issues
 }
 
+/**
+ * CHECK 18: Missing error.tsx in App Router route segments
+ * Each app/ directory with a page.tsx should have an error.tsx sibling.
+ * Without it, runtime errors show Next.js's generic crash page to users.
+ */
+async function checkMissingErrorBoundaries(cloneDir: string): Promise<VibeIssue[]> {
+  const issues: VibeIssue[] = []
+
+  async function walk(dir: string): Promise<void> {
+    let entries: string[]
+    try { entries = await readdir(dir) } catch { return }
+
+    const names = new Set(entries)
+    const hasPage   = names.has('page.tsx') || names.has('page.jsx') || names.has('page.ts') || names.has('page.js')
+    const hasError  = names.has('error.tsx') || names.has('error.jsx') || names.has('error.ts') || names.has('error.js')
+
+    if (hasPage && !hasError) {
+      const rel = relative(cloneDir, dir)
+      issues.push({
+        file: `${rel}/page.tsx`,
+        line: 1,
+        snippet: `Route segment ${rel} has page.tsx but no error.tsx`,
+        guard: 'scalability',
+        severity: 'medium',
+        confidence: 'confirmed',
+        title: `Missing error.tsx in route segment \`${rel}\``,
+        description: `The route segment \`${rel}\` has a \`page.tsx\` but no \`error.tsx\` error boundary. If an async Server Component throws, Next.js shows a blank crash page with a raw error message — exposing internals to users and killing conversions.`,
+        fix: `Create \`${rel}/error.tsx\`:\n\`\`\`tsx\n"use client"\nexport default function Error({ error, reset }: { error: Error; reset: () => void }) {\n  return (\n    <div>\n      <h2>Something went wrong</h2>\n      <button onClick={reset}>Try again</button>\n    </div>\n  )\n}\n\`\`\``,
+      })
+    }
+
+    for (const entry of entries) {
+      if (entry.startsWith('.') || SKIP_DIRS.has(entry)) continue
+      const full = join(dir, entry)
+      let s: { isDirectory(): boolean }
+      try { s = await stat(full) } catch { continue }
+      if (s.isDirectory()) await walk(full)
+    }
+  }
+
+  const appDir = join(cloneDir, 'app')
+  try { await stat(appDir) } catch { return [] }
+  await walk(appDir)
+
+  // Cap at 5 to avoid flooding the report for large apps
+  return issues.slice(0, 5)
+}
+
+/**
+ * CHECK 19: Server Actions without input validation
+ * Exported async functions in 'use server' files that take parameters
+ * but have no Zod/yup/joi validation call in the function body.
+ */
+function checkServerActionNoValidation(f: FileResult): VibeIssue[] {
+  if (!f.isServerAction) return []
+
+  const issues: VibeIssue[] = []
+
+  // Match: export async function foo(someParam...) { ... }
+  // or: export const foo = async (someParam...) => { ... }
+  const FN_RE = /export\s+(?:async\s+function\s+(\w+)\s*\(([^)]{1,200})\)|const\s+(\w+)\s*=\s*async\s*\(([^)]{1,200})\)\s*=>)/g
+  let m: RegExpExecArray | null
+
+  while ((m = FN_RE.exec(f.content)) !== null) {
+    const fnName   = m[1] || m[3]
+    const params   = (m[2] || m[4] || '').trim()
+
+    // Skip functions with no params (or only FormData — that's fine, Next handles it)
+    if (!params || params === 'formData: FormData' || params === 'formData') continue
+
+    // Find the function body — scan from match position
+    const bodyStart = f.content.indexOf('{', m.index + m[0].length - 1)
+    if (bodyStart === -1) continue
+    // Extract ~600 chars of body (enough to see validation calls)
+    const bodySlice = f.content.slice(bodyStart, bodyStart + 600)
+
+    const hasValidation = /\.parse\s*\(|\.safeParse\s*\(|\.validate\s*\(|joi\.|yup\.|zod\.|schema\./i.test(bodySlice)
+    if (!hasValidation) {
+      const lineNum = f.content.slice(0, m.index).split('\n').length
+      issues.push(issue(f.rel, lineNum, m[0].slice(0, 120), {
+        guard: 'security',
+        severity: 'high',
+        confidence: 'likely',
+        title: `Server Action \`${fnName}\` accepts params without input validation`,
+        description: `\`${f.rel}\` → \`${fnName}(${params.slice(0, 60)})\` is a Server Action that accepts parameters but has no visible Zod/yup/joi validation. Server Actions are public POST endpoints — any user can send arbitrary payloads.`,
+        fix: `Validate all inputs with Zod before using them:\n\`\`\`ts\nimport { z } from "zod"\nconst schema = z.object({ /* ... */ })\nexport async function ${fnName}(data: unknown) {\n  const parsed = schema.safeParse(data)\n  if (!parsed.success) throw new Error("Invalid input")\n  // use parsed.data\n}\n\`\`\``,
+      }))
+      if (issues.length >= 3) break // max 3 per file
+    }
+  }
+
+  return issues
+}
+
+/**
+ * CHECK 20: Unbounded DB queries — findMany / select() with no limit/take/where
+ */
+function checkUnboundedQueries(f: FileResult): VibeIssue[] {
+  if (f.isClientComponent) return []
+  if (!/prisma|drizzle|supabase|mongoose|db\./i.test(f.content)) return []
+
+  const issues: VibeIssue[] = []
+
+  for (let i = 0; i < f.lines.length; i++) {
+    const line = f.lines[i]
+
+    // Prisma: .findMany({ }) with no take/where/skip, or .findMany() with nothing
+    // Drizzle: db.select().from(table) with no .limit()
+    // Supabase: .from('table').select('*') with no .limit() or .range()
+    if (/\.(findMany|findAll)\s*\(\s*\{?\s*\}?\s*\)/.test(line)) {
+      // Check if the next few lines have a .take / limit / where
+      const context = f.lines.slice(i, i + 5).join(' ')
+      if (!/\btake\b|\blimit\b|\bwhere\b|\brange\b|\bskip\b/.test(context)) {
+        issues.push(issue(f.rel, i + 1, line, {
+          guard: 'scalability',
+          severity: 'high',
+          confidence: 'likely',
+          title: 'Unbounded DB query — no limit or where clause',
+          description: `\`${f.rel}\` calls \`.findMany()\` or \`.findAll()\` with no \`take\`/\`limit\`/\`where\` — this fetches every row in the table. With 100k+ rows this will OOM the server and time out.`,
+          fix: 'Always paginate:\n```ts\nconst items = await db.items.findMany({\n  take: 50,\n  skip: (page - 1) * 50,\n  orderBy: { createdAt: "desc" },\n})\n```',
+        }))
+        if (issues.length >= 3) break
+      }
+    }
+
+    // Supabase: .select() without .limit()
+    if (/\.select\s*\(\s*['"`\*]/.test(line)) {
+      const context = f.lines.slice(i, i + 8).join(' ')
+      if (!/\.limit\s*\(|\.range\s*\(/.test(context) && /supabase|from\s*\(/.test(context)) {
+        issues.push(issue(f.rel, i + 1, line, {
+          guard: 'scalability',
+          severity: 'high',
+          confidence: 'possible',
+          title: 'Unbounded Supabase query — no .limit() call',
+          description: `\`${f.rel}\` queries Supabase with \`.select()\` but no \`.limit()\`. Without a limit, this returns every matching row — unbounded reads that can exhaust memory and hit Supabase's row limits.`,
+          fix: 'Add `.limit()` to every query:\n```ts\nconst { data } = await supabase.from("items").select("*").limit(50)\n```',
+        }))
+        if (issues.length >= 3) break
+      }
+    }
+  }
+
+  return issues
+}
+
+/**
+ * CHECK 21: Auth endpoints without rate limiting
+ * /api/login, /register, /forgot-password etc with no rate-limit import
+ */
+function checkAuthEndpointNoRateLimit(f: FileResult): VibeIssue[] {
+  if (!/api\//i.test(f.rel)) return []
+
+  const AUTH_ROUTE_RE = /\/(login|signin|sign-in|register|signup|sign-up|forgot-?password|reset-?password|verify|otp|2fa)\b/i
+  if (!AUTH_ROUTE_RE.test(f.rel) && !AUTH_ROUTE_RE.test(f.content.slice(0, 300))) return []
+
+  const hasRateLimit = /ratelimit|rate.?limit|upstash|express-rate-limit|bottleneck|limiter/i.test(f.content)
+  if (!hasRateLimit) {
+    return [issue(f.rel, 1, f.lines[0] ?? '', {
+      guard: 'security',
+      severity: 'high',
+      confidence: 'likely',
+      title: 'Auth endpoint without rate limiting (brute-force risk)',
+      description: `\`${f.rel}\` is an authentication endpoint with no rate limiting. Without it, attackers can try millions of password combinations, enumerate valid accounts, or flood OTP/magic-link endpoints at zero cost.`,
+      fix: 'Add rate limiting with Upstash:\n```bash\nnpm install @upstash/ratelimit @upstash/redis\n```\n```ts\nimport { Ratelimit } from "@upstash/ratelimit"\nconst ratelimit = new Ratelimit({ redis, limiter: Ratelimit.slidingWindow(5, "1 m") })\nconst { success } = await ratelimit.limit(ip)\nif (!success) return new Response("Too many requests", { status: 429 })\n```',
+    })]
+  }
+  return []
+}
+
+/**
+ * CHECK 22: console.log(process.env.*) in client components (env var leak)
+ */
+function checkEnvVarConsoleLog(f: FileResult): VibeIssue[] {
+  const issues: VibeIssue[] = []
+
+  for (let i = 0; i < f.lines.length; i++) {
+    const line = f.lines[i]
+    if (f.lines[i].trim().startsWith('//')) continue
+
+    // console.log(...process.env...) in any file
+    if (/console\.(log|warn|error|info|debug)\s*\(.*process\.env\./i.test(line)) {
+      issues.push(issue(f.rel, i + 1, line, {
+        guard: 'security',
+        severity: f.isClientComponent ? 'high' : 'medium',
+        confidence: 'confirmed',
+        title: 'console.log() of process.env variable',
+        description: f.isClientComponent
+          ? `\`${f.rel}\` logs \`process.env.*\` in a client component — the value is bundled into the JS payload and printed to every user's browser console, exposing configuration and potentially secrets.`
+          : `\`${f.rel}\` logs \`process.env.*\` — server logs often ship to external services (Datadog, Sentry, Logtail). Secret values in logs create an audit trail of credential exposure.`,
+        fix: 'Remove the console.log. If you need to verify a value locally, use a debugger breakpoint or check the value server-side in a one-off script.',
+      }))
+      if (issues.length >= 2) break
+    }
+  }
+
+  return issues
+}
+
+/**
+ * CHECK 23: Race condition in Server Actions — multiple sequential awaited DB writes
+ * with no transaction wrapper (db.$transaction / withTransaction / BEGIN)
+ */
+function checkRaceConditionInServerAction(f: FileResult): VibeIssue[] {
+  if (!f.isServerAction) return []
+
+  const issues: VibeIssue[] = []
+
+  // Look for functions that have 2+ sequential await db writes (create/update/delete/upsert)
+  // without a transaction wrapper
+  const WRITE_RE = /await\s+\S*(?:db|prisma|supabase)\S*\.(create|update|delete|upsert|insert|patch)\s*[\(\{]/gi
+  const TRANSACTION_RE = /\$transaction|withTransaction|\.transaction\(|db\.begin|START TRANSACTION|BEGIN/i
+
+  // Per-function analysis: find exported async functions
+  const FN_RE = /export\s+(?:async\s+function\s+\w+|const\s+\w+\s*=\s*async\s*(?:\([^)]*\)|\w+)\s*=>)\s*\{/g
+  let fnMatch: RegExpExecArray | null
+
+  while ((fnMatch = FN_RE.exec(f.content)) !== null) {
+    // Find the function body by tracking braces
+    let depth = 0
+    let bodyStart = -1
+    let bodyEnd = -1
+
+    for (let i = fnMatch.index; i < f.content.length; i++) {
+      if (f.content[i] === '{') {
+        if (depth === 0) bodyStart = i
+        depth++
+      } else if (f.content[i] === '}') {
+        depth--
+        if (depth === 0) { bodyEnd = i; break }
+      }
+    }
+
+    if (bodyStart === -1 || bodyEnd === -1) continue
+    const body = f.content.slice(bodyStart, bodyEnd)
+
+    const writeMatches = body.match(WRITE_RE) ?? []
+    if (writeMatches.length >= 2 && !TRANSACTION_RE.test(body)) {
+      const lineNum = f.content.slice(0, fnMatch.index).split('\n').length
+      issues.push(issue(f.rel, lineNum, fnMatch[0].slice(0, 120), {
+        guard: 'scalability',
+        severity: 'medium',
+        confidence: 'possible',
+        title: 'Multiple DB writes in Server Action without transaction (race condition)',
+        description: `\`${f.rel}\` has ${writeMatches.length} sequential DB write operations in a Server Action without a transaction. If any write fails mid-way, the database is left in a partial/inconsistent state. Concurrent requests can also interleave, corrupting balances or counts.`,
+        fix: 'Wrap multiple writes in a transaction:\n```ts\nawait prisma.$transaction(async (tx) => {\n  await tx.order.create({ ... })\n  await tx.inventory.update({ ... })\n})\n```',
+      }))
+      if (issues.length >= 2) break
+    }
+  }
+
+  return issues
+}
+
 // ── Main export ────────────────────────────────────────────────────────────────
 
 export async function runVibeLeakDetector(cloneDir: string): Promise<VibeIssue[]> {
@@ -631,6 +884,12 @@ export async function runVibeLeakDetector(cloneDir: string): Promise<VibeIssue[]
     ...checkFloatMoney(f),
     ...checkStripeWebhookVerification(f),
     ...checkNPlusOneQuery(f),
+    // CHECK 19–23: new checks
+    ...checkServerActionNoValidation(f),
+    ...checkUnboundedQueries(f),
+    ...checkAuthEndpointNoRateLimit(f),
+    ...checkEnvVarConsoleLog(f),
+    ...checkRaceConditionInServerAction(f),
   ]
 
   for (const f of fileResults) {
@@ -639,6 +898,7 @@ export async function runVibeLeakDetector(cloneDir: string): Promise<VibeIssue[]
 
   // Cross-file checks
   allIssues.push(...await checkMixedRouting(cloneDir))
+  allIssues.push(...await checkMissingErrorBoundaries(cloneDir))  // CHECK 18
   allIssues.push(...checkTypeScriptAnyOveruse(fileResults))
 
   // Deduplicate: same title + file + line

@@ -1,0 +1,61 @@
+rules:
+  - id: shipguard.security.server-action-no-validation
+    languages: [typescript, javascript]
+    message: >
+      Server Action `$FNAME` accepts parameters but has no Zod/yup/joi input validation.
+      Server Actions are public POST endpoints — any user can send arbitrary payloads.
+      Add `.parse()` or `.safeParse()` from Zod to validate all inputs before use.
+    severity: WARNING
+    metadata:
+      guard: security
+      category: server-actions
+      confidence: MEDIUM
+      fix: |
+        import { z } from "zod"
+        const schema = z.object({ /* define your fields */ })
+        export async function myAction(data: unknown) {
+          const parsed = schema.safeParse(data)
+          if (!parsed.success) throw new Error("Invalid input")
+          // use parsed.data safely
+        }
+    patterns:
+      # Match exported async functions in files that have "use server"
+      - pattern: |
+          export async function $FNAME($PARAMS) {
+            ...
+          }
+      - pattern-not: |
+          export async function $FNAME($PARAMS) {
+            ...
+            $SCHEMA.parse(...)
+            ...
+          }
+      - pattern-not: |
+          export async function $FNAME($PARAMS) {
+            ...
+            $SCHEMA.safeParse(...)
+            ...
+          }
+      - pattern-not: |
+          export async function $FNAME($PARAMS) {
+            ...
+            $SCHEMA.validate(...)
+            ...
+          }
+      - pattern-not: |
+          export async function $FNAME() {
+            ...
+          }
+      - pattern-not: |
+          export async function $FNAME($PARAMS: FormData) {
+            ...
+          }
+    paths:
+      include:
+        - "app/**/*.ts"
+        - "app/**/*.tsx"
+        - "actions/**/*.ts"
+        - "lib/actions/**/*.ts"
+        - "src/actions/**/*.ts"
+        - "src/app/**/*.ts"
+        - "src/app/**/*.tsx"

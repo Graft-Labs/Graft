@@ -39,3 +39,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# trigger.dev local build artifacts
+.trigger/tmp/
+.trigger/store/
+.trigger/active-runs.json
+.trigger/dev.lock
+.trigger/watchdog.pid
