@@ -297,6 +297,9 @@ Rules:
 - Every high/critical issue MUST cite a specific file path AND include a code_snippet showing the problematic code
 - Do NOT flag: missing features, style issues, test files, commented-out code, placeholder values in .env.example, polyfills like window.process (these are legitimate bundler patterns)
 - Do NOT hallucinate issues for files you cannot see — only flag what is explicitly present in the provided code
+- Do NOT flag internal/status/health/progress/tooling API routes as "missing auth" unless they explicitly read user PII or perform write operations on user data — routes like /api/status, /api/health, /api/agent/status, /api/init, /api/logs/stream are typically internal plumbing
+- Do NOT flag setInterval/setTimeout as "no cleanup" if the same file contains clearInterval, clearTimeout, request.signal, signal.addEventListener, or an abort handler — these are legitimate cleanup mechanisms
+- Do NOT flag console.log() calls as "env var leak" unless the argument literally contains process.env. — do not flag console.log() calls that only mention env var names inside plain string literals
 - Confidence: "confirmed" = clearly visible in the provided code, "likely" = strong indicator present, "possible" = needs verification
 - Severity: "critical" = exploitable right now, "high" = significant risk, "medium" = moderate, "low" = minor
 - Aim for 5-15 high-confidence issues; aggressively skip speculative ones
@@ -631,8 +634,8 @@ async function runGrepChecks(
     g(`grep -rn "sk-[a-zA-Z0-9]\\{20,\\}\\|sk_live_[a-zA-Z0-9]\\{20,\\}\\|pk_live_[a-zA-Z0-9]\\{20,\\}\\|AIza[a-zA-Z0-9]\\{35\\}\\|ghp_[a-zA-Z0-9]\\{36\\}" ${allSrcFiles} . 2>/dev/null | grep -v "\\.env\\|test\\|spec\\|node_modules" | head -10 || true`),
     // S1.6 — ORM/DB client imported in frontend source (single-quote and double-quote variants)
     g(`grep -rn "from 'drizzle-orm\\|from \"drizzle-orm\\|from '@neondatabase\\|from \"@neondatabase\\|from '@prisma/client\\|from \"@prisma/client\\|require('pg')\\|require(\"pg\")\\|from 'pg'\\|from \"pg\"" ${allSrcFiles} ${srcDirs} 2>/dev/null | head -20 || true`),
-    // S1.7
-    g(`grep -rn "console\\.log.*env\\|console\\.log.*key\\|console\\.log.*token\\|console\\.log.*password\\|console\\.log.*secret" ${allSrcFiles} . 2>/dev/null | grep -v "node_modules\\|test\\|spec" | head -10 || true`),
+    // S1.7 — only flag when process.env. is actually accessed inside the call, not just mentioned in a string
+    g(`grep -rn "console\\.log(.*process\\.env\\.\\|console\\.log(.*process\\.env\\[" ${allSrcFiles} . 2>/dev/null | grep -v "node_modules\\|test\\|spec" | head -10 || true`),
     // S4.4
     g(`grep -rn "DEBUG.*=.*true\\|debug.*=.*true\\|debug: true" --include="*.py" --include="*.ts" --include="*.js" --include="*.env.example" . 2>/dev/null | grep -v "node_modules\\|\\.git\\|test\\|spec\\|webpack\\|vite\\|esbuild\\|sourceMap\\|devtools" | head -10 || true`),
     // S4.6
@@ -643,8 +646,9 @@ async function runGrepChecks(
     g(`grep -rn "unoptimized.*true\\|unoptimized: true" --include="*.ts" --include="*.js" --include="*.mjs" . 2>/dev/null | grep -v "node_modules\\|\\.git" | head -5 || true`),
     // SC3.2
     g(`grep -rn "readFileSync\\|writeFileSync\\|readdirSync\\|statSync" ${allSrcFiles} app/api pages/api 2>/dev/null | grep -v "node_modules\\|\\.git\\|test\\|spec\\|trigger.config" | head -10 || true`),
-    // SC3.6
-    g(`grep -rn "setInterval(" ${allSrcFiles} . 2>/dev/null | grep -v "node_modules\\|\\.git\\|clearInterval\\|test\\|spec" | head -10 || true`),
+    // SC3.6 — setInterval with no cleanup. Exclude lines containing clearInterval and files where
+    // request.signal / abort-based cleanup is used (Route Handler pattern).
+    g(`grep -rn "setInterval(" ${allSrcFiles} . 2>/dev/null | grep -v "node_modules\\|\\.git\\|clearInterval\\|test\\|spec\\|signal\\|abort" | head -10 || true`),
     // SC3.3 — count console.log lines
     g(`grep -rn "console\\.log(" ${allSrcFiles} . 2>/dev/null | grep -v "node_modules\\|\\.git\\|test\\|spec\\|\\.next" | wc -l || echo "0"`),
     // D1.6

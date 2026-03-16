@@ -193,7 +193,8 @@ function checkUncleanedTimers(f: FileResult): VibeIssue[] {
       depth -= (line.match(/\}/g) ?? []).length
 
       if (/setInterval\s*\(|setTimeout\s*\(/.test(line)) hasTimer    = true
-      if (/clearInterval|clearTimeout|return\s*\(\s*\)\s*=>/.test(line)) hasCleanup = true
+      // clearInterval/clearTimeout, return cleanup fn, OR signal/abort-based cleanup (Route Handler pattern)
+      if (/clearInterval|clearTimeout|return\s*\(\s*\)\s*=>|request\.signal|signal\.addEventListener|\.abort\s*\(/.test(line)) hasCleanup = true
 
       // End of useEffect block
       if (depth <= 0 && effectStart > 0) {
@@ -567,7 +568,9 @@ function checkNPlusOneQuery(f: FileResult): VibeIssue[] {
   let loopStart = -1
   let depth = 0
 
-  const LOOP_START_RE = /\b(for|forEach|map|filter|reduce|while)\s*[\(\{]/
+  // Exclude `reduce` and `filter` — these are in-memory transforms, not DB loop drivers.
+  // Also exclude `find` / `findIndex` which are in-memory searches.
+  const LOOP_START_RE = /\b(for|forEach|map|while)\s*[\(\{]/
   const DB_CALL_RE    = /\.(findFirst|findMany|findUnique|select|from|query|execute|find|count|aggregate)\s*[(\{(]/i
 
   for (let i = 0; i < f.lines.length; i++) {
@@ -710,9 +713,9 @@ function checkUnboundedQueries(f: FileResult): VibeIssue[] {
     // Drizzle: db.select().from(table) with no .limit()
     // Supabase: .from('table').select('*') with no .limit() or .range()
     if (/\.(findMany|findAll)\s*\(\s*\{?\s*\}?\s*\)/.test(line)) {
-      // Check if the next few lines have a .take / limit / where
-      const context = f.lines.slice(i, i + 5).join(' ')
-      if (!/\btake\b|\blimit\b|\bwhere\b|\brange\b|\bskip\b/.test(context)) {
+      // Check surrounding lines (before + after) for pagination signals
+      const context = f.lines.slice(Math.max(0, i - 3), i + 8).join(' ')
+      if (!/\btake\b|\blimit\b|\bwhere\b|\brange\b|\bskip\b|\bLIMIT\b/i.test(context)) {
         issues.push(issue(f.rel, i + 1, line, {
           guard: 'scalability',
           severity: 'high',
@@ -728,7 +731,8 @@ function checkUnboundedQueries(f: FileResult): VibeIssue[] {
     // Supabase: .select() without .limit()
     if (/\.select\s*\(\s*['"`\*]/.test(line)) {
       const context = f.lines.slice(i, i + 8).join(' ')
-      if (!/\.limit\s*\(|\.range\s*\(/.test(context) && /supabase|from\s*\(/.test(context)) {
+      // Also treat raw SQL LIMIT keyword (e.g. LIMIT ? OFFSET ?) as paginated
+      if (!/\.limit\s*\(|\.range\s*\(|\bLIMIT\b/i.test(context) && /supabase|from\s*\(/.test(context)) {
         issues.push(issue(f.rel, i + 1, line, {
           guard: 'scalability',
           severity: 'high',
