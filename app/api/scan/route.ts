@@ -141,7 +141,33 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Daily scan limit disabled for testing
+    // ── Scan limit enforcement ─────────────────────────────────────────────────
+    // Get user's plan and scan limits
+    const { data: userData } = await supabase
+      .from('users')
+      .select('plan, scans_used, scans_limit')
+      .eq('id', user.id)
+      .single()
+
+    const plan = userData?.plan || 'free'
+    const scansLimit = userData?.scans_limit ?? 3
+    const scansUsed = userData?.scans_used ?? 0
+
+    // Check if user has scans remaining
+    if (scansUsed >= scansLimit) {
+      logScan('scan_limit_reached', { traceId, userId: user.id, plan, scansLimit, scansUsed })
+      return NextResponse.json(
+        { 
+          error: 'limit_reached', 
+          message: `You've used all your scans (${scansLimit}). Upgrade to get more scans!`,
+          upgrade_url: '/pricing'
+        },
+        { status: 403 }
+      )
+    }
+
+    logScan('scan_limit_checked', { traceId, userId: user.id, plan, scansLimit, scansUsed })
+
     // ─────────────────────────────────────────────────────────────────────────
 
     const userName =
@@ -159,6 +185,9 @@ export async function POST(request: NextRequest) {
           email: user.email,
           name: userName,
           avatar_url: userAvatar,
+          plan: plan,
+          scans_limit: scansLimit,
+          scans_used: scansUsed,
           updated_at: new Date().toISOString(),
         },
         { onConflict: 'id' }

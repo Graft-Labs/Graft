@@ -27,6 +27,7 @@ export default function DashboardSidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
+  const [userData, setUserData] = useState<{ plan: string; scans_used: number; scans_limit: number } | null>(null);
 
   // Fetch user on load
   useEffect(() => {
@@ -34,6 +35,15 @@ export default function DashboardSidebar() {
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
       setUser(user);
+
+      if (user) {
+        const { data } = await supabase
+          .from('users')
+          .select('plan, scans_used, scans_limit')
+          .eq('id', user.id)
+          .single();
+        setUserData(data);
+      }
     }
     fetchUser();
   }, []);
@@ -49,6 +59,13 @@ export default function DashboardSidebar() {
   const userEmail = user?.email || "user@example.com";
   const userName = user?.user_metadata?.full_name || user?.user_metadata?.name || userEmail.split("@")[0];
   const avatarUrl = user?.user_metadata?.avatar_url;
+
+  // Plan display
+  const plan = userData?.plan || 'free';
+  const scansUsed = userData?.scans_used ?? 0;
+  const scansLimit = userData?.scans_limit ?? 3;
+  const planDisplay = plan === 'free' ? 'Free Plan' : plan === 'pro' ? 'Pro Plan' : plan === 'unlimited' ? 'Unlimited Plan' : plan === 'lifetime' ? 'Lifetime Plan' : 'Free Plan';
+  const scansDisplay = scansLimit >= 999999 ? 'Unlimited scans' : `${scansUsed}/${scansLimit} scans used`;
 
   return (
     <aside
@@ -143,15 +160,16 @@ export default function DashboardSidebar() {
               className="text-xs font-medium"
               style={{ color: "var(--text-primary)", fontFamily: "var(--font-label)" }}
             >
-              Free Plan
+              {planDisplay}
             </p>
             <p
               className="text-xs"
               style={{ color: "var(--text-tertiary)", fontFamily: "var(--font-label)" }}
             >
-              0/1 scans used
+              {scansDisplay}
             </p>
           </div>
+          {scansLimit < 999999 && (
           <Link
             href="/pricing"
             className="text-xs font-semibold px-2 py-1 rounded"
@@ -163,6 +181,7 @@ export default function DashboardSidebar() {
           >
             Upgrade
           </Link>
+          )}
         </div>
 
         {/* User */}

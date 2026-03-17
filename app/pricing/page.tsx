@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   CheckCircle,
   X,
@@ -15,6 +16,7 @@ import {
 } from "lucide-react";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
+import { createClient } from "@/lib/supabase";
 
 type Billing = "monthly" | "annual";
 
@@ -157,6 +159,9 @@ const faqItems = [
 export default function PricingPage() {
   const [billing, setBilling] = useState<Billing>("monthly");
   const [openFaq, setOpenFaq] = useState<number | null>(null);
+  const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
+  const router = useRouter();
+  const supabase = createClient();
 
   const displayPrice = (plan: typeof plans[0]) => {
     if (plan.id === "lifetime") return "$199";
@@ -169,6 +174,47 @@ export default function PricingPage() {
     if (plan.id === "lifetime") return "one time";
     if (plan.priceMonthly === 0) return "forever";
     return billing === "annual" ? "per month, billed annually" : "per month";
+  };
+
+  const handleUpgrade = async (planId: string) => {
+    if (planId === "free") {
+      router.push("/auth/signup");
+      return;
+    }
+
+    setLoadingPlan(planId);
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+
+      if (!user) {
+        router.push(`/auth/login?redirect=/pricing&plan=${planId}`);
+        return;
+      }
+
+      const response = await fetch("/api/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          planId,
+          userId: user.id,
+          email: user.email,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.url) {
+        window.location.href = data.url;
+      } else if (data.error) {
+        alert(data.message || "Failed to create checkout. Please try again.");
+      }
+    } catch (error) {
+      console.error("Checkout error:", error);
+      alert("Something went wrong. Please try again.");
+    } finally {
+      setLoadingPlan(null);
+    }
   };
 
   return (
@@ -347,9 +393,10 @@ export default function PricingPage() {
                 })}
               </ul>
 
-              <Link
-                href={plan.ctaHref}
-                className="block text-center py-3 rounded-xl text-sm font-semibold transition-all duration-200 hover:-translate-y-0.5"
+              <button
+                onClick={() => handleUpgrade(plan.id)}
+                disabled={loadingPlan !== null}
+                className="block text-center py-3 rounded-xl text-sm font-semibold transition-all duration-200 hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
                 style={{
                   background: plan.highlight ? "var(--accent)" : "var(--surface-3)",
                   color: plan.highlight ? "var(--obsidian)" : "var(--text-primary)",
@@ -357,8 +404,8 @@ export default function PricingPage() {
                   fontFamily: "var(--font-ui)",
                 }}
               >
-                {plan.cta}
-              </Link>
+                {loadingPlan === plan.id ? "Loading..." : plan.cta}
+              </button>
             </div>
           ))}
         </div>

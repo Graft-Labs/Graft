@@ -84,8 +84,6 @@ export interface ToolOutputs {
     framework:            string
     hallucinated_packages: string
   }
-  // LLM semantic analysis issues (pre-parsed, passed directly)
-  llm_issues:       EnrichedIssue[]
   // Vibe-leak-detector issues (in-process regex/AST scanner)
   vibe_issues?:     VibeIssueInput[]
   osv_skipped:      boolean
@@ -789,11 +787,6 @@ export async function analyzeToolOutputs(outputs: ToolOutputs): Promise<Enriched
   // Vibe-leak-detector — in-process regex/AST scanner (new)
   if (outputs.vibe_issues && outputs.vibe_issues.length > 0) {
     allIssues.push(...parseVibeIssues(outputs.vibe_issues))
-  }
-
-  // LLM semantic analysis — auth flaws, N+1, payment bugs, injection
-  if (outputs.llm_issues && outputs.llm_issues.length > 0) {
-    allIssues.push(...outputs.llm_issues)
   }
 
   // Grep-based source code checks — deterministic, unambiguous patterns
