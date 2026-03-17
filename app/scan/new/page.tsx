@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import DashboardSidebar from "@/components/layout/DashboardSidebar";
 import { createClient } from "@/lib/supabase";
+import posthog from "posthog-js";
 
 // ─── Framework options ────────────────────────────────────────────────────────
 
@@ -284,6 +285,12 @@ export default function NewScanPage() {
     setPercent(0);
     setSteps([]);
 
+    posthog.capture("scan_run_clicked", {
+      mode: useManual ? "manual_url" : "repo_picker",
+      framework,
+      branch: selectedBranch,
+    });
+
     try {
       const response = await fetch("/api/scan", {
         method: "POST",
@@ -308,9 +315,17 @@ export default function NewScanPage() {
         throw new Error((data.message || "Failed to start scan") + (data.details ? ` (${data.details})` : ""));
       }
 
+      posthog.capture("scan_create_success", {
+        scanId: data.scan_id,
+        framework,
+        branch: selectedBranch,
+      });
       setScanId(data.scan_id);
     } catch (err) {
       setScanning(false);
+      posthog.capture("scan_create_failed", {
+        message: err instanceof Error ? err.message : "Unknown error",
+      });
       setError(err instanceof Error ? err.message : "An error occurred");
     }
   };

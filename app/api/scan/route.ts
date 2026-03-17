@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { createServerClient } from '@/lib/supabase-server'
 import { tasks } from '@trigger.dev/sdk/v3'
 import type { runScanTask } from '@/trigger/run-scan'
+import { captureServerEvent } from '@/lib/posthog-server'
 
 interface ScanPayload {
   repo: string
@@ -19,6 +20,7 @@ export async function POST(request: NextRequest) {
 
   try {
     logScan('start', { traceId })
+    await captureServerEvent('anonymous', 'scan_api_requested', { traceId })
 
     // Use getUser() (secure — verifies JWT with Supabase server) instead of getSession()
     const supabase = await createServerClient()
@@ -26,6 +28,7 @@ export async function POST(request: NextRequest) {
 
     if (userError || !user) {
       logScan('unauthorized', { traceId })
+      await captureServerEvent('anonymous', 'scan_api_unauthorized', { traceId })
       return NextResponse.json(
         { error: 'unauthorized', message: 'Please log in to start a scan' },
         { status: 401 }
@@ -48,6 +51,7 @@ export async function POST(request: NextRequest) {
 
     if (!repo) {
       logScan('invalid_input', { traceId })
+      await captureServerEvent(user.id, 'scan_api_invalid_input', { traceId })
       return NextResponse.json(
         { error: 'invalid_input', message: 'Repository URL is required' },
         { status: 400 }
@@ -103,6 +107,10 @@ export async function POST(request: NextRequest) {
 
     if (isPrivate && !githubToken) {
       logScan('private_repo_without_token', { traceId })
+      await captureServerEvent(user.id, 'scan_private_repo_without_github', {
+        traceId,
+        repo: repoUrl,
+      })
       return NextResponse.json(
         {
           error: 'github_not_connected',
@@ -135,6 +143,10 @@ export async function POST(request: NextRequest) {
 
     if ((activeCount ?? 0) >= 3) {
       logScan('rate_limit_concurrent', { traceId, userId: user.id, activeCount })
+      await captureServerEvent(user.id, 'scan_rate_limited', {
+        traceId,
+        activeCount: activeCount ?? 0,
+      })
       return NextResponse.json(
         { error: 'rate_limited', message: 'You already have 3 scans in progress. Please wait for them to complete.' },
         { status: 429 }
@@ -156,6 +168,12 @@ export async function POST(request: NextRequest) {
     // Check if user has scans remaining
     if (scansUsed >= scansLimit) {
       logScan('scan_limit_reached', { traceId, userId: user.id, plan, scansLimit, scansUsed })
+      await captureServerEvent(user.id, 'scan_limit_reached', {
+        traceId,
+        plan,
+        scansLimit,
+        scansUsed,
+      })
       return NextResponse.json(
         { 
           error: 'limit_reached', 
@@ -250,6 +268,13 @@ export async function POST(request: NextRequest) {
       .eq('id', scan.id)
 
     logScan('trigger_success', { traceId, scanId: scan.id, triggerId: handle.id })
+    await captureServerEvent(user.id, 'scan_started', {
+      traceId,
+      scanId: scan.id,
+      repo: repoUrl,
+      branch,
+      framework: framework ?? 'auto',
+    })
 
     return NextResponse.json({
       scan_id: scan.id,
@@ -264,6 +289,10 @@ export async function POST(request: NextRequest) {
       traceId,
       message: err.message,
       stack: err.stack,
+    })
+    await captureServerEvent('anonymous', 'scan_api_error', {
+      traceId,
+      message: err.message,
     })
 
     return NextResponse.json(

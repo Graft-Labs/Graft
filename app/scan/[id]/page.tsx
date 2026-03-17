@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import posthog from "posthog-js";
 import {
   Github,
   Shield,
@@ -134,9 +135,9 @@ function FrameworkBadge({ framework }: { framework: string | null }) {
     <span
       className="text-xs px-2 py-0.5 rounded-full font-medium"
       style={{
-        background: "rgba(139,92,246,0.12)",
-        color: "#a78bfa",
-        border: "1px solid rgba(139,92,246,0.3)",
+        background: "var(--primary-glow)",
+        color: "var(--primary)",
+        border: "1px solid var(--border-amber)",
         fontFamily: "var(--font-label)",
       }}
     >
@@ -165,9 +166,9 @@ function SaasBadge() {
     <span
       className="text-xs px-1.5 py-0.5 rounded"
       style={{
-        background: "rgba(99,102,241,0.1)",
-        color: "#818cf8",
-        border: "1px solid rgba(99,102,241,0.25)",
+        background: "var(--accent-glow)",
+        color: "var(--accent-bright)",
+        border: "1px solid var(--border-accent)",
         fontFamily: "var(--font-label)",
         fontSize: "10px",
         letterSpacing: "0.02em",
@@ -256,7 +257,18 @@ function IssueCard({ issue, repo, branch, commitHash }: {
     >
       {/* Header */}
       <button
-        onClick={() => setExpanded(!expanded)}
+        onClick={() => {
+          const nextExpanded = !expanded;
+          setExpanded(nextExpanded);
+          if (nextExpanded) {
+            posthog.capture("scan_issue_expanded", {
+              issueId: issue.id,
+              severity: issue.severity,
+              guard: issue.guard,
+              title: issue.title,
+            });
+          }
+        }}
         className="w-full flex items-start gap-3 p-4 text-left transition-colors hover:bg-white/[0.02]"
       >
         <SeverityIcon severity={issue.severity} />
@@ -432,7 +444,7 @@ export default function ScanReportPage() {
       <div className="flex min-h-screen" style={{ background: "var(--obsidian)" }}>
         <DashboardSidebar />
         <main className="flex-1 flex items-center justify-center">
-          <div className="w-8 h-8 rounded-full border-2 border-indigo-500 border-t-transparent animate-spin" />
+          <div className="w-8 h-8 rounded-full border-2 border-[var(--primary)] border-t-transparent animate-spin" />
         </main>
       </div>
     );
@@ -507,22 +519,7 @@ export default function ScanReportPage() {
               </span>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setShowFixPrompt(!showFixPrompt)}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-300 hover:scale-105"
-              style={{
-                background: showFixPrompt ? "var(--primary)" : "var(--primary-glow)",
-                border: `1px solid ${showFixPrompt ? "var(--primary)" : "var(--border-amber)"}`,
-                color: showFixPrompt ? "var(--secondary)" : "var(--primary)",
-                fontFamily: "var(--font-ui)",
-                boxShadow: showFixPrompt ? "0 4px 20px var(--primary-glow-strong)" : "none",
-              }}
-            >
-              <Wand2 size={16} />
-              Fix All ({issues.length})
-            </button>
-          </div>
+          <div />
         </div>
 
         <div className="flex-1 overflow-y-auto">
@@ -626,6 +623,27 @@ export default function ScanReportPage() {
               </div>
             </div>
 
+            <div className="mb-6">
+              <button
+                onClick={() => {
+                  const next = !showFixPrompt;
+                  setShowFixPrompt(next);
+                  posthog.capture("scan_fix_prompt_toggled", { open: next, issuesCount: issues.length });
+                }}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-300 hover:scale-105"
+                style={{
+                  background: showFixPrompt ? "var(--primary)" : "var(--primary-glow)",
+                  border: `1px solid ${showFixPrompt ? "var(--primary)" : "var(--border-amber)"}`,
+                  color: showFixPrompt ? "var(--secondary)" : "var(--primary)",
+                  fontFamily: "var(--font-ui)",
+                  boxShadow: showFixPrompt ? "0 4px 20px var(--primary-glow-strong)" : "none",
+                }}
+              >
+                <Wand2 size={16} />
+                Fix All ({issues.length})
+              </button>
+            </div>
+
             {/* Fix-all Prompt Panel */}
             {showFixPrompt && (() => {
               const prompt = generateFixPrompt(issues, scan.repo, scan.framework, scan.created_at);
@@ -649,6 +667,7 @@ export default function ScanReportPage() {
                       onClick={() => {
                         navigator.clipboard.writeText(prompt);
                         setFixPromptCopied(true);
+                        posthog.capture("scan_fix_prompt_copied", { issuesCount: issues.length, scanId: scan.id });
                         setTimeout(() => setFixPromptCopied(false), 2000);
                       }}
                       className="flex items-center gap-1.5 text-xs py-1.5 px-4 rounded-lg transition-all duration-300 hover:scale-105"
