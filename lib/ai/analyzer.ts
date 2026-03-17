@@ -70,6 +70,7 @@ export interface ToolOutputs {
     has_paddle:           string
     has_lemonsqueezy:     string
     has_razorpay:         string
+    has_polar:            string
     has_sentry:           string
     has_plausible:        string
     has_google_analytics: string
@@ -590,13 +591,14 @@ function parseFileChecks(fileChecks: ToolOutputs['file_checks']): EnrichedIssue[
     fileChecks.has_stripe === 'true' ||
     fileChecks.has_paddle === 'true' ||
     fileChecks.has_lemonsqueezy === 'true' ||
-    fileChecks.has_razorpay === 'true'
+    fileChecks.has_razorpay === 'true' ||
+    fileChecks.has_polar === 'true'
 
   if (!hasAnyPayment) {
     issues.push({
       guard: 'monetization', category: 'payments', severity: 'high', confidence: 'confirmed',
       title: 'No payment integration detected',
-      description: 'No Stripe, Paddle, LemonSqueezy, or Razorpay library found in package.json. You cannot charge users without a payment provider.',
+      description: 'No Stripe, Paddle, LemonSqueezy, Razorpay, or Polar library found in package.json. You cannot charge users without a payment provider.',
       fix_suggestion: 'Install Stripe (recommended for most apps):\n```\nnpm install stripe @stripe/stripe-js\n```\nSet up checkout sessions and webhook handlers.',
     })
   }

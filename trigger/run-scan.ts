@@ -472,6 +472,7 @@ export const runScanTask = task({
       const hasPaddle       = 'paddle' in allDeps || '@paddle/paddle-node-sdk' in allDeps
       const hasLemonSqueezy = '@lemonsqueezy/lemonsqueezy.js' in allDeps
       const hasRazorpay     = 'razorpay' in allDeps
+      const hasPolar        = '@polar-sh/sdk' in allDeps || '@polar-sh/checkout' in allDeps
 
       // Check for auth library
       const hasNextAuth     = 'next-auth' in allDeps || '@auth/core' in allDeps
@@ -504,6 +505,7 @@ export const runScanTask = task({
         has_paddle:               String(hasPaddle),
         has_lemonsqueezy:         String(hasLemonSqueezy),
         has_razorpay:             String(hasRazorpay),
+        has_polar:                String(hasPolar),
         has_sentry:               String(Object.keys(allDeps).some(k => k.startsWith('@sentry'))),
         has_plausible:            String(Object.keys(allDeps).some(k => k.includes('plausible'))),
         has_google_analytics:     String(Object.keys(allDeps).some(k => k.includes('react-ga') || k.includes('gtag'))),
