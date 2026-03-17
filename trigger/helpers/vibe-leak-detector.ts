@@ -1465,11 +1465,8 @@ export async function runVibeLeakDetector(cloneDir: string): Promise<VibeIssue[]
   allIssues.push(...await checkMissingErrorBoundaries(cloneDir))  // CHECK 18
   allIssues.push(...checkTypeScriptAnyOveruse(fileResults))
   allIssues.push(...await checkMissingDataDeletion(cloneDir))     // CHECK 29
-  // Distribution checks (cross-file)
-  allIssues.push(...await checkRobotsTxtCoverage(cloneDir))       // CHECK 31
-  allIssues.push(...await checkMissingCanonical(cloneDir))        // CHECK 32
-  allIssues.push(...await checkMissingOgImage(cloneDir))          // CHECK 33
-  allIssues.push(...await checkNoCookieConsent(cloneDir))         // CHECK 34
+  // Distribution: cookie consent (CHECK 34) - LLM handles robots.txt/sitemap/og:image/canonical
+  allIssues.push(...await checkNoCookieConsent(cloneDir))       // CHECK 34
 
   // Deduplicate: same title + file + line
   const seen = new Set<string>()
