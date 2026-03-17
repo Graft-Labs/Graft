@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import {
   User,
   Github,
@@ -34,12 +34,58 @@ const tabs: { id: Tab; label: string; icon: typeof User }[] = [
   { id: "security", label: "Security", icon: Shield },
 ];
 
+interface UserData {
+  email: string;
+  name: string;
+  plan: string;
+  scans_used: number;
+  scans_limit: number;
+}
+
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<Tab>("profile");
   const [saved, setSaved] = useState(false);
   const [githubConnected, setGithubConnected] = useState<boolean | null>(null);
   const [loadingGithub, setLoadingGithub] = useState(false);
+  const [userData, setUserData] = useState<UserData | null>(null);
+  const [loadingUser, setLoadingUser] = useState(true);
+  const [profileForm, setProfileForm] = useState({ name: "", email: "" });
   const supabase = createClient();
+
+  const fetchUserData = useCallback(async () => {
+    setLoadingUser(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setLoadingUser(false);
+        return;
+      }
+
+      const { data: userRecord } = await supabase
+        .from("users")
+        .select("plan, scans_used, scans_limit")
+        .eq("id", user.id)
+        .single();
+
+      const userData: UserData = {
+        email: user.email || "",
+        name: user.user_metadata?.full_name || user.user_metadata?.name || "",
+        plan: userRecord?.plan || "free",
+        scans_used: userRecord?.scans_used || 0,
+        scans_limit: userRecord?.scans_limit || 3,
+      };
+
+      setUserData(userData);
+      setProfileForm({ name: userData.name, email: userData.email });
+    } catch (error) {
+      console.error("Error fetching user data:", error);
+    }
+    setLoadingUser(false);
+  }, [supabase]);
+
+  useEffect(() => {
+    void fetchUserData();
+  }, [fetchUserData]);
 
   const checkGithubStatus = useCallback(async () => {
     setLoadingGithub(true);
@@ -77,9 +123,43 @@ export default function SettingsPage() {
     }
   };
 
-  const handleSave = () => {
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+  const handleSave = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { error } = await supabase.auth.updateUser({
+        data: { full_name: profileForm.name }
+      });
+
+      if (error) {
+        console.error("Error updating profile:", error);
+        return;
+      }
+
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch (error) {
+      console.error("Error saving profile:", error);
+    }
+  };
+
+  const getPlanDisplayName = (plan: string) => {
+    switch (plan) {
+      case "pro": return "Pro";
+      case "unlimited": return "Unlimited";
+      case "lifetime": return "Lifetime";
+      default: return "Free";
+    }
+  };
+
+  const getPlanFeatures = (plan: string) => {
+    switch (plan) {
+      case "pro": return "30 scans / month";
+      case "unlimited": return "Unlimited scans";
+      case "lifetime": return "Unlimited scans (one-time)";
+      default: return "3 scans / month";
+    }
   };
 
   return (
@@ -132,44 +212,69 @@ export default function SettingsPage() {
                     <h2 className="text-lg font-semibold mb-6" style={{ fontFamily: "var(--font-ui)", letterSpacing: "-0.02em" }}>
                       Profile Settings
                     </h2>
-                    <div className="flex flex-col gap-5 p-6 rounded-2xl mb-5"
-                      style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}>
-                      {/* Avatar */}
-                      <div className="flex items-center gap-4">
-                        <div className="w-16 h-16 rounded-2xl flex items-center justify-center text-xl font-bold"
-                          style={{ background: "var(--accent-glow)", border: "1px solid var(--border-amber)", color: "var(--accent)", fontFamily: "var(--font-ui)",  }}>
-                          U
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium" style={{ fontFamily: "var(--font-ui)" }}>Profile Picture</p>
-                          <p style={{ fontSize: "12px", color: "var(--text-tertiary)", fontFamily: "var(--font-label)" }}>
-                            Auto-generated from your initials
-                          </p>
-                        </div>
+                    {loadingUser ? (
+                      <div className="flex items-center justify-center p-12">
+                        <Loader2 size={24} className="animate-spin" style={{ color: "var(--accent)" }} />
                       </div>
+                    ) : (
+                      <>
+                        <div className="flex flex-col gap-5 p-6 rounded-2xl mb-5"
+                          style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}>
+                          {/* Avatar */}
+                          <div className="flex items-center gap-4">
+                            <div className="w-16 h-16 rounded-2xl flex items-center justify-center text-xl font-bold"
+                              style={{ background: "var(--accent-glow)", border: "1px solid var(--border-amber)", color: "var(--accent)", fontFamily: "var(--font-ui)" }}>
+                              {(profileForm.name || profileForm.email || "U").charAt(0).toUpperCase()}
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium" style={{ fontFamily: "var(--font-ui)" }}>Profile Picture</p>
+                              <p style={{ fontSize: "12px", color: "var(--text-tertiary)", fontFamily: "var(--font-label)" }}>
+                                Auto-generated from your initials
+                              </p>
+                            </div>
+                          </div>
 
-                      {/* Fields */}
-                      {[
-                        { label: "Full Name", placeholder: "Your name", type: "text", value: "Builder" },
-                        { label: "Email", placeholder: "you@example.com", type: "email", value: "user@example.com" },
-                      ].map((field) => (
-                        <div key={field.label}>
-                          <label className="block text-xs font-medium mb-1.5"
-                            style={{ color: "var(--text-secondary)", fontFamily: "var(--font-label)" }}>
-                            {field.label}
-                          </label>
-                          <input type={field.type} defaultValue={field.value} placeholder={field.placeholder}
-                            className="w-full px-4 py-3 rounded-lg bg-transparent outline-none text-sm"
-                            style={{ background: "var(--surface-3)", border: "1px solid var(--border)", color: "var(--text-primary)", fontFamily: "var(--font-label)" }} />
+                          {/* Fields */}
+                          <div>
+                            <label className="block text-xs font-medium mb-1.5"
+                              style={{ color: "var(--text-secondary)", fontFamily: "var(--font-label)" }}>
+                              Full Name
+                            </label>
+                            <input 
+                              type="text" 
+                              value={profileForm.name}
+                              onChange={(e) => setProfileForm(prev => ({ ...prev, name: e.target.value }))}
+                              placeholder="Your name" 
+                              className="w-full px-4 py-3 rounded-lg bg-transparent outline-none text-sm"
+                              style={{ background: "var(--surface-3)", border: "1px solid var(--border)", color: "var(--text-primary)", fontFamily: "var(--font-label)" }} 
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-xs font-medium mb-1.5"
+                              style={{ color: "var(--text-secondary)", fontFamily: "var(--font-label)" }}>
+                              Email
+                            </label>
+                            <input 
+                              type="email" 
+                              value={profileForm.email}
+                              disabled
+                              className="w-full px-4 py-3 rounded-lg bg-transparent outline-none text-sm opacity-60"
+                              style={{ background: "var(--surface-3)", border: "1px solid var(--border)", color: "var(--text-primary)", fontFamily: "var(--font-label)" }} 
+                            />
+                            <p style={{ fontSize: "11px", color: "var(--text-tertiary)", fontFamily: "var(--font-label)", marginTop: 4 }}>
+                              Email cannot be changed
+                            </p>
+                          </div>
                         </div>
-                      ))}
-                    </div>
 
-                    <button onClick={handleSave}
-                      className="flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold transition-all"
-                      style={{ background: saved ? "var(--guard-monetize-glow)" : "var(--accent)", color: saved ? "var(--guard-monetize)" : "var(--obsidian)", border: saved ? "1px solid rgba(64,200,122,0.3)" : "none", fontFamily: "var(--font-ui)" }}>
-                      {saved ? <><CheckCircle size={14} /> Saved!</> : "Save Changes"}
-                    </button>
+                        <button onClick={handleSave}
+                          className="flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold transition-all"
+                          style={{ background: saved ? "var(--guard-monetize-glow)" : "var(--accent)", color: saved ? "var(--guard-monetize)" : "var(--obsidian)", border: saved ? "1px solid rgba(64,200,122,0.3)" : "none", fontFamily: "var(--font-ui)" }}>
+                          {saved ? <><CheckCircle size={14} /> Saved!</> : "Save Changes"}
+                        </button>
+                      </>
+                    )}
                   </div>
                 )}
 
@@ -241,33 +346,60 @@ export default function SettingsPage() {
                       Billing & Plan
                     </h2>
 
-                    {/* Current plan */}
-                    <div className="p-6 rounded-2xl mb-5"
-                      style={{ background: "var(--accent-glow)", border: "1px solid var(--border-amber)" }}>
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p style={{ fontSize: "12px", color: "var(--accent)", fontFamily: "var(--font-label)", marginBottom: 4 }}>Current Plan</p>
-                          <p className="text-2xl" style={{ fontFamily: "var(--font-ui)",  color: "var(--accent)" }}>Free</p>
-                          <p style={{ fontSize: "13px", color: "var(--text-secondary)", fontFamily: "var(--font-label)" }}>1 scan / month · 2 Guards</p>
-                        </div>
-                        <Link href="/pricing"
-                          className="px-5 py-2.5 rounded-xl text-sm font-semibold transition-all"
-                          style={{ background: "var(--accent)", color: "var(--obsidian)", fontFamily: "var(--font-ui)" }}>
-                          Upgrade to Pro
-                        </Link>
+                    {loadingUser ? (
+                      <div className="flex items-center justify-center p-12">
+                        <Loader2 size={24} className="animate-spin" style={{ color: "var(--accent)" }} />
                       </div>
-                    </div>
+                    ) : userData ? (
+                      <>
+                        {/* Current plan */}
+                        <div className="p-6 rounded-2xl mb-5"
+                          style={{ background: "var(--accent-glow)", border: "1px solid var(--border-amber)" }}>
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p style={{ fontSize: "12px", color: "var(--accent)", fontFamily: "var(--font-label)", marginBottom: 4 }}>Current Plan</p>
+                              <p className="text-2xl" style={{ fontFamily: "var(--font-ui)", color: "var(--accent)" }}>{getPlanDisplayName(userData.plan)}</p>
+                              <p style={{ fontSize: "13px", color: "var(--text-secondary)", fontFamily: "var(--font-label)" }}>{getPlanFeatures(userData.plan)}</p>
+                            </div>
+                            {userData.plan !== "unlimited" && userData.plan !== "lifetime" && (
+                              <Link href="/pricing"
+                                className="px-5 py-2.5 rounded-xl text-sm font-semibold transition-all"
+                                style={{ background: "var(--accent)", color: "var(--obsidian)", fontFamily: "var(--font-ui)" }}>
+                                Upgrade to Pro
+                              </Link>
+                            )}
+                          </div>
+                        </div>
 
-                    <div className="p-5 rounded-2xl"
-                      style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}>
-                      <p className="text-sm font-medium mb-1" style={{ fontFamily: "var(--font-ui)" }}>Usage this month</p>
-                      <div className="flex items-center gap-3 mt-3">
-                        <div className="flex-1 h-2 rounded-full" style={{ background: "var(--obsidian-5)" }}>
-                          <div style={{ width: "0%", height: "100%", background: "var(--accent)", borderRadius: "9999px" }} />
+                        <div className="p-5 rounded-2xl"
+                          style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}>
+                          <p className="text-sm font-medium mb-1" style={{ fontFamily: "var(--font-ui)" }}>Usage this month</p>
+                          <div className="flex items-center gap-3 mt-3">
+                            <div className="flex-1 h-2 rounded-full" style={{ background: "var(--obsidian-5)" }}>
+                              <div style={{ 
+                                width: userData.scans_limit === 999999 
+                                  ? "100%" 
+                                  : `${Math.min((userData.scans_used / userData.scans_limit) * 100, 100)}%`, 
+                                height: "100%", 
+                                background: userData.scans_used >= userData.scans_limit ? "var(--sev-critical)" : "var(--accent)", 
+                                borderRadius: "9999px" 
+                              }} />
+                            </div>
+                            <span style={{ fontSize: "12px", color: "var(--text-secondary)", fontFamily: "var(--font-label)" }}>
+                              {userData.scans_limit === 999999 
+                                ? "Unlimited" 
+                                : `${userData.scans_used}/${userData.scans_limit} scans`
+                              }
+                            </span>
+                          </div>
                         </div>
-                        <span style={{ fontSize: "12px", color: "var(--text-secondary)", fontFamily: "var(--font-label)" }}>0/1 scans</span>
+                      </>
+                    ) : (
+                      <div className="p-6 rounded-2xl"
+                        style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}>
+                        <p style={{ color: "var(--text-secondary)", fontFamily: "var(--font-label)" }}>Unable to load billing info</p>
                       </div>
-                    </div>
+                    )}
                   </div>
                 )}
 

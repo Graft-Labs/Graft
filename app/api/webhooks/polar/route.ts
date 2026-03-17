@@ -107,6 +107,29 @@ export async function POST(req: NextRequest) {
         break
       }
 
+      case 'order.created': {
+        if (planId === 'lifetime') {
+          const { error } = await supabase
+            .from('users')
+            .update({
+              plan: 'lifetime',
+              scans_limit: 999999,
+              subscription_id: data.id,
+              subscription_status: 'active',
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', userId)
+
+          if (error) {
+            console.error('Failed to update lifetime purchase:', error)
+            return NextResponse.json({ error: 'Failed to update user' }, { status: 500 })
+          }
+
+          console.log(`User ${userId} purchased lifetime plan`)
+        }
+        break
+      }
+
       default:
         console.log(`Unhandled webhook event: ${event}`)
     }
