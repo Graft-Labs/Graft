@@ -10,8 +10,6 @@ import {
   DollarSign,
   Globe,
   ChevronLeft,
-  Download,
-  Share2,
   Copy,
   CheckCircle,
   XCircle,
@@ -88,11 +86,8 @@ function generateFixPrompt(
   repo: string,
   framework: string | null,
   date: string,
-  includeAll = false,
 ): string {
-  const filtered = includeAll
-    ? issues
-    : issues.filter(i => i.severity === "critical" || i.severity === "high");
+  const filtered = issues;
 
   if (filtered.length === 0) return "";
 
@@ -106,6 +101,7 @@ function generateFixPrompt(
     ``,
     `## Codebase: ${repo} (${frameworkLabel})`,
     `## Scan date: ${new Date(date).toLocaleDateString()}`,
+    `## Total issues: ${issues.length}`,
     ``,
     `---`,
     ``,
@@ -215,7 +211,7 @@ function ScoreRing({ score, color, size = 90 }: { score: number; color: string; 
         style={{ transition: "stroke-dashoffset 1.2s cubic-bezier(0.4,0,0.2,1)" }}
       />
       <text x="40" y="46" textAnchor="middle" fill={color} fontSize="18" fontWeight="600"
-        fontFamily="'EB Garamond', serif" fontStyle="italic">
+        fontFamily="'Geist', sans-serif" fontStyle="normal">
         {score}
       </text>
     </svg>
@@ -399,7 +395,6 @@ export default function ScanReportPage() {
   const [loading, setLoading] = useState(true);
   const [showFixPrompt, setShowFixPrompt] = useState(false);
   const [fixPromptCopied, setFixPromptCopied] = useState(false);
-  const [includeAllSeverities, setIncludeAllSeverities] = useState(false);
 
   useEffect(() => {
     async function fetchScanData() {
@@ -515,40 +510,17 @@ export default function ScanReportPage() {
           <div className="flex items-center gap-2">
             <button
               onClick={() => setShowFixPrompt(!showFixPrompt)}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+              className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-300 hover:scale-105"
               style={{
-                background: showFixPrompt ? "var(--accent-glow)" : "var(--surface-3)",
-                border: `1px solid ${showFixPrompt ? "var(--border-amber)" : "var(--border)"}`,
-                color: showFixPrompt ? "var(--accent)" : "var(--text-secondary)",
-                fontFamily: "var(--font-label)",
+                background: showFixPrompt ? "var(--primary)" : "var(--primary-glow)",
+                border: `1px solid ${showFixPrompt ? "var(--primary)" : "var(--border-amber)"}`,
+                color: showFixPrompt ? "var(--secondary)" : "var(--primary)",
+                fontFamily: "var(--font-ui)",
+                boxShadow: showFixPrompt ? "0 4px 20px var(--primary-glow-strong)" : "none",
               }}
             >
-              <Wand2 size={13} />
-              Fix All
-            </button>
-            <button
-              className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
-              style={{
-                background: "var(--surface-3)",
-                border: "1px solid var(--border)",
-                color: "var(--text-secondary)",
-                fontFamily: "var(--font-label)",
-              }}
-            >
-              <Share2 size={13} />
-              Share
-            </button>
-            <button
-              className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
-              style={{
-                background: "var(--surface-3)",
-                border: "1px solid var(--border)",
-                color: "var(--text-secondary)",
-                fontFamily: "var(--font-label)",
-              }}
-            >
-              <Download size={13} />
-              Export PDF
+              <Wand2 size={16} />
+              Fix All ({issues.length})
             </button>
           </div>
         </div>
@@ -656,16 +628,15 @@ export default function ScanReportPage() {
 
             {/* Fix-all Prompt Panel */}
             {showFixPrompt && (() => {
-              const criticalHighCount = issues.filter(i => i.severity === "critical" || i.severity === "high").length;
-              const prompt = generateFixPrompt(issues, scan.repo, scan.framework, scan.created_at, includeAllSeverities);
+              const prompt = generateFixPrompt(issues, scan.repo, scan.framework, scan.created_at);
               return (
                 <div
-                  className="p-5 rounded-2xl mb-6"
+                  className="p-5 rounded-2xl mb-6 animate-fade-scale"
                   style={{ background: "var(--surface-2)", border: "1px solid var(--border-amber)" }}
                 >
                   <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
                     <div className="flex items-center gap-2">
-                      <Wand2 size={15} style={{ color: "var(--accent)" }} />
+                      <Wand2 size={15} style={{ color: "var(--primary)" }} />
                       <span style={{ fontSize: "14px", fontWeight: 600, fontFamily: "var(--font-ui)", color: "var(--text-primary)" }}>
                         Fix-all prompt
                       </span>
@@ -673,45 +644,25 @@ export default function ScanReportPage() {
                         Paste into Claude, Cursor, or any AI tool to fix everything at once
                       </span>
                     </div>
-                    <div className="flex items-center gap-3">
-                      {/* Toggle all severities */}
-                      <label className="flex items-center gap-1.5 cursor-pointer">
-                        <div
-                          onClick={() => setIncludeAllSeverities(!includeAllSeverities)}
-                          className="w-8 h-4 rounded-full relative transition-colors cursor-pointer"
-                          style={{ background: includeAllSeverities ? "var(--accent)" : "var(--surface-3)", border: "1px solid var(--border)" }}
-                        >
-                          <div
-                            className="w-3 h-3 rounded-full absolute top-0.5 transition-transform"
-                            style={{
-                              background: "var(--text-primary)",
-                              left: includeAllSeverities ? "calc(100% - 14px)" : "2px",
-                            }}
-                          />
-                        </div>
-                        <span style={{ fontSize: "11px", color: "var(--text-tertiary)", fontFamily: "var(--font-label)" }}>
-                          Include medium &amp; low
-                        </span>
-                      </label>
-                      {/* Copy button */}
-                      <button
-                        onClick={() => {
-                          navigator.clipboard.writeText(prompt);
-                          setFixPromptCopied(true);
-                          setTimeout(() => setFixPromptCopied(false), 2000);
-                        }}
-                        className="flex items-center gap-1.5 text-xs py-1.5 px-3 rounded-lg transition-all"
-                        style={{
-                          background: fixPromptCopied ? "var(--guard-monetize-glow)" : "var(--accent-glow)",
-                          color: fixPromptCopied ? "var(--guard-monetize)" : "var(--accent)",
-                          border: `1px solid ${fixPromptCopied ? "rgba(64,200,122,0.3)" : "var(--border-amber)"}`,
-                          fontFamily: "var(--font-label)",
-                        }}
-                      >
-                        {fixPromptCopied ? <CheckCircle size={12} /> : <Copy size={12} />}
-                        {fixPromptCopied ? "Copied!" : `Copy prompt (${includeAllSeverities ? issues.length : criticalHighCount} issues)`}
-                      </button>
-                    </div>
+                    {/* Copy button */}
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(prompt);
+                        setFixPromptCopied(true);
+                        setTimeout(() => setFixPromptCopied(false), 2000);
+                      }}
+                      className="flex items-center gap-1.5 text-xs py-1.5 px-4 rounded-lg transition-all duration-300 hover:scale-105"
+                      style={{
+                        background: fixPromptCopied ? "var(--primary)" : "var(--primary-glow)",
+                        color: fixPromptCopied ? "var(--secondary)" : "var(--primary)",
+                        border: `1px solid ${fixPromptCopied ? "var(--primary)" : "var(--border-amber)"}`,
+                        fontFamily: "var(--font-ui)",
+                        fontWeight: 500,
+                      }}
+                    >
+                      {fixPromptCopied ? <CheckCircle size={12} /> : <Copy size={12} />}
+                      {fixPromptCopied ? "Copied!" : `Copy prompt (${issues.length} issues)`}
+                    </button>
                   </div>
                   {/* Preview */}
                   <pre

@@ -42,10 +42,9 @@ export default function Navbar() {
           <div
             className="w-8 h-8 rounded flex items-center justify-center text-xs font-bold transition-all duration-200 group-hover:scale-105"
             style={{
-              background: "var(--accent)",
-              color: "var(--obsidian)",
+              background: "var(--primary)",
+              color: "var(--secondary)",
               fontFamily: "var(--font-ui)",
-              
               fontSize: "16px",
             }}
           >
@@ -56,7 +55,7 @@ export default function Navbar() {
             style={{ fontFamily: "var(--font-ui)", fontSize: "15px", letterSpacing: "-0.02em" }}
           >
             ShipGuard
-            <span style={{ color: "var(--accent)" }}> AI</span>
+            <span style={{ color: "var(--primary)" }}> AI</span>
           </span>
         </Link>
 
@@ -74,7 +73,7 @@ export default function Navbar() {
               )}
               style={{
                 fontFamily: "var(--font-label)",
-                color: pathname === link.href ? "var(--accent)" : "var(--text-primary)",
+                color: pathname === link.href ? "var(--primary)" : "var(--text-primary)",
               }}
             >
               {link.label}
@@ -98,8 +97,8 @@ export default function Navbar() {
             href="/auth/signup"
             className="text-sm px-5 py-2 rounded-md font-semibold transition-all duration-200 hover:-translate-y-px"
             style={{
-              background: "var(--accent)",
-              color: "var(--obsidian)",
+              background: "var(--primary)",
+              color: "var(--secondary)",
               fontFamily: "var(--font-ui)",
             }}
           >
@@ -145,7 +144,7 @@ export default function Navbar() {
               className="text-sm"
               style={{
                 fontFamily: "var(--font-label)",
-                color: pathname === link.href ? "var(--accent)" : "var(--text-secondary)",
+                color: pathname === link.href ? "var(--primary)" : "var(--text-secondary)",
               }}
             >
               {link.label}
@@ -164,7 +163,7 @@ export default function Navbar() {
               href="/auth/signup"
               onClick={() => setMobileOpen(false)}
               className="text-sm text-center py-2.5 rounded-md font-semibold"
-              style={{ background: "var(--accent)", color: "var(--obsidian)", fontFamily: "var(--font-ui)" }}
+              style={{ background: "var(--primary)", color: "var(--secondary)", fontFamily: "var(--font-ui)" }}
             >
               Start Free Scan
             </Link>

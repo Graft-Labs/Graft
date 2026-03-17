@@ -8,7 +8,6 @@ import {
   Shield,
   PlusCircle,
   Settings,
-  CreditCard,
   LogOut,
   ChevronRight,
 } from "lucide-react";
@@ -19,7 +18,6 @@ const navItems = [
   { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
   { href: "/scan/new", label: "New Scan", icon: PlusCircle },
   { href: "/dashboard/history", label: "Scan History", icon: Shield },
-  { href: "/pricing", label: "Upgrade", icon: CreditCard },
   { href: "/dashboard/settings", label: "Settings", icon: Settings },
 ];
 
@@ -84,10 +82,9 @@ export default function DashboardSidebar() {
           <div
             className="w-7 h-7 rounded flex items-center justify-center text-xs font-bold"
             style={{
-              background: "var(--accent)",
-              color: "var(--obsidian)",
+              background: "var(--primary)",
+              color: "var(--secondary)",
               fontFamily: "var(--font-ui)",
-              
               fontSize: "14px",
             }}
           >
@@ -97,7 +94,7 @@ export default function DashboardSidebar() {
             className="font-semibold text-sm"
             style={{ fontFamily: "var(--font-ui)", letterSpacing: "-0.02em" }}
           >
-            ShipGuard <span style={{ color: "var(--accent)" }}>AI</span>
+            ShipGuard <span style={{ color: "var(--primary)" }}>AI</span>
           </span>
         </Link>
       </div>
@@ -118,8 +115,8 @@ export default function DashboardSidebar() {
                   : "opacity-60 hover:opacity-80"
               )}
               style={{
-                background: isActive ? "var(--accent-glow)" : "transparent",
-                color: isActive ? "var(--accent)" : "var(--text-primary)",
+                background: isActive ? "var(--primary-glow)" : "transparent",
+                color: isActive ? "var(--primary)" : "var(--text-primary)",
                 border: isActive ? "1px solid var(--border-amber)" : "1px solid transparent",
                 fontFamily: "var(--font-label)",
               }}
@@ -130,8 +127,8 @@ export default function DashboardSidebar() {
                 <span
                   className="ml-auto text-xs px-1.5 py-0.5 rounded"
                   style={{
-                    background: "var(--accent)",
-                    color: "var(--obsidian)",
+                    background: "var(--primary)",
+                    color: "var(--secondary)",
                     fontFamily: "var(--font-label)",
                     fontSize: "10px",
                     fontWeight: 700,
@@ -174,8 +171,8 @@ export default function DashboardSidebar() {
             href="/pricing"
             className="text-xs font-semibold px-2 py-1 rounded"
             style={{
-              background: "var(--accent)",
-              color: "var(--obsidian)",
+              background: "var(--primary)",
+              color: "var(--secondary)",
               fontFamily: "var(--font-label)",
             }}
           >
@@ -195,7 +192,7 @@ export default function DashboardSidebar() {
           ) : (
             <div
               className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold flex-shrink-0"
-              style={{ background: "var(--obsidian-4)", color: "var(--accent)", fontFamily: "var(--font-ui)" }}
+              style={{ background: "var(--obsidian-4)", color: "var(--primary)", fontFamily: "var(--font-ui)" }}
             >
               {userName.charAt(0).toUpperCase()}
             </div>

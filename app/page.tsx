@@ -87,7 +87,7 @@ export default function LandingPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-[#0C0C0E] text-[#FAFAFA] overflow-x-hidden selection:bg-indigo-500/30 font-sans">
+    <div className="min-h-screen bg-[#0a0a0c] text-[#f5f5f5] overflow-x-hidden selection:bg-[#ffdc61]/30 font-sans">
       <Navbar />
 
       <main>
@@ -95,8 +95,8 @@ export default function LandingPage() {
         <section className="relative pt-40 pb-20 md:pt-52 md:pb-32 px-6 overflow-hidden min-h-[90vh] flex flex-col justify-center">
           {/* Abstract Background Effects */}
           <div className="absolute inset-0 pointer-events-none">
-            <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[800px] h-[500px] bg-indigo-500/20 rounded-full blur-[120px] opacity-50" />
-            <div className="absolute top-1/3 left-1/4 w-[400px] h-[400px] bg-purple-500/10 rounded-full blur-[100px]" />
+            <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[800px] h-[500px] bg-[#ffdc61]/10 rounded-full blur-[120px] opacity-50" />
+            <div className="absolute top-1/3 left-1/4 w-[400px] h-[400px] bg-[#806e31]/10 rounded-full blur-[100px]" />
             <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:64px_64px] [mask-image:radial-gradient(ellipse_60%_60%_at_50%_40%,#000_70%,transparent_100%)]" />
           </div>
 
@@ -105,10 +105,10 @@ export default function LandingPage() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5 }}
-              className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-indigo-500/30 bg-indigo-500/10 text-indigo-300 text-sm font-medium mb-8"
+              className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-[#ffdc61]/30 bg-[#ffdc61]/10 text-[#ffdc61] text-sm font-medium mb-8"
             >
-              <span className="flex h-2 w-2 rounded-full bg-indigo-500">
-                <span className="animate-ping absolute inline-flex h-2 w-2 rounded-full bg-indigo-400 opacity-75"></span>
+              <span className="flex h-2 w-2 rounded-full bg-[#ffdc61]">
+                <span className="animate-ping absolute inline-flex h-2 w-2 rounded-full bg-[#ffdc61] opacity-75"></span>
               </span>
               ShipGuard AI 2.0 is live
             </motion.div>
@@ -117,13 +117,13 @@ export default function LandingPage() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.1 }}
-              className="text-5xl md:text-7xl lg:text-8xl tracking-tight leading-[1.1] mb-8 font-serif italic"
+              className="text-5xl md:text-7xl lg:text-8xl tracking-tight leading-[1.1] mb-8"
               style={{ fontFamily: "var(--font-display)" }}
             >
               Ship with <br className="hidden md:block" />
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-purple-400 to-indigo-400 animate-gradient-x relative">
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#ffdc61] via-[#806e31] to-[#ffdc61] animate-gradient-x relative">
                 Absolute Confidence.
-                <div className="absolute -bottom-2 left-0 w-full h-1 bg-gradient-to-r from-transparent via-indigo-500/50 to-transparent blur-sm" />
+                <div className="absolute -bottom-2 left-0 w-full h-1 bg-gradient-to-r from-transparent via-[#ffdc61]/50 to-transparent blur-sm" />
               </span>
             </motion.h1>
 
@@ -131,7 +131,7 @@ export default function LandingPage() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.2 }}
-              className="text-lg md:text-xl text-gray-400 max-w-2xl mx-auto mb-10 leading-relaxed"
+              className="text-lg md:text-xl text-[#a1a1aa] max-w-2xl mx-auto mb-10 leading-relaxed"
             >
               AI writes the code. You own the risk. Automatically scan AI-generated Next.js & React apps for security flaws, performance bottlenecks, and production-readiness before you deploy.
             </motion.p>
@@ -144,9 +144,9 @@ export default function LandingPage() {
             >
               <Link
                 href="/scan/new"
-                className="group relative inline-flex items-center justify-center gap-2 px-8 py-4 bg-white text-black rounded-lg font-semibold text-lg transition-transform hover:scale-[1.02] active:scale-[0.98] w-full sm:w-auto overflow-hidden"
+                className="group relative inline-flex items-center justify-center gap-2 px-8 py-4 bg-[#ffdc61] text-[#403718] rounded-lg font-semibold text-lg transition-all hover:scale-[1.02] active:scale-[0.98] w-full sm:w-auto overflow-hidden shadow-lg shadow-[#ffdc61]/20"
               >
-                <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/20 to-purple-500/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-out" />
+                <div className="absolute inset-0 bg-gradient-to-r from-[#806e31]/20 to-[#403718]/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-out" />
                 <Github className="w-5 h-5 relative z-10" />
                 <span className="relative z-10">Scan GitHub Repo</span>
                 <ArrowRight className="w-5 h-5 relative z-10 group-hover:translate-x-1 transition-transform" />
@@ -177,13 +177,13 @@ export default function LandingPage() {
                   whileInView={{ opacity: 1, y: 0 }}
                   viewport={{ once: true }}
                   transition={{ delay: i * 0.1 }}
-                  className="p-8 rounded-2xl bg-white/[0.02] border border-white/[0.05] hover:border-indigo-500/30 transition-colors group"
+                  className="p-8 rounded-2xl bg-white/[0.02] border border-white/[0.05] hover:border-[#ffdc61]/30 transition-all duration-300 group"
                 >
-                  <div className="w-12 h-12 rounded-lg bg-indigo-500/10 flex items-center justify-center mb-6 text-indigo-400 group-hover:scale-110 transition-transform">
+                  <div className="w-12 h-12 rounded-lg bg-[#ffdc61]/10 flex items-center justify-center mb-6 text-[#ffdc61] group-hover:scale-110 transition-transform">
                     {feature.icon}
                   </div>
                   <h3 className="text-xl font-semibold mb-3">{feature.title}</h3>
-                  <p className="text-gray-400 leading-relaxed">{feature.desc}</p>
+                  <p className="text-[#a1a1aa] leading-relaxed">{feature.desc}</p>
                 </motion.div>
               ))}
             </div>
@@ -197,7 +197,7 @@ export default function LandingPage() {
               <div>
                 <h2 className="text-3xl md:text-5xl font-semibold mb-6 tracking-tight leading-tight">
                   Connect. Scan. <br />
-                  <span className="text-indigo-400">Ship it.</span>
+                  <span className="text-[#ffdc61]">Ship it.</span>
                 </h2>
                 <div className="space-y-8 mt-12">
                   {[
@@ -212,7 +212,7 @@ export default function LandingPage() {
                       </div>
                       <div>
                         <h4 className="text-xl font-medium mb-2">{item.title}</h4>
-                        <p className="text-gray-400">{item.desc}</p>
+                        <p className="text-[#a1a1aa]">{item.desc}</p>
                       </div>
                     </div>
                   ))}
@@ -220,13 +220,13 @@ export default function LandingPage() {
               </div>
 
               {/* Minimal Code Preview */}
-              <div className="relative rounded-2xl border border-white/10 bg-[#111113] p-6 overflow-hidden shadow-2xl shadow-indigo-500/10">
+              <div className="relative rounded-2xl border border-white/10 bg-[#111113] p-6 overflow-hidden shadow-2xl shadow-[#ffdc61]/10">
                 <div className="flex items-center gap-2 mb-4">
                   <div className="w-3 h-3 rounded-full bg-red-500/80" />
                   <div className="w-3 h-3 rounded-full bg-yellow-500/80" />
                   <div className="w-3 h-3 rounded-full bg-green-500/80" />
                 </div>
-                <div className="font-mono text-sm space-y-3 text-gray-400">
+                <div className="font-mono text-sm space-y-3 text-[#a1a1aa]">
                   <div className="flex gap-4">
                     <span className="text-gray-600">1</span>
                     <span><span className="text-pink-400">import</span> {"{ useState }"} <span className="text-pink-400">from</span> <span className="text-green-400">"react"</span>;</span>
@@ -273,13 +273,13 @@ export default function LandingPage() {
 
         {/* ─── CTA SECTION ──────────────────────────────────────────────── */}
         <section className="py-32 px-6 relative border-t border-white/5">
-          <div className="absolute inset-0 bg-indigo-500/5" />
+          <div className="absolute inset-0 bg-[#ffdc61]/5" />
           <div className="max-w-4xl mx-auto text-center relative z-10">
             <h2 className="text-4xl md:text-5xl font-semibold mb-6 tracking-tight">Ready to ship confidently?</h2>
-            <p className="text-xl text-gray-400 mb-10">Join forward-thinking developers securing their AI-generated apps.</p>
+            <p className="text-xl text-[#a1a1aa] mb-10">Join forward-thinking developers securing their AI-generated apps.</p>
             <Link
               href="/auth/signup"
-              className="inline-flex items-center justify-center gap-2 px-8 py-4 bg-white text-black rounded-lg font-semibold text-lg transition-transform hover:scale-[1.02] active:scale-[0.98]"
+              className="inline-flex items-center justify-center gap-2 px-8 py-4 bg-[#ffdc61] text-[#403718] rounded-lg font-semibold text-lg transition-all hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-[#ffdc61]/20"
             >
               Start Free Trial
               <ArrowRight className="w-5 h-5" />
