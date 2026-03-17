@@ -1,0 +1,30 @@
+rules:
+  - id: shipguard.security.jwt-in-localstorage
+    message: >
+      JWT or auth token stored in localStorage. localStorage is accessible to
+      any JavaScript on the page — an XSS attack can steal this token and
+      impersonate the user without any interaction. Use httpOnly cookies instead.
+    languages: [js, ts]
+    severity: WARNING
+    metadata:
+      guard: security
+      category: authentication
+      confidence: confirmed
+      cwe: CWE-922
+    pattern-either:
+      - pattern: localStorage.setItem("token", ...)
+      - pattern: localStorage.setItem('token', ...)
+      - pattern: localStorage.setItem("jwt", ...)
+      - pattern: localStorage.setItem('jwt', ...)
+      - pattern: localStorage.setItem("accessToken", ...)
+      - pattern: localStorage.setItem('accessToken', ...)
+      - pattern: localStorage.setItem("access_token", ...)
+      - pattern: localStorage.setItem('access_token', ...)
+      - pattern: localStorage.setItem("id_token", ...)
+      - pattern: localStorage.setItem('id_token', ...)
+      - pattern: localStorage.setItem("auth_token", ...)
+      - pattern: localStorage.setItem('auth_token', ...)
+      - pattern: localStorage.setItem("refresh_token", ...)
+      - pattern: localStorage.setItem('refresh_token', ...)
+      - pattern: localStorage.setItem("authToken", ...)
+      - pattern: localStorage.setItem('authToken', ...)

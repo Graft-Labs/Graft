@@ -287,19 +287,23 @@ async function runLlmAnalysis(
 ${stackDesc}
 
 Audit ONLY for these guards:
-- security: auth flaws (missing auth on API routes, IDOR — userId from request body), injection (SQL template literals, eval, XSS via dangerouslySetInnerHTML without sanitization), CORS wildcard + credentials, hardcoded secrets, exposed debug/admin endpoints, server actions without input validation (no Zod/yup/joi), auth endpoints without rate limiting, console.log() of process.env secrets or NEXT_PUBLIC_ vars
+- security: auth flaws (missing auth on API routes, IDOR — userId from request body), injection (SQL template literals, eval, XSS via dangerouslySetInnerHTML without sanitization), CORS wildcard + credentials, hardcoded secrets (sk_live_, pk_live_, whsec_), exposed debug/admin endpoints, server actions without input validation (no Zod/yup/joi), auth endpoints without rate limiting, console.log() of process.env secrets or NEXT_PUBLIC_ vars, multi-tenancy isolation (queries on shared SaaS tables like users/subscriptions/organizations without tenant_id/org_id/workspace_id filter — cross-tenant data leak), JWT stored in localStorage (XSS-stealable tokens), hardcoded live API keys (sk_live_, pk_live_, whsec_), subscription plan checks only on client side (bypassable)
 - scalability: N+1 queries (DB call inside loop), unbounded fetches (findMany/select with no limit/where), sync I/O blocking event loop (readFileSync in handlers), missing rate limiting on auth endpoints, race conditions in async server actions (multiple sequential DB writes without a transaction), TypeScript any overuse, missing error.tsx in App Router route segments (unhandled async errors show raw crash pages)
-- monetization: price/amount from client body (not server-side lookup), float math for money (use cents/Decimal), missing Stripe webhook signature verification, provisioning access on redirect instead of webhook
+- monetization: price/amount from client body (not server-side lookup), float math for money (use cents/Decimal), missing Stripe/Paddle/LemonSqueezy webhook signature verification, payment webhook missing idempotency check (duplicate charge/fulfillment risk), provisioning access on redirect instead of webhook
 - supply_chain: imported npm packages that appear AI-hallucinated or do not exist (wrong package names, packages that are not on npm, or packages with subtly wrong names like "nextjs" instead of "next")
 
 Rules:
 - Only flag issues causing REAL harm to a live app with real users and real money
 - Every high/critical issue MUST cite a specific file path AND include a code_snippet showing the problematic code
 - Do NOT flag: missing features, style issues, test files, commented-out code, placeholder values in .env.example, polyfills like window.process (these are legitimate bundler patterns)
+- Do NOT flag window.Buffer or window.process — these are legitimate Vite/webpack bundler polyfills, not Node.js globals being exposed
+- Do NOT flag one-shot setTimeout with delay < 2000ms for UI feedback — not a memory leak
+- Do NOT flag .env.example placeholder values like YOUR_KEY_HERE, pk_test_, sk_test_, your-project-url — these are intentional examples
 - Do NOT hallucinate issues for files you cannot see — only flag what is explicitly present in the provided code
-- Do NOT flag internal/status/health/progress/tooling API routes as "missing auth" unless they explicitly read user PII or perform write operations on user data — routes like /api/status, /api/health, /api/agent/status, /api/init, /api/logs/stream are typically internal plumbing
+- Do NOT flag internal/status/health/progress/tooling API routes as "missing auth" unless they explicitly read user PII or perform write operations on user data — routes like /api/status, /api/health, /api/agent/status, /api/init, /api/logs/stream, /api/ping, /api/agent/* are typically internal plumbing
 - Do NOT flag setInterval/setTimeout as "no cleanup" if the same file contains clearInterval, clearTimeout, request.signal, signal.addEventListener, or an abort handler — these are legitimate cleanup mechanisms
 - Do NOT flag console.log() calls as "env var leak" unless the argument literally contains process.env. — do not flag console.log() calls that only mention env var names inside plain string literals
+- Do NOT flag row-level queries as unbounded if they have a WHERE user_id = or WHERE tenant_id = or WHERE org_id = filter
 - Confidence: "confirmed" = clearly visible in the provided code, "likely" = strong indicator present, "possible" = needs verification
 - Severity: "critical" = exploitable right now, "high" = significant risk, "medium" = moderate, "low" = minor
 - Aim for 5-15 high-confidence issues; aggressively skip speculative ones
@@ -625,6 +629,13 @@ async function runGrepChecks(
     // ── Distribution: SEO & titles ─────────────────────────────────────────────
     // D1.6 Default Vite/CRA title still in index.html
     defaultAppTitle,
+    // ── SaaS-specific checks ────────────────────────────────────────────────────
+    // JWT stored in localStorage (XSS-stealable auth tokens)
+    jwtInLocalStorage,
+    // Hardcoded live API keys in source (sk_live_, pk_live_, whsec_)
+    liveApiKeysInSource,
+    // import.meta.env.VITE_* secret vars exposed in client bundle
+    viteMetaEnvSecrets,
   ] = await Promise.all([
     // S1.1
     g(`grep -rn "VITE_.*KEY\\|VITE_.*URL\\|VITE_.*SECRET\\|VITE_.*TOKEN\\|VITE_.*PASSWORD\\|VITE_.*DATABASE" ${allSrcFiles} ${srcDirs} 2>/dev/null | head -20 || true`),
@@ -653,6 +664,12 @@ async function runGrepChecks(
     g(`grep -rn "console\\.log(" ${allSrcFiles} . 2>/dev/null | grep -v "node_modules\\|\\.git\\|test\\|spec\\|\\.next" | wc -l || echo "0"`),
     // D1.6
     g(`grep -rn "Vite App\\|Create React App\\|<title>React\\|<title>Vite" --include="*.html" --include="*.tsx" . 2>/dev/null | grep -v "node_modules\\|\\.git" | head -5 || true`),
+    // SaaS: JWT in localStorage
+    g(`grep -rn "localStorage\\.setItem.*token\\|localStorage\\.setItem.*jwt\\|localStorage\\.setItem.*accessToken\\|localStorage\\.setItem.*access_token\\|localStorage\\.setItem.*id_token\\|localStorage\\.setItem.*auth_token" ${allSrcFiles} . 2>/dev/null | grep -v "node_modules\\|\\.git\\|test\\|spec" | head -10 || true`),
+    // SaaS: Hardcoded live API keys (sk_live_, pk_live_, whsec_) in source files
+    g(`grep -rn "sk_live_[a-zA-Z0-9]\\{20,\\}\\|pk_live_[a-zA-Z0-9]\\{20,\\}\\|rk_live_[a-zA-Z0-9]\\{20,\\}\\|whsec_[a-zA-Z0-9]\\{20,\\}" ${allSrcFiles} . 2>/dev/null | grep -v "\\.env\\|node_modules\\|\\.git\\|test\\|spec" | head -10 || true`),
+    // SaaS: import.meta.env.VITE_* secret vars in client bundle
+    g(`grep -rn "import\\.meta\\.env\\.VITE_.*KEY\\|import\\.meta\\.env\\.VITE_.*SECRET\\|import\\.meta\\.env\\.VITE_.*TOKEN\\|import\\.meta\\.env\\.VITE_.*DATABASE" ${allSrcFiles} ${srcDirs} 2>/dev/null | grep -v "node_modules\\|\\.git\\|test\\|spec" | head -10 || true`),
   ])
 
   // Dep-based checks (no grep needed — already have allDeps)
@@ -704,6 +721,10 @@ async function runGrepChecks(
     has_auth_library:        String(hasAuthLibrary),
     has_middleware:          String(hasMiddleware),
     framework,
+    // SaaS-specific
+    jwt_in_localstorage:     jwtInLocalStorage,
+    live_api_keys_in_source: liveApiKeysInSource,
+    vite_meta_env_secrets:   viteMetaEnvSecrets,
   }
 
   logger.log('grep_checks_done', {

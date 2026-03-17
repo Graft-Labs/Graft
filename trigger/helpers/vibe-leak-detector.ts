@@ -216,9 +216,12 @@ function checkUncleanedTimers(f: FileResult): VibeIssue[] {
 
 /**
  * CHECK 4: WebSocket not closed in cleanup
+ * Only fire in React component files to avoid false positives in server/utility code.
  */
 function checkWebSocketLeak(f: FileResult): VibeIssue[] {
   if (!f.content.includes('new WebSocket')) return []
+  // Only fire in React component files (use client or JSX/TSX with React imports)
+  if (!f.isClientComponent && !f.content.includes('useEffect') && !/\.(tsx|jsx)$/.test(f.rel)) return []
 
   const issues: VibeIssue[] = []
   const WS_RE = /new\s+WebSocket\s*\(/g
@@ -229,7 +232,7 @@ function checkWebSocketLeak(f: FileResult): VibeIssue[] {
     if (!f.content.includes('.close()')) {
       const lineNum = f.content.slice(0, m.index).split('\n').length
       issues.push(issue(f.rel, lineNum, f.lines[lineNum - 1] ?? '', {
-        guard: 'scalability', severity: 'medium', confidence: 'likely',
+        guard: 'scalability', severity: 'medium', confidence: 'possible',
         title: 'WebSocket opened but never closed (connection leak)',
         description: `\`new WebSocket()\` in \`${f.rel}\` with no \`.close()\` call. When the component unmounts or the user navigates away, the connection stays open — leaking memory, firing stale message handlers, and exhausting server connection slots.`,
         fix: 'Close the WebSocket in useEffect cleanup:\n```ts\nuseEffect(() => {\n  const ws = new WebSocket(url)\n  ws.onmessage = (e) => { /* ... */ }\n  return () => ws.close()\n}, [url])\n```',
@@ -297,6 +300,7 @@ function checkHooksInServerComponent(f: FileResult): VibeIssue[] {
 /**
  * CHECK 7: App Router + Pages Router coexistence
  * Detect mixed routing (app/ AND pages/ with route files)
+ * Downgraded to 'low' severity — this is a migration issue, not a production security/money risk.
  */
 async function checkMixedRouting(cloneDir: string): Promise<VibeIssue[]> {
   const hasAppRoutes =
@@ -307,10 +311,10 @@ async function checkMixedRouting(cloneDir: string): Promise<VibeIssue[]> {
   if (hasAppRoutes && hasPagesRoutes) {
     return [{
       file: 'package.json', line: 1, snippet: 'Both app/ and pages/ directories with route files detected',
-      guard: 'scalability', severity: 'high', confidence: 'confirmed',
+      guard: 'scalability', severity: 'low', confidence: 'confirmed',
       title: 'Mixed App Router + Pages Router (both app/ and pages/ have routes)',
-      description: 'Both `app/` (App Router) and `pages/` (Pages Router) contain route files. Mixing routers causes unpredictable hydration errors, layout mismatches, and makes middleware behavior ambiguous. Next.js officially supports migration but not permanent coexistence.',
-      fix: 'Choose one router. To migrate fully to App Router: move all `pages/` routes to `app/`, replace `getServerSideProps`/`getStaticProps` with async Server Components, and delete the `pages/` directory (keep `pages/_document` only if needed).',
+      description: 'Both `app/` (App Router) and `pages/` (Pages Router) contain route files. Mixing routers during a migration is supported by Next.js, but permanent coexistence can cause unpredictable hydration errors and layout mismatches.',
+      fix: 'If still migrating, this is expected. Once done: move all `pages/` routes to `app/`, replace `getServerSideProps`/`getStaticProps` with async Server Components, and delete `pages/`.',
     }]
   }
   return []
@@ -364,28 +368,14 @@ function checkTypeScriptAnyOveruse(files: FileResult[]): VibeIssue[] {
 }
 
 /**
- * CHECK 9: require() mixed with ESM imports
+ * CHECK 9: REMOVED — require() mixed with ESM imports
+ * Deprioritized: build tooling noise, not a SaaS production risk.
+ * Bundlers (webpack, Vite, Next.js) handle this transparently.
  */
-function checkRequireMixedWithEsm(f: FileResult): VibeIssue[] {
-  const hasEsmImport = /^import\s+/m.test(f.content)
-  if (!hasEsmImport) return []
-
-  const REQUIRE_RE = /\brequire\s*\(\s*['"][^'"]+['"]\s*\)/
-  for (let i = 0; i < f.lines.length; i++) {
-    if (REQUIRE_RE.test(f.lines[i]) && !f.lines[i].trim().startsWith('//')) {
-      return [issue(f.rel, i + 1, f.lines[i], {
-        guard: 'scalability', severity: 'low', confidence: 'confirmed',
-        title: 'require() mixed with ESM imports (module system mismatch)',
-        description: `\`${f.rel}\` mixes \`require()\` (CommonJS) with \`import\` (ESM). This causes bundler errors and runtime issues, especially in Next.js edge runtime and Deno environments.`,
-        fix: 'Replace `require()` with `import`:\n```ts\nimport { thing } from "package"\n```\nIf the package has no ESM export, use a dynamic import:\n```ts\nconst { thing } = await import("package")\n```',
-      })]
-    }
-  }
-  return []
-}
 
 /**
  * CHECK 10: userId / price / amount from request body (IDOR / price manipulation)
+ * Enhanced: also detects Paddle, PayPal, LemonSqueezy body patterns
  */
 function checkIdorPatterns(f: FileResult): VibeIssue[] {
   if (f.isClientComponent) return []
@@ -408,15 +398,15 @@ function checkIdorPatterns(f: FileResult): VibeIssue[] {
     }
   }
 
-  // price/amount from body
-  const PRICE_BODY_RE = /(?:req\.body|body|data|payload)\s*[\.\[]?\s*(?:price|amount|total|cost|fee)\b/i
+  // price/amount from body (Stripe, Paddle, PayPal, LemonSqueezy, generic)
+  const PRICE_BODY_RE = /(?:req\.body|body|data|payload)\s*[\.\[]?\s*(?:price|amount|total|cost|fee|plan_id|priceId|price_id|variant_id|variantId)\b/i
   for (let i = 0; i < f.lines.length; i++) {
     if (PRICE_BODY_RE.test(f.lines[i]) && !f.lines[i].trim().startsWith('//')) {
       issues.push(issue(f.rel, i + 1, f.lines[i], {
         guard: 'monetization', severity: 'critical', confidence: 'likely',
         title: 'Price/amount taken from client body (payment manipulation)',
-        description: `\`${f.rel}\` reads a price or amount directly from the request body. A user can change this to \`0.01\` in DevTools and pay pennies for any purchase.`,
-        fix: 'Always look up the price server-side from your database or a Stripe Price ID:\n```ts\n// Good: price comes from server\nconst price = await db.products.findUnique({ where: { id: productId } })\nawait stripe.checkout.sessions.create({ line_items: [{ price: price.stripeId, quantity: 1 }] })\n```',
+        description: `\`${f.rel}\` reads a price, amount, or plan ID directly from the request body. A user can change this to \`0.01\` or a free plan ID in DevTools and pay pennies — or nothing — for any purchase.`,
+        fix: 'Always look up the price server-side from your database or provider price catalog:\n```ts\n// Good: price comes from server\nconst price = await db.products.findUnique({ where: { id: productId } })\nawait stripe.checkout.sessions.create({ line_items: [{ price: price.stripeId, quantity: 1 }] })\n// Paddle: use price_id from your Paddle catalog, never from the body\n```',
       }))
       break
     }
@@ -539,21 +529,63 @@ function checkFloatMoney(f: FileResult): VibeIssue[] {
 }
 
 /**
- * CHECK 16: Missing Stripe webhook signature verification
+ * CHECK 16: Missing webhook signature verification (Stripe, Paddle, LemonSqueezy, PayPal)
  */
 function checkStripeWebhookVerification(f: FileResult): VibeIssue[] {
   if (!/webhook/i.test(f.rel)) return []
-  if (!f.content.includes('stripe')) return []
 
-  const hasVerification = /stripe\.webhooks\.constructEvent|constructEventAsync|Stripe\.webhooks/i.test(f.content)
-  if (!hasVerification) {
-    return [issue(f.rel, 1, f.lines[0] ?? '', {
-      guard: 'monetization', severity: 'critical', confidence: 'likely',
-      title: 'Stripe webhook without signature verification',
-      description: `\`${f.rel}\` appears to be a Stripe webhook handler but does not call \`stripe.webhooks.constructEvent()\`. Without signature verification, anyone can POST fake webhook events to your endpoint — triggering order fulfillment, subscription upgrades, or account changes without payment.`,
-      fix: '```ts\nconst sig = req.headers.get("stripe-signature")!\nconst event = stripe.webhooks.constructEvent(\n  await req.text(),  // raw body — NOT parsed JSON\n  sig,\n  process.env.STRIPE_WEBHOOK_SECRET!\n)\n```',
-    })]
+  // ── Stripe ───────────────────────────────────────────────────────────────────
+  if (f.content.includes('stripe') || f.content.toLowerCase().includes('stripe')) {
+    const hasVerification = /stripe\.webhooks\.constructEvent|constructEventAsync|Stripe\.webhooks/i.test(f.content)
+    if (!hasVerification) {
+      return [issue(f.rel, 1, f.lines[0] ?? '', {
+        guard: 'monetization', severity: 'critical', confidence: 'likely',
+        title: 'Stripe webhook without signature verification',
+        description: `\`${f.rel}\` appears to be a Stripe webhook handler but does not call \`stripe.webhooks.constructEvent()\`. Without signature verification, anyone can POST fake webhook events — triggering order fulfillment, subscription upgrades, or account changes without payment.`,
+        fix: '```ts\nconst sig = req.headers.get("stripe-signature")!\nconst event = stripe.webhooks.constructEvent(\n  await req.text(),  // raw body — NOT parsed JSON\n  sig,\n  process.env.STRIPE_WEBHOOK_SECRET!\n)\n```',
+      })]
+    }
   }
+
+  // ── Paddle ───────────────────────────────────────────────────────────────────
+  if (/paddle/i.test(f.content)) {
+    const hasPaddleVerify = /paddle\.webhooks\.unmarshal|verifyWebhookSignature|paddle-signature/i.test(f.content)
+    if (!hasPaddleVerify) {
+      return [issue(f.rel, 1, f.lines[0] ?? '', {
+        guard: 'monetization', severity: 'critical', confidence: 'likely',
+        title: 'Paddle webhook without signature verification',
+        description: `\`${f.rel}\` appears to be a Paddle webhook handler with no signature verification. Call \`paddle.webhooks.unmarshal()\` or check the \`paddle-signature\` header before processing any event.`,
+        fix: '```ts\nconst event = await paddle.webhooks.unmarshal(\n  await req.text(),\n  process.env.PADDLE_WEBHOOK_SECRET!,\n  req.headers.get("paddle-signature")!\n)\n```',
+      })]
+    }
+  }
+
+  // ── LemonSqueezy ─────────────────────────────────────────────────────────────
+  if (/lemonsqueezy|lemon.squeezy/i.test(f.content)) {
+    const hasLSVerify = /createHmac|x-signature|X-Signature|webhookSigningSecret/i.test(f.content)
+    if (!hasLSVerify) {
+      return [issue(f.rel, 1, f.lines[0] ?? '', {
+        guard: 'monetization', severity: 'critical', confidence: 'likely',
+        title: 'LemonSqueezy webhook without signature verification',
+        description: `\`${f.rel}\` handles LemonSqueezy webhooks with no HMAC-SHA256 signature check on the \`X-Signature\` header. Fake events can provision paid features for free.`,
+        fix: '```ts\nimport { createHmac, timingSafeEqual } from "crypto"\nconst sig = req.headers.get("x-signature") ?? ""\nconst digest = createHmac("sha256", process.env.LEMONSQUEEZY_WEBHOOK_SECRET!)\n  .update(await req.text()).digest("hex")\nif (!timingSafeEqual(Buffer.from(sig), Buffer.from(digest))) {\n  return new Response("Invalid signature", { status: 401 })\n}\n```',
+      })]
+    }
+  }
+
+  // ── PayPal ────────────────────────────────────────────────────────────────────
+  if (/paypal/i.test(f.content)) {
+    const hasPayPalVerify = /PAYPAL-TRANSMISSION-SIG|verifyWebhookSignature|paypal.*webhook.*verif/i.test(f.content)
+    if (!hasPayPalVerify) {
+      return [issue(f.rel, 1, f.lines[0] ?? '', {
+        guard: 'monetization', severity: 'critical', confidence: 'likely',
+        title: 'PayPal webhook without signature verification',
+        description: `\`${f.rel}\` handles PayPal webhooks with no verification of the \`PAYPAL-TRANSMISSION-SIG\` header. Fake payment events can trigger order fulfillment without actual payment.`,
+        fix: 'Use PayPal\'s `/v1/notifications/verify-webhook-signature` API or the PayPal SDK to verify the \`PAYPAL-TRANSMISSION-SIG\` header before processing any event.',
+      })]
+    }
+  }
+
   return []
 }
 
@@ -699,6 +731,7 @@ function checkServerActionNoValidation(f: FileResult): VibeIssue[] {
 
 /**
  * CHECK 20: Unbounded DB queries — findMany / select() with no limit/take/where
+ * Enhanced: also detects SaaS table queries without tenant_id/org_id filter
  */
 function checkUnboundedQueries(f: FileResult): VibeIssue[] {
   if (f.isClientComponent) return []
@@ -750,17 +783,32 @@ function checkUnboundedQueries(f: FileResult): VibeIssue[] {
 }
 
 /**
- * CHECK 21: Auth endpoints without rate limiting
- * /api/login, /register, /forgot-password etc with no rate-limit import
+ * CHECK 21: Auth endpoints + payment webhook endpoints without rate limiting
+ * Enhanced: also covers webhook endpoints (webhook bombing risk)
  */
 function checkAuthEndpointNoRateLimit(f: FileResult): VibeIssue[] {
   if (!/api\//i.test(f.rel)) return []
 
   const AUTH_ROUTE_RE = /\/(login|signin|sign-in|register|signup|sign-up|forgot-?password|reset-?password|verify|otp|2fa)\b/i
-  if (!AUTH_ROUTE_RE.test(f.rel) && !AUTH_ROUTE_RE.test(f.content.slice(0, 300))) return []
+  const WEBHOOK_ROUTE_RE = /\/webhook/i
+
+  const isAuthRoute    = AUTH_ROUTE_RE.test(f.rel) || AUTH_ROUTE_RE.test(f.content.slice(0, 300))
+  const isWebhookRoute = WEBHOOK_ROUTE_RE.test(f.rel)
+
+  if (!isAuthRoute && !isWebhookRoute) return []
 
   const hasRateLimit = /ratelimit|rate.?limit|upstash|express-rate-limit|bottleneck|limiter/i.test(f.content)
   if (!hasRateLimit) {
+    if (isWebhookRoute) {
+      return [issue(f.rel, 1, f.lines[0] ?? '', {
+        guard: 'security',
+        severity: 'medium',
+        confidence: 'likely',
+        title: 'Webhook endpoint without rate limiting (webhook bombing risk)',
+        description: `\`${f.rel}\` is a webhook endpoint with no rate limiting. Without it, attackers can flood your webhook with thousands of fake events per second — exhausting your serverless invocation quota and potentially causing event processing queue backup.`,
+        fix: 'Add IP-based rate limiting to your webhook endpoint to prevent flooding:\n```ts\nconst ratelimit = new Ratelimit({ redis, limiter: Ratelimit.slidingWindow(100, "1 m") })\nconst { success } = await ratelimit.limit(ip)\nif (!success) return new Response("Too many requests", { status: 429 })\n```',
+      })]
+    }
     return [issue(f.rel, 1, f.lines[0] ?? '', {
       guard: 'security',
       severity: 'high',
@@ -774,7 +822,7 @@ function checkAuthEndpointNoRateLimit(f: FileResult): VibeIssue[] {
 }
 
 /**
- * CHECK 22: console.log(process.env.*) in client components (env var leak)
+ * CHECK 22: console.log(process.env.*) or import.meta.env.VITE_* in client components (env var leak)
  */
 function checkEnvVarConsoleLog(f: FileResult): VibeIssue[] {
   const issues: VibeIssue[] = []
@@ -794,6 +842,22 @@ function checkEnvVarConsoleLog(f: FileResult): VibeIssue[] {
           ? `\`${f.rel}\` logs \`process.env.*\` in a client component — the value is bundled into the JS payload and printed to every user's browser console, exposing configuration and potentially secrets.`
           : `\`${f.rel}\` logs \`process.env.*\` — server logs often ship to external services (Datadog, Sentry, Logtail). Secret values in logs create an audit trail of credential exposure.`,
         fix: 'Remove the console.log. If you need to verify a value locally, use a debugger breakpoint or check the value server-side in a one-off script.',
+      }))
+      if (issues.length >= 2) break
+    }
+
+    // import.meta.env.VITE_*SECRET/KEY/TOKEN/DATABASE exposed in client bundle
+    if (
+      (f.isClientComponent || f.rel.endsWith('.tsx') || f.rel.endsWith('.jsx')) &&
+      /import\.meta\.env\.VITE_(?:\w*SECRET\w*|\w*KEY\w*|\w*TOKEN\w*|\w*DATABASE\w*|\w*PASSWORD\w*)/i.test(line)
+    ) {
+      issues.push(issue(f.rel, i + 1, line, {
+        guard: 'security',
+        severity: 'high',
+        confidence: 'confirmed',
+        title: 'Secret env var exposed via import.meta.env.VITE_ in client bundle',
+        description: `\`${f.rel}\` references a Vite env variable that looks like a secret (\`VITE_SECRET\`, \`VITE_KEY\`, \`VITE_TOKEN\`, \`VITE_DATABASE\`). All \`VITE_*\` variables are **inlined at build time** into the browser JS bundle — anyone can read them with View Source. Non-public secrets must stay in server-only files (API routes, server actions) and use plain \`process.env.*\` or non-VITE_ prefix.`,
+        fix: 'Move the secret to a server-only file. If it is a public key (e.g. Supabase anon key), rename it to make its public nature clear and document it as intentionally public.',
       }))
       if (issues.length >= 2) break
     }
@@ -857,6 +921,251 @@ function checkRaceConditionInServerAction(f: FileResult): VibeIssue[] {
   return issues
 }
 
+/**
+ * CHECK 24: Multi-tenancy isolation — queries on SaaS shared tables without tenant filter
+ * Detects DB queries on tables named users/subscriptions/organizations/workspaces/teams
+ * that have no WHERE tenant_id/org_id/workspace_id/team_id clause nearby.
+ */
+function checkMultiTenancyIsolation(f: FileResult): VibeIssue[] {
+  // Only check server-side files (API routes, server actions, server components)
+  if (f.isClientComponent) return []
+  const issues: VibeIssue[] = []
+
+  // Tables that should almost always be scoped to a tenant
+  const TENANT_TABLE_RE = /\.(from|table)\s*\(\s*['"`](?:users|subscriptions|organizations|workspaces|teams|accounts|members|memberships)['"`]/i
+  // Filters that correctly scope to a tenant
+  const TENANT_FILTER_RE = /tenant_id|org_id|workspace_id|team_id|account_id|organization_id/i
+
+  for (let i = 0; i < f.lines.length; i++) {
+    const line = f.lines[i]
+    if (line.trim().startsWith('//')) continue
+    if (!TENANT_TABLE_RE.test(line)) continue
+
+    // Check surrounding 8 lines (the WHERE clause is usually chained on next lines)
+    const contextStart = Math.max(0, i - 2)
+    const contextEnd   = Math.min(f.lines.length - 1, i + 8)
+    const context      = f.lines.slice(contextStart, contextEnd + 1).join('\n')
+
+    if (!TENANT_FILTER_RE.test(context)) {
+      issues.push(issue(f.rel, i + 1, line, {
+        guard: 'security',
+        severity: 'high',
+        confidence: 'possible',
+        title: 'Multi-tenant query without tenant isolation filter',
+        description: `\`${f.rel}\` queries a shared SaaS table without a \`tenant_id\`/\`org_id\`/\`workspace_id\` filter. In a multi-tenant app, every query on shared tables **must** include the tenant scope — otherwise Tenant A can read Tenant B's data (cross-tenant data leak).`,
+        fix: 'Always filter by the current tenant\'s ID:\n```ts\n// Bad:\nconst subs = await db.from("subscriptions").select("*")\n// Good:\nconst subs = await db.from("subscriptions").select("*").eq("org_id", session.orgId)\n```\nConsider using Postgres Row Level Security (RLS) to enforce this at the database layer.',
+      }))
+      if (issues.length >= 2) break
+    }
+  }
+
+  return issues
+}
+
+/**
+ * CHECK 25: JWT / auth token stored in localStorage
+ * localStorage is readable by any JS on the page — XSS-stealable.
+ */
+function checkJwtInLocalStorage(f: FileResult): VibeIssue[] {
+  const issues: VibeIssue[] = []
+
+  for (let i = 0; i < f.lines.length; i++) {
+    const line = f.lines[i]
+    if (line.trim().startsWith('//')) continue
+
+    if (/localStorage\.setItem\s*\(\s*['"`](?:token|jwt|accessToken|access_token|id_token|auth_token|refresh_token|authToken)['"`]/i.test(line)) {
+      issues.push(issue(f.rel, i + 1, line, {
+        guard: 'security',
+        severity: 'high',
+        confidence: 'confirmed',
+        title: 'Auth token stored in localStorage (XSS-stealable)',
+        description: `\`${f.rel}\` stores an auth token in \`localStorage\`. Any JavaScript running on the page (including injected via XSS) can read \`localStorage\` and steal the token, completely impersonating the user — no user interaction needed. This is especially dangerous for SaaS apps.`,
+        fix: 'Store tokens in \`httpOnly\` cookies (inaccessible to JavaScript):\n```ts\n// Server-side (Next.js API route / Server Action):\ncookies().set("token", value, { httpOnly: true, secure: true, sameSite: "lax" })\n```\nOr use an auth library that handles this for you (NextAuth, Clerk, Supabase Auth with cookie sessions).',
+      }))
+      if (issues.length >= 2) break
+    }
+  }
+
+  return issues
+}
+
+/**
+ * CHECK 26: Payment webhook handler without idempotency key check
+ * Stripe/Paddle/LemonSqueezy can retry webhooks — without idempotency checks
+ * the same event may trigger duplicate charges, fulfillments or credits.
+ */
+function checkWebhookIdempotency(f: FileResult): VibeIssue[] {
+  // Only look at webhook endpoint files
+  const isWebhookFile = /webhook|stripe|paddle|lemon/i.test(f.rel)
+  if (!isWebhookFile) return []
+
+  const issues: VibeIssue[] = []
+
+  // Check for payment event handling (fulfillment-type events)
+  const PAYMENT_EVENT_RE = /checkout\.completed|payment_intent\.succeeded|payment\.succeeded|order\.completed|subscription\.created|invoice\.paid/i
+  if (!PAYMENT_EVENT_RE.test(f.content)) return []
+
+  // Check if idempotency is handled
+  const IDEMPOTENCY_RE = /idempotency|stripe-event-id|event\.id|eventId|processedEvents|stripe_event_id|processed_at|alreadyProcessed/i
+  if (!IDEMPOTENCY_RE.test(f.content)) {
+    issues.push(issue(f.rel, 1, f.lines[0] ?? '', {
+      guard: 'monetization',
+      severity: 'high',
+      confidence: 'likely',
+      title: 'Payment webhook handler missing idempotency check (duplicate charge risk)',
+      description: `\`${f.rel}\` handles payment fulfillment events (checkout completed / payment succeeded) but has no idempotency check. Payment processors **retry webhooks** on network errors — without deduplication, the same event can trigger duplicate order fulfillment, duplicate credits, or duplicate subscription activations.`,
+      fix: 'Store and check processed event IDs before handling:\n```ts\nconst eventId = event.id  // Stripe event ID is globally unique\nconst already = await db.from("processed_events").select("id").eq("event_id", eventId).single()\nif (already.data) return new Response("OK", { status: 200 }) // already processed\n\nawait db.from("processed_events").insert({ event_id: eventId, processed_at: new Date() })\n// ... now safely handle the event\n```',
+    }))
+  }
+
+  return issues
+}
+
+/**
+ * CHECK 28: Plan/feature gating only on the client side (bypassable)
+ * Detects plan checks (plan === 'pro', isPro, subscription.status) inside
+ * 'use client' files with no corresponding server-side guard visible.
+ */
+function checkClientOnlyPlanGating(f: FileResult): VibeIssue[] {
+  if (!f.isClientComponent) return []
+
+  const issues: VibeIssue[] = []
+
+  // Detect plan gating patterns
+  const PLAN_CHECK_RE = /\bplan\s*===?\s*['"`](?:pro|premium|enterprise|business|paid)['"`]|isPro\b|isPremium\b|isEnterprise\b|subscription\.status\s*===?\s*['"`]active['"`]|tier\s*===?\s*['"`]/i
+
+  for (let i = 0; i < f.lines.length; i++) {
+    const line = f.lines[i]
+    if (line.trim().startsWith('//')) continue
+    if (!PLAN_CHECK_RE.test(line)) continue
+
+    // Check if there's a server-side fetch that validates the plan (acceptable pattern)
+    const hasServerFetch = /useServerAction|fetch\s*\(.*\/api\/|server action/i.test(f.content)
+
+    // Flag if the plan check is used directly to hide/show UI or unlock features
+    // and there's no visible server validation
+    const isUiGate = /return\s+null|return\s+<|<Upgrade|<Lock|disabled=\{!is|className.*hidden|style.*display.*none/i.test(
+      f.lines.slice(Math.max(0, i - 1), Math.min(f.lines.length, i + 4)).join('\n')
+    )
+
+    if (isUiGate && !hasServerFetch) {
+      issues.push(issue(f.rel, i + 1, line, {
+        guard: 'security',
+        severity: 'high',
+        confidence: 'possible',
+        title: 'Plan/feature gate is client-side only (bypassable)',
+        description: `\`${f.rel}\` hides features or UI based on a plan check in a client component. Client-side gating is **trivially bypassable** — anyone can open DevTools and set \`plan = "pro"\` or delete the check. Real plan enforcement must happen on the **server** (API route, Server Action, middleware) where the user cannot tamper with the check.`,
+        fix: 'Enforce plan limits on the server:\n```ts\n// In your API route or Server Action:\nconst user = await getUser(session)\nif (user.plan !== "pro") return new Response("Upgrade required", { status: 403 })\n// Client UI can still show/hide for UX, but the real gate is here\n```',
+      }))
+      if (issues.length >= 1) break // one per file is enough
+    }
+  }
+
+  return issues
+}
+
+/**
+ * CHECK 29: Missing data deletion endpoint (cross-file check)
+ * SaaS apps that have auth routes but no /delete-account or /cancel route
+ * violate GDPR "right to erasure" and are a liability.
+ */
+async function checkMissingDataDeletion(cloneDir: string): Promise<VibeIssue[]> {
+  // Check if the project has auth (sign-in/sign-up routes)
+  const { readdir: rd, stat: st } = await import('fs/promises')
+  const { join: j, relative: rel } = await import('path')
+
+  let hasAuth = false
+  let hasDeleteOrCancel = false
+
+  async function walk(dir: string, depth = 0): Promise<void> {
+    if (depth > 4) return
+    let entries: string[]
+    try { entries = await rd(dir) } catch { return }
+
+    for (const entry of entries) {
+      if (entry.startsWith('.') || SKIP_DIRS.has(entry)) continue
+      const full = j(dir, entry)
+      let s: { isDirectory(): boolean }
+      try { s = await st(full) } catch { continue }
+
+      if (s.isDirectory()) {
+        const lower = entry.toLowerCase()
+        if (lower.includes('sign-in') || lower.includes('signin') || lower.includes('login') || lower.includes('auth')) {
+          hasAuth = true
+        }
+        if (lower.includes('delete-account') || lower.includes('deleteaccount') || lower.includes('cancel') || lower.includes('deactivate')) {
+          hasDeleteOrCancel = true
+        }
+        await walk(full, depth + 1)
+      } else {
+        // Also check file names (API routes like /api/delete-account/route.ts)
+        const lower = entry.toLowerCase()
+        if (lower.includes('delete-account') || lower.includes('cancel-subscription') || lower.includes('delete_account')) {
+          hasDeleteOrCancel = true
+        }
+      }
+    }
+  }
+
+  // Walk app/ and pages/api/
+  try { await walk(j(cloneDir, 'app')) } catch { /* ok */ }
+  try { await walk(j(cloneDir, 'pages')) } catch { /* ok */ }
+  try { await walk(j(cloneDir, 'src', 'app')) } catch { /* ok */ }
+
+  if (hasAuth && !hasDeleteOrCancel) {
+    return [{
+      file: 'app/',
+      line: 1,
+      snippet: 'No delete-account or cancel-subscription route found',
+      guard: 'security',
+      severity: 'medium',
+      confidence: 'possible',
+      title: 'No account deletion / subscription cancellation endpoint (GDPR risk)',
+      description: 'This app has authentication but no visible account deletion or subscription cancellation endpoint. Under GDPR Article 17 ("right to erasure"), users in the EU/UK have a legal right to request deletion of their data. Missing this is a compliance liability and also frustrates users who want to cancel.',
+      fix: 'Create an account deletion endpoint:\n```ts\n// app/api/delete-account/route.ts\nexport async function DELETE(req: Request) {\n  const session = await getServerSession()\n  if (!session) return new Response("Unauthorized", { status: 401 })\n\n  // Delete user data in the correct order (respect FK constraints)\n  await db.from("subscriptions").delete().eq("user_id", session.user.id)\n  await db.from("profiles").delete().eq("id", session.user.id)\n  await supabaseAdmin.auth.admin.deleteUser(session.user.id)\n\n  return new Response(null, { status: 204 })\n}\n```\nAlso cancel any active Stripe/Paddle subscriptions before deleting the user.',
+    }]
+  }
+
+  return []
+}
+
+/**
+ * CHECK 30: Hardcoded live API keys in source code (not in .env files)
+ * Detects sk_live_, pk_live_, rk_live_, whsec_ patterns in JS/TS source files.
+ */
+function checkHardcodedLiveApiKey(f: FileResult): VibeIssue[] {
+  // Skip .env files — these are expected to have keys
+  if (f.rel.includes('.env') || f.rel.endsWith('.example')) return []
+
+  const issues: VibeIssue[] = []
+
+  // Match live Stripe keys and webhook secrets
+  const LIVE_KEY_RE = /(sk_live_[a-zA-Z0-9]{20,}|pk_live_[a-zA-Z0-9]{20,}|rk_live_[a-zA-Z0-9]{20,}|whsec_[a-zA-Z0-9]{20,})/
+
+  for (let i = 0; i < f.lines.length; i++) {
+    const line = f.lines[i]
+    if (line.trim().startsWith('//')) continue
+    // Skip if the value is loaded from env (false positive)
+    if (/process\.env\.|import\.meta\.env\./.test(line)) continue
+
+    const match = LIVE_KEY_RE.exec(line)
+    if (match) {
+      const keyPrefix = match[1].slice(0, 12) + '...' // Don't log the full key
+      issues.push(issue(f.rel, i + 1, line.replace(match[1], keyPrefix), {
+        guard: 'security',
+        severity: 'critical' as any,
+        confidence: 'confirmed',
+        title: `Live API key hardcoded in source (${match[1].slice(0, 7)}...)`,
+        description: `\`${f.rel}\` contains what appears to be a hardcoded live Stripe key or webhook secret (\`${keyPrefix}\`). This key is fully functional and grants complete access to your payment account. If this file is in a public repo, the key is already compromised.`,
+        fix: '1. **Rotate the key immediately** in your Stripe dashboard\n2. Move it to your \`.env.local\` / environment variables:\n```ts\n// Instead of:\nconst stripe = new Stripe("sk_live_...")\n// Use:\nconst stripe = new Stripe(process.env.STRIPE_SECRET_KEY!)\n```\n3. Add \`.env.local\` to \`.gitignore\` if not already there.',
+      }))
+      if (issues.length >= 2) break
+    }
+  }
+
+  return issues
+}
+
 // ── Main export ────────────────────────────────────────────────────────────────
 
 export async function runVibeLeakDetector(cloneDir: string): Promise<VibeIssue[]> {
@@ -879,7 +1188,7 @@ export async function runVibeLeakDetector(cloneDir: string): Promise<VibeIssue[]
     ...checkWebSocketLeak(f),
     ...checkServerActionInClientComponent(f),
     ...checkHooksInServerComponent(f),
-    ...checkRequireMixedWithEsm(f),
+    // CHECK 9 REMOVED (require() + ESM false-positive)
     ...checkIdorPatterns(f),
     ...checkEvalUsage(f),
     ...checkDangerousHtml(f),
@@ -894,6 +1203,12 @@ export async function runVibeLeakDetector(cloneDir: string): Promise<VibeIssue[]
     ...checkAuthEndpointNoRateLimit(f),
     ...checkEnvVarConsoleLog(f),
     ...checkRaceConditionInServerAction(f),
+    // CHECK 24–26, 28, 30: SaaS-first checks
+    ...checkMultiTenancyIsolation(f),
+    ...checkJwtInLocalStorage(f),
+    ...checkWebhookIdempotency(f),
+    ...checkClientOnlyPlanGating(f),
+    ...checkHardcodedLiveApiKey(f),
   ]
 
   for (const f of fileResults) {
@@ -904,6 +1219,7 @@ export async function runVibeLeakDetector(cloneDir: string): Promise<VibeIssue[]
   allIssues.push(...await checkMixedRouting(cloneDir))
   allIssues.push(...await checkMissingErrorBoundaries(cloneDir))  // CHECK 18
   allIssues.push(...checkTypeScriptAnyOveruse(fileResults))
+  allIssues.push(...await checkMissingDataDeletion(cloneDir))     // CHECK 29
 
   // Deduplicate: same title + file + line
   const seen = new Set<string>()

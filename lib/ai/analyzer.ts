@@ -25,6 +25,10 @@ export interface GrepCheckResults {
   has_auth_library:        string  // 'true' | 'false'
   has_middleware:          string  // 'true' | 'false'
   framework:               string
+  // SaaS-specific checks
+  jwt_in_localstorage:     string  // localStorage.setItem with token/jwt/accessToken
+  live_api_keys_in_source: string  // sk_live_, pk_live_, whsec_ in source (not .env)
+  vite_meta_env_secrets:   string  // import.meta.env.VITE_* secret vars
 }
 
 // Vibe issue from the in-process vibe-leak-detector
@@ -396,6 +400,48 @@ function parseGrepChecks(g: GrepCheckResults): EnrichedIssue[] {
       description: '`window.Buffer` or `window.process` is being set globally. This means any third-party script, browser extension, or XSS payload can read `window.process.env` — potentially exposing all environment variables that were bundled at build time.',
       fix_suggestion: 'Remove the global polyfill. Instead, import `Buffer` directly where needed:\n```ts\nimport { Buffer } from "buffer"\n// Use it locally, not via window\n```\nIf a library requires `Buffer` globally, use Vite\'s `define` config instead:\n```ts\n// vite.config.ts\ndefine: { global: "globalThis" }\n```',
       code_snippet: firstLine(g.window_node_polyfill),
+      file_path: file,
+      line_number: line,
+    })
+  }
+
+  // ── SaaS: JWT stored in localStorage ──────────────────────────────────────────
+  if (g.jwt_in_localstorage) {
+    const { file, line } = extractFile(g.jwt_in_localstorage)
+    issues.push({
+      guard: 'security', category: 'authentication', severity: 'high', confidence: 'confirmed',
+      title: 'Auth token stored in localStorage (XSS-stealable)',
+      description: '`localStorage.setItem` is used to store a JWT or auth token. `localStorage` is readable by any JavaScript on the page — any XSS injection can steal the token and fully impersonate the user with no interaction required.',
+      fix_suggestion: 'Store auth tokens in `httpOnly` cookies (inaccessible to JavaScript):\n```ts\n// Server-side:\ncookies().set("token", value, { httpOnly: true, secure: true, sameSite: "lax" })\n```\nOr use NextAuth / Clerk / Supabase Auth which manage secure cookie sessions automatically.',
+      code_snippet: firstLine(g.jwt_in_localstorage),
+      file_path: file,
+      line_number: line,
+    })
+  }
+
+  // ── SaaS: Live API keys hardcoded in source ────────────────────────────────────
+  if (g.live_api_keys_in_source) {
+    const { file, line } = extractFile(g.live_api_keys_in_source)
+    issues.push({
+      guard: 'security', category: 'secrets', severity: 'critical', confidence: 'confirmed',
+      title: 'Live Stripe/payment API key hardcoded in source',
+      description: 'A live Stripe key (`sk_live_`, `pk_live_`) or webhook secret (`whsec_`) was found directly in source code. This key is fully functional — it grants complete access to your payment account and is likely already compromised if the repo is public.',
+      fix_suggestion: '1. **Rotate the key immediately** in the Stripe dashboard.\n2. Move to environment variable: `process.env.STRIPE_SECRET_KEY`.\n3. Audit your git history — the key may still be in older commits.',
+      code_snippet: firstLine(g.live_api_keys_in_source),
+      file_path: file,
+      line_number: line,
+    })
+  }
+
+  // ── SaaS: import.meta.env.VITE_* secrets in client bundle ────────────────────
+  if (g.vite_meta_env_secrets) {
+    const { file, line } = extractFile(g.vite_meta_env_secrets)
+    issues.push({
+      guard: 'security', category: 'secrets', severity: 'high', confidence: 'confirmed',
+      title: 'Secret variable exposed via import.meta.env.VITE_ in client bundle',
+      description: 'A `VITE_*` env variable with a secret-looking name (KEY, SECRET, TOKEN, DATABASE) is accessed in frontend code. All `VITE_*` variables are inlined at build time into the browser bundle — anyone can read them in the page source.',
+      fix_suggestion: 'Remove the `VITE_` prefix from secret variables. Access them only in server-side code (API routes, server functions). Only truly public values (e.g. `VITE_PUBLIC_APP_NAME`) should use the `VITE_` prefix.',
+      code_snippet: firstLine(g.vite_meta_env_secrets),
       file_path: file,
       line_number: line,
     })
