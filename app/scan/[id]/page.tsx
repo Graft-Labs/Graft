@@ -405,7 +405,6 @@ export default function ScanReportPage() {
   const [scan, setScan] = useState<Scan | null>(null);
   const [issues, setIssues] = useState<Issue[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showFixPrompt, setShowFixPrompt] = useState(false);
   const [fixPromptCopied, setFixPromptCopied] = useState(false);
 
   useEffect(() => {
@@ -623,29 +622,8 @@ export default function ScanReportPage() {
               </div>
             </div>
 
-            <div className="mb-6">
-              <button
-                onClick={() => {
-                  const next = !showFixPrompt;
-                  setShowFixPrompt(next);
-                  posthog.capture("scan_fix_prompt_toggled", { open: next, issuesCount: issues.length });
-                }}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-300 hover:scale-105"
-                style={{
-                  background: showFixPrompt ? "var(--primary)" : "var(--primary-glow)",
-                  border: `1px solid ${showFixPrompt ? "var(--primary)" : "var(--border-amber)"}`,
-                  color: showFixPrompt ? "var(--secondary)" : "var(--primary)",
-                  fontFamily: "var(--font-ui)",
-                  boxShadow: showFixPrompt ? "0 4px 20px var(--primary-glow-strong)" : "none",
-                }}
-              >
-                <Wand2 size={16} />
-                Fix All ({issues.length})
-              </button>
-            </div>
-
             {/* Fix-all Prompt Panel */}
-            {showFixPrompt && (() => {
+            {(() => {
               const prompt = generateFixPrompt(issues, scan.repo, scan.framework, scan.created_at);
               return (
                 <div
@@ -662,7 +640,6 @@ export default function ScanReportPage() {
                         Paste into Claude, Cursor, or any AI tool to fix everything at once
                       </span>
                     </div>
-                    {/* Copy button */}
                     <button
                       onClick={() => {
                         navigator.clipboard.writeText(prompt);
@@ -683,7 +660,6 @@ export default function ScanReportPage() {
                       {fixPromptCopied ? "Copied!" : `Copy prompt (${issues.length} issues)`}
                     </button>
                   </div>
-                  {/* Preview */}
                   <pre
                     className="code-block overflow-auto"
                     style={{
@@ -694,7 +670,7 @@ export default function ScanReportPage() {
                       border: "1px solid var(--border)",
                     }}
                   >
-                    <code>{prompt || "No critical or high issues to fix."}</code>
+                    <code>{prompt || "No issues to fix."}</code>
                   </pre>
                 </div>
               );
