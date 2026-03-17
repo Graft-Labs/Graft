@@ -149,6 +149,39 @@ function FrameworkBadge({ framework }: { framework: string | null }) {
   );
 }
 
+// Titles that are SaaS-specific checks (CHECKs 24-30, 34)
+const SAAS_TITLE_FRAGMENTS = [
+  'Multi-tenant query',
+  'Auth token stored in localStorage',
+  'Payment webhook handler missing idempotency',
+  'Plan/feature gate is client-side only',
+  'No account deletion',
+  'Live API key hardcoded',
+  'Analytics/tracking without cookie consent',
+]
+
+function isSaasIssue(title: string): boolean {
+  return SAAS_TITLE_FRAGMENTS.some(f => title.includes(f))
+}
+
+function SaasBadge() {
+  return (
+    <span
+      className="text-xs px-1.5 py-0.5 rounded"
+      style={{
+        background: "rgba(99,102,241,0.1)",
+        color: "#818cf8",
+        border: "1px solid rgba(99,102,241,0.25)",
+        fontFamily: "var(--font-label)",
+        fontSize: "10px",
+        letterSpacing: "0.02em",
+      }}
+    >
+      SaaS
+    </span>
+  )
+}
+
 function ConfidenceBadge({ confidence }: { confidence: Issue["confidence"] }) {
   if (!confidence) return null;
   const styles = {
@@ -246,6 +279,7 @@ function IssueCard({ issue, repo, branch, commitHash }: {
               {issue.severity}
             </span>
             <ConfidenceBadge confidence={issue.confidence} />
+            {isSaasIssue(issue.title) && <SaasBadge />}
           </div>
           {issue.file && (
             <div className="flex items-center gap-1.5">

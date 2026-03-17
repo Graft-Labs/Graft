@@ -931,19 +931,23 @@ function checkMultiTenancyIsolation(f: FileResult): VibeIssue[] {
   if (f.isClientComponent) return []
   const issues: VibeIssue[] = []
 
-  // Tables that should almost always be scoped to a tenant
-  const TENANT_TABLE_RE = /\.(from|table)\s*\(\s*['"`](?:users|subscriptions|organizations|workspaces|teams|accounts|members|memberships)['"`]/i
-  // Filters that correctly scope to a tenant
-  const TENANT_FILTER_RE = /tenant_id|org_id|workspace_id|team_id|account_id|organization_id/i
+  // Skip admin, migration, seed, and test files — they legitimately query without tenant scope
+  if (/admin|migration|seed|fixture|test|spec|__tests__|scripts\//i.test(f.rel)) return []
+
+  // Tables that should almost always be scoped to a tenant in multi-tenant apps
+  // Note: 'users' alone is less indicative — many single-tenant apps have a users table
+  const TENANT_TABLE_RE = /\.(from|table)\s*\(\s*['"`](?:subscriptions|organizations|workspaces|teams|accounts|members|memberships)['"`]/i
+  // Filters that correctly scope to a tenant (user_id is acceptable for single-tenant SaaS)
+  const TENANT_FILTER_RE = /tenant_id|org_id|workspace_id|team_id|account_id|organization_id|user_id|userId/i
 
   for (let i = 0; i < f.lines.length; i++) {
     const line = f.lines[i]
     if (line.trim().startsWith('//')) continue
     if (!TENANT_TABLE_RE.test(line)) continue
 
-    // Check surrounding 8 lines (the WHERE clause is usually chained on next lines)
+    // Check surrounding 10 lines (the WHERE clause is usually chained on next lines)
     const contextStart = Math.max(0, i - 2)
-    const contextEnd   = Math.min(f.lines.length - 1, i + 8)
+    const contextEnd   = Math.min(f.lines.length - 1, i + 10)
     const context      = f.lines.slice(contextStart, contextEnd + 1).join('\n')
 
     if (!TENANT_FILTER_RE.test(context)) {
@@ -1034,6 +1038,12 @@ function checkClientOnlyPlanGating(f: FileResult): VibeIssue[] {
   // Detect plan gating patterns
   const PLAN_CHECK_RE = /\bplan\s*===?\s*['"`](?:pro|premium|enterprise|business|paid)['"`]|isPro\b|isPremium\b|isEnterprise\b|subscription\.status\s*===?\s*['"`]active['"`]|tier\s*===?\s*['"`]/i
 
+  // Only flag if the file also imports something that suggests it's auth-aware
+  // This avoids false positives on unrelated UI components that happen to use 'isPro' in a comment
+  const hasAuthImport = /from\s+['"`](?:next-auth|@clerk|@supabase|lucia|firebase|@auth)/i.test(f.content) ||
+    /useUser\b|useSession\b|currentUser\b|getUser\b|auth\(\)/i.test(f.content)
+  if (!hasAuthImport) return []
+
   for (let i = 0; i < f.lines.length; i++) {
     const line = f.lines[i]
     if (line.trim().startsWith('//')) continue
@@ -1042,10 +1052,10 @@ function checkClientOnlyPlanGating(f: FileResult): VibeIssue[] {
     // Check if there's a server-side fetch that validates the plan (acceptable pattern)
     const hasServerFetch = /useServerAction|fetch\s*\(.*\/api\/|server action/i.test(f.content)
 
-    // Flag if the plan check is used directly to hide/show UI or unlock features
-    // and there's no visible server validation
+    // Flag if the plan check is used directly to hide/show UI or unlock features within 3 lines
+    // Tighter window (was 4 lines) to reduce false positives
     const isUiGate = /return\s+null|return\s+<|<Upgrade|<Lock|disabled=\{!is|className.*hidden|style.*display.*none/i.test(
-      f.lines.slice(Math.max(0, i - 1), Math.min(f.lines.length, i + 4)).join('\n')
+      f.lines.slice(Math.max(0, i - 1), Math.min(f.lines.length, i + 3)).join('\n')
     )
 
     if (isUiGate && !hasServerFetch) {
@@ -1153,7 +1163,7 @@ function checkHardcodedLiveApiKey(f: FileResult): VibeIssue[] {
       const keyPrefix = match[1].slice(0, 12) + '...' // Don't log the full key
       issues.push(issue(f.rel, i + 1, line.replace(match[1], keyPrefix), {
         guard: 'security',
-        severity: 'critical' as any,
+        severity: 'critical',
         confidence: 'confirmed',
         title: `Live API key hardcoded in source (${match[1].slice(0, 7)}...)`,
         description: `\`${f.rel}\` contains what appears to be a hardcoded live Stripe key or webhook secret (\`${keyPrefix}\`). This key is fully functional and grants complete access to your payment account. If this file is in a public repo, the key is already compromised.`,
@@ -1164,6 +1174,241 @@ function checkHardcodedLiveApiKey(f: FileResult): VibeIssue[] {
   }
 
   return issues
+}
+
+/**
+ * CHECK 31: Missing or incomplete robots.txt
+ * No robots.txt — or one that doesn't block /api/ and /admin/ — lets crawlers
+ * hammer your endpoints, potentially exposing internal routes in search results.
+ */
+async function checkRobotsTxtCoverage(cloneDir: string): Promise<VibeIssue[]> {
+  const { readFile: rf, stat: st } = await import('fs/promises')
+  const { join: j } = await import('path')
+
+  const robotsPath = j(cloneDir, 'public', 'robots.txt')
+  let robotsContent = ''
+  try {
+    robotsContent = await rf(robotsPath, 'utf8')
+  } catch {
+    // No robots.txt at all — check if there's a next.js metadata robots config instead
+    // Next.js 13+ allows app/robots.ts
+    try {
+      await st(j(cloneDir, 'app', 'robots.ts'))
+      return [] // Using Next.js metadata robots — fine
+    } catch { /* fall through */ }
+    try {
+      await st(j(cloneDir, 'app', 'robots.js'))
+      return [] // Using Next.js metadata robots — fine
+    } catch { /* fall through */ }
+
+    return [{
+      file: 'public/robots.txt',
+      line: 1,
+      snippet: '(file not found)',
+      guard: 'distribution',
+      severity: 'medium',
+      confidence: 'confirmed',
+      title: 'No robots.txt — search crawlers can index /api/ and admin routes',
+      description: 'There is no `public/robots.txt` file. Without one, search engine crawlers will attempt to index every route including `/api/*`, `/admin/*`, `/dashboard/*`, and internal pages. This leaks your internal route structure in search results and adds unnecessary load to your API endpoints.',
+      fix: 'Create `public/robots.txt`:\n```\nUser-agent: *\nDisallow: /api/\nDisallow: /admin/\nDisallow: /dashboard/\nDisallow: /_next/\nAllow: /\n\nSitemap: https://yourdomain.com/sitemap.xml\n```',
+    }]
+  }
+
+  const issues: VibeIssue[] = []
+  const hasApiBlock   = /Disallow:\s*\/api\//i.test(robotsContent)
+  const hasAdminBlock = /Disallow:\s*\/admin\//i.test(robotsContent)
+
+  if (!hasApiBlock || !hasAdminBlock) {
+    const missing: string[] = []
+    if (!hasApiBlock)   missing.push('`/api/`')
+    if (!hasAdminBlock) missing.push('`/admin/`')
+    issues.push({
+      file: 'public/robots.txt',
+      line: 1,
+      snippet: robotsContent.slice(0, 120),
+      guard: 'distribution',
+      severity: 'low',
+      confidence: 'confirmed',
+      title: `robots.txt is missing Disallow rules for ${missing.join(' and ')}`,
+      description: `Your \`robots.txt\` exists but is missing \`Disallow\` rules for ${missing.join(' and ')}. Crawlers will index these internal routes, which can expose your API surface in search results and add noise load to endpoints not meant to be public.`,
+      fix: `Add the missing rules to \`public/robots.txt\`:\n\`\`\`\n${!hasApiBlock ? 'Disallow: /api/\n' : ''}${!hasAdminBlock ? 'Disallow: /admin/\n' : ''}\`\`\``,
+    })
+  }
+
+  return issues
+}
+
+/**
+ * CHECK 32: Marketing / landing pages missing rel="canonical" link
+ * Without canonical tags, duplicate URLs (http vs https, www vs non-www,
+ * trailing slash variants) split your SEO link equity.
+ */
+async function checkMissingCanonical(cloneDir: string): Promise<VibeIssue[]> {
+  const { readFile: rf, readdir: rd, stat: st } = await import('fs/promises')
+  const { join: j, extname: ext } = await import('path')
+
+  // Look for a root layout or root page that should declare canonical
+  const candidates = [
+    j(cloneDir, 'app', 'layout.tsx'),
+    j(cloneDir, 'app', 'layout.jsx'),
+    j(cloneDir, 'src', 'app', 'layout.tsx'),
+    j(cloneDir, 'src', 'app', 'layout.jsx'),
+    j(cloneDir, 'app', 'page.tsx'),
+    j(cloneDir, 'app', 'page.jsx'),
+    j(cloneDir, 'pages', '_document.tsx'),
+    j(cloneDir, 'pages', '_document.jsx'),
+    j(cloneDir, 'pages', '_document.js'),
+    j(cloneDir, 'pages', 'index.tsx'),
+    j(cloneDir, 'pages', 'index.jsx'),
+    j(cloneDir, 'pages', 'index.js'),
+  ]
+
+  const CANONICAL_RE = /rel\s*=\s*['"`]canonical['"`]|alternates.*canonical|canonicalUrl/i
+
+  for (const candidate of candidates) {
+    let content = ''
+    try { content = await rf(candidate, 'utf8') } catch { continue }
+
+    if (CANONICAL_RE.test(content)) return [] // Found canonical tag — OK
+
+    // Only report once from the first file that exists
+    const rel = candidate.replace(cloneDir + '/', '')
+    return [{
+      file: rel,
+      line: 1,
+      snippet: content.slice(0, 80),
+      guard: 'distribution',
+      severity: 'low',
+      confidence: 'likely',
+      title: 'No canonical URL tag — duplicate content may split SEO rankings',
+      description: `\`${rel}\` doesn't declare a canonical URL (\`<link rel="canonical" />\`). Without it, search engines may index the same page under multiple URLs (http vs https, www vs non-www, trailing slash variants), splitting your link equity and hurting SEO rankings for your landing/marketing pages.`,
+      fix: 'In Next.js App Router, add canonical to your root layout metadata:\n```ts\n// app/layout.tsx\nexport const metadata: Metadata = {\n  alternates: {\n    canonical: "https://yourdomain.com",\n  },\n}\n```\nFor Pages Router, add to `_document.tsx`:\n```tsx\n<Head>\n  <link rel="canonical" href="https://yourdomain.com" />\n</Head>\n```',
+    }]
+  }
+
+  return []
+}
+
+/**
+ * CHECK 33: No og:image meta tag — link previews are blank
+ * When users share your link on Twitter/Slack/LinkedIn, no og:image means
+ * a blank grey card instead of an attractive preview — hurts distribution.
+ */
+async function checkMissingOgImage(cloneDir: string): Promise<VibeIssue[]> {
+  const { readFile: rf } = await import('fs/promises')
+  const { join: j } = await import('path')
+
+  const candidates = [
+    j(cloneDir, 'app', 'layout.tsx'),
+    j(cloneDir, 'app', 'layout.jsx'),
+    j(cloneDir, 'src', 'app', 'layout.tsx'),
+    j(cloneDir, 'src', 'app', 'layout.jsx'),
+    j(cloneDir, 'pages', '_document.tsx'),
+    j(cloneDir, 'pages', '_document.jsx'),
+    j(cloneDir, 'pages', '_document.js'),
+    j(cloneDir, 'pages', 'index.tsx'),
+    j(cloneDir, 'pages', 'index.jsx'),
+    j(cloneDir, 'pages', 'index.js'),
+  ]
+
+  // Next.js metadata API uses openGraph.images, direct JSX uses og:image
+  const OG_IMAGE_RE = /og:image|openGraph.*images|openGraph.*image|opengraph-image/i
+
+  for (const candidate of candidates) {
+    let content = ''
+    try { content = await rf(candidate, 'utf8') } catch { continue }
+
+    if (OG_IMAGE_RE.test(content)) return [] // Found og:image — OK
+
+    const rel = candidate.replace(cloneDir + '/', '')
+    return [{
+      file: rel,
+      line: 1,
+      snippet: content.slice(0, 80),
+      guard: 'distribution',
+      severity: 'low',
+      confidence: 'likely',
+      title: 'No og:image meta tag — social link previews show blank card',
+      description: `\`${rel}\` has no \`og:image\` tag. When your app URL is shared on Twitter/X, Slack, LinkedIn, or WhatsApp, the preview card will be blank or show a generic placeholder — significantly reducing click-through rates. A good og:image can increase CTR by 3-5x on social shares.`,
+      fix: 'In Next.js App Router, add og:image to root layout metadata:\n```ts\n// app/layout.tsx\nexport const metadata: Metadata = {\n  openGraph: {\n    images: [{ url: "https://yourdomain.com/og-image.png", width: 1200, height: 630 }],\n  },\n  twitter: {\n    card: "summary_large_image",\n    images: ["https://yourdomain.com/og-image.png"],\n  },\n}\n```\nFor dynamic pages, use `app/opengraph-image.tsx` with Next.js\'s built-in OG image generation.',
+    }]
+  }
+
+  return []
+}
+
+/**
+ * CHECK 34: No cookie consent library (GDPR/CCPA risk)
+ * SaaS apps that use analytics/tracking without a cookie consent banner
+ * are technically non-compliant in EU/UK/California.
+ */
+async function checkNoCookieConsent(cloneDir: string): Promise<VibeIssue[]> {
+  const { readFile: rf } = await import('fs/promises')
+  const { join: j } = await import('path')
+
+  // Check package.json for analytics/tracking and consent libraries
+  let pkgJson: Record<string, unknown> = {}
+  try {
+    const raw = await rf(j(cloneDir, 'package.json'), 'utf8')
+    pkgJson = JSON.parse(raw)
+  } catch { return [] }
+
+  const allDeps = {
+    ...(pkgJson.dependencies as Record<string, string> ?? {}),
+    ...(pkgJson.devDependencies as Record<string, string> ?? {}),
+  }
+
+  const depNames = Object.keys(allDeps)
+
+  // Known analytics/tracking packages
+  const TRACKING_DEPS = [
+    '@segment/analytics-next', 'posthog-js', '@posthog/react',
+    'mixpanel-browser', '@fullstory/browser',
+    'react-ga', 'react-ga4', '@next/third-parties',
+    'hotjar-js', 'clarity-js', '@microsoft/clarity',
+  ]
+  const hasTracking = TRACKING_DEPS.some(d => depNames.includes(d))
+
+  // Also check for Google Analytics / GTM in layout files
+  let hasGtmOrGa = false
+  const layoutPaths = [
+    j(cloneDir, 'app', 'layout.tsx'), j(cloneDir, 'app', 'layout.jsx'),
+    j(cloneDir, 'src', 'app', 'layout.tsx'),
+    j(cloneDir, 'pages', '_document.tsx'), j(cloneDir, 'pages', '_document.js'),
+  ]
+  for (const p of layoutPaths) {
+    try {
+      const c = await rf(p, 'utf8')
+      if (/gtag|GA_MEASUREMENT_ID|google-analytics|googletagmanager|GTM-/i.test(c)) {
+        hasGtmOrGa = true; break
+      }
+    } catch { /* ok */ }
+  }
+
+  if (!hasTracking && !hasGtmOrGa) return [] // No tracking — no consent needed
+
+  // Known cookie consent packages
+  const CONSENT_DEPS = [
+    'react-cookie-consent', 'vanilla-cookieconsent', 'cookieconsent',
+    '@osano/cookieconsent', 'react-gdpr', 'gdpr-cookie-consent',
+    '@consent-manager/core', 'tarteaucitron', 'klaro',
+    'cookie-consent', 'onetrust', 'iubenda',
+  ]
+  const hasConsent = CONSENT_DEPS.some(d => depNames.includes(d))
+
+  if (hasConsent) return []
+
+  return [{
+    file: 'package.json',
+    line: 1,
+    snippet: `Analytics detected (${hasTracking ? TRACKING_DEPS.find(d => depNames.includes(d)) : 'Google Analytics/GTM'}), no consent library found`,
+    guard: 'distribution',
+    severity: 'medium',
+    confidence: 'likely',
+    title: 'Analytics/tracking without cookie consent banner (GDPR/CCPA risk)',
+    description: 'This app uses analytics or tracking (PostHog, Segment, Google Analytics, etc.) but has no cookie consent management library. Under GDPR (EU/UK) and CCPA (California), apps must obtain user consent **before** setting non-essential tracking cookies. Non-compliance can result in fines and user trust issues.',
+    fix: 'Add a cookie consent library. The simplest approach for Next.js:\n```bash\nnpm install react-cookie-consent\n```\n```tsx\n// app/layout.tsx\nimport CookieConsent from "react-cookie-consent"\n\n<CookieConsent\n  location="bottom"\n  buttonText="Accept"\n  declineButtonText="Decline"\n  enableDeclineButton\n  onAccept={() => { /* initialize analytics */ }}\n  onDecline={() => { /* skip analytics init */ }}\n>\n  We use cookies to improve your experience.\n</CookieConsent>\n```\nAlternatively, use a managed service like [Cookiebot](https://cookiebot.com) or [Osano](https://osano.com).',
+  }]
 }
 
 // ── Main export ────────────────────────────────────────────────────────────────
@@ -1220,6 +1465,11 @@ export async function runVibeLeakDetector(cloneDir: string): Promise<VibeIssue[]
   allIssues.push(...await checkMissingErrorBoundaries(cloneDir))  // CHECK 18
   allIssues.push(...checkTypeScriptAnyOveruse(fileResults))
   allIssues.push(...await checkMissingDataDeletion(cloneDir))     // CHECK 29
+  // Distribution checks (cross-file)
+  allIssues.push(...await checkRobotsTxtCoverage(cloneDir))       // CHECK 31
+  allIssues.push(...await checkMissingCanonical(cloneDir))        // CHECK 32
+  allIssues.push(...await checkMissingOgImage(cloneDir))          // CHECK 33
+  allIssues.push(...await checkNoCookieConsent(cloneDir))         // CHECK 34
 
   // Deduplicate: same title + file + line
   const seen = new Set<string>()
