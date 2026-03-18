@@ -704,6 +704,25 @@ export default function ScanReportPage() {
               );
             })()}
 
+            <div
+              className="p-3 rounded-lg mb-6"
+              style={{
+                background: "rgba(251,191,36,0.08)",
+                border: "1px solid rgba(251,191,36,0.25)",
+              }}
+            >
+              <p
+                style={{
+                  fontSize: "12px",
+                  color: "var(--text-secondary)",
+                  fontFamily: "var(--font-label)",
+                  lineHeight: "1.6",
+                }}
+              >
+                ShipGuard AI can make mistakes. Review important security, legal, and production decisions before applying changes.
+              </p>
+            </div>
+
             {/* Guard Score Cards */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
               {(Object.entries(report.scores) as [Guard, { score: number; label: string }][]).map(([key, val]) => {

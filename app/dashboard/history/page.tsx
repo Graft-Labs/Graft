@@ -197,6 +197,25 @@ export default function ScanHistoryPage() {
                 </div>
               )}
             </div>
+
+            <div
+              className="mt-4 p-3 rounded-lg"
+              style={{
+                background: "rgba(251,191,36,0.08)",
+                border: "1px solid rgba(251,191,36,0.25)",
+              }}
+            >
+              <p
+                style={{
+                  fontSize: "12px",
+                  color: "var(--text-secondary)",
+                  fontFamily: "var(--font-label)",
+                  lineHeight: "1.6",
+                }}
+              >
+                Scan findings are advisory and may include false positives or misses. Validate high-impact decisions before production rollout.
+              </p>
+            </div>
           </div>
         </div>
       </main>

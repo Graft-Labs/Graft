@@ -1,4 +1,102 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+## ShipGuard AI
+
+ShipGuard AI is a SaaS readiness scanner that evaluates repositories across security, scalability, monetization, and distribution.
+
+## Production hardening checklist
+
+### 1) Enable leaked password protection in Supabase Auth
+
+1. Open Supabase dashboard for your project.
+2. Go to `Authentication` -> `Providers` -> `Email`.
+3. Enable **Leaked password protection**.
+4. Save settings.
+
+Reference: https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection
+
+If this toggle is disabled/greyed out on your project plan, keep password hardening using:
+- stronger password policy requirements in your auth UI,
+- rate limiting on login/reset endpoints,
+- email verification + optional MFA,
+- regular credential hygiene messaging.
+
+### 2) Configure staged DAST safe probes
+
+Set these env vars in your deployment platform (Vercel + Trigger.dev env sync):
+
+```bash
+SHIPGUARD_DAST_STAGING_URL=https://staging.yourapp.com
+SHIPGUARD_DAST_AUTH_HEADER=Bearer <staging-token>
+```
+
+Notes:
+- `SHIPGUARD_DAST_STAGING_URL` should point to a non-production environment.
+- `SHIPGUARD_DAST_AUTH_HEADER` is optional but recommended for authenticated probe coverage.
+
+Where to get values:
+- `SHIPGUARD_DAST_STAGING_URL`: your staging app URL (for example Vercel preview/staging domain).
+- `SHIPGUARD_DAST_AUTH_HEADER`: create a staging-only bearer token/API key accepted by your middleware and set:
+  - `Authorization: Bearer <token>`
+
+### 3) Configure optional OSINT provider keys
+
+```bash
+SHODAN_API_KEY=<your_shodan_key>
+CENSYS_API_ID=<your_censys_api_id>
+CENSYS_API_SECRET=<your_censys_api_secret>
+```
+
+If these are not set, ShipGuard still runs DNS-based OSINT checks.
+
+Where to get values:
+- `SHODAN_API_KEY`: https://account.shodan.io/
+- `CENSYS_API_ID` and `CENSYS_API_SECRET`: https://search.censys.io/account/api
+
+### 3.1) Where to put env vars
+
+Set these in both places used by your runtime:
+
+1. Vercel project env vars (for app/API runtime).
+2. Trigger.dev project env vars (for `run-scan` worker runtime).
+
+You can also keep local values in `.env.local` for local development.
+
+### 4) Phase toggles
+
+```bash
+SHIPGUARD_PHASE_OSINT=true
+SHIPGUARD_PHASE_DAST=true
+SHIPGUARD_PHASE_POLICY_REPLAY=true
+```
+
+Disable any phase by setting the value to `false`.
+
+## Update Supabase email templates
+
+Your default auth email template can be changed in:
+`Supabase Dashboard -> Authentication -> Email Templates`
+
+Recommended templates to customize first:
+- Confirm signup
+- Magic link (if enabled)
+- Reset password
+
+Suggested baseline:
+- Set brand name to ShipGuard AI
+- Add support contact
+- Use your app URL for CTA links
+- Keep security messaging concise and clear
+
+Example confirm-signup subject:
+`Confirm your ShipGuard AI account`
+
+Example opening line:
+`Welcome to ShipGuard AI. Confirm your email to start running repository scans.`
+
+## Environment variables
+
+Use `.env.example` as the source of truth for all required and optional variables.
+
+## Getting Started
 
 ## Getting Started
 

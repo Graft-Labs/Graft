@@ -18,7 +18,7 @@ function readBool(name: string, defaultValue: boolean): boolean {
 
 export function getPhaseToggles(): PhaseToggleMap {
   return {
-    osint: readBool('SHIPGUARD_PHASE_OSINT', true),
+    osint: readBool('SHIPGUARD_PHASE_OSINT', false),
     dast: readBool('SHIPGUARD_PHASE_DAST', true),
     policyReplay: readBool('SHIPGUARD_PHASE_POLICY_REPLAY', true),
   }

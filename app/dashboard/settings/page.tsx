@@ -7,7 +7,8 @@ import {
   Bell,
   Shield,
   CreditCard,
-  Key,
+  LifeBuoy,
+  MessageSquarePlus,
   Trash2,
   CheckCircle,
   ExternalLink,
@@ -24,7 +25,7 @@ function getAuthRedirectUrl() {
   return `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/auth/callback`;
 }
 
-type Tab = "profile" | "integrations" | "notifications" | "billing" | "security";
+type Tab = "profile" | "integrations" | "notifications" | "billing" | "security" | "support";
 
 const tabs: { id: Tab; label: string; icon: typeof User }[] = [
   { id: "profile", label: "Profile", icon: User },
@@ -32,6 +33,7 @@ const tabs: { id: Tab; label: string; icon: typeof User }[] = [
   { id: "notifications", label: "Notifications", icon: Bell },
   { id: "billing", label: "Billing", icon: CreditCard },
   { id: "security", label: "Security", icon: Shield },
+  { id: "support", label: "Support", icon: LifeBuoy },
 ];
 
 interface UserData {
@@ -42,6 +44,20 @@ interface UserData {
   scans_limit: number;
 }
 
+type NotificationPrefs = {
+  scanComplete: boolean;
+  criticalIssues: boolean;
+  weeklyDigest: boolean;
+  productUpdates: boolean;
+};
+
+const defaultNotificationPrefs: NotificationPrefs = {
+  scanComplete: true,
+  criticalIssues: true,
+  weeklyDigest: false,
+  productUpdates: false,
+};
+
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<Tab>("profile");
   const [saved, setSaved] = useState(false);
@@ -50,6 +66,13 @@ export default function SettingsPage() {
   const [userData, setUserData] = useState<UserData | null>(null);
   const [loadingUser, setLoadingUser] = useState(true);
   const [profileForm, setProfileForm] = useState({ name: "", email: "" });
+  const [notificationPrefs, setNotificationPrefs] = useState<NotificationPrefs>(defaultNotificationPrefs);
+  const [savingNotifications, setSavingNotifications] = useState(false);
+  const [notificationsSaved, setNotificationsSaved] = useState(false);
+  const [passwordForm, setPasswordForm] = useState({ newPassword: "", confirmPassword: "" });
+  const [savingPassword, setSavingPassword] = useState(false);
+  const [passwordMessage, setPasswordMessage] = useState<string | null>(null);
+  const [deletingAccount, setDeletingAccount] = useState(false);
   const supabase = createClient();
 
   const fetchUserData = useCallback(async () => {
@@ -74,6 +97,14 @@ export default function SettingsPage() {
         scans_used: userRecord?.scans_used || 0,
         scans_limit: userRecord?.scans_limit || 3,
       };
+
+      const rawPrefs = user.user_metadata?.notification_prefs as Partial<NotificationPrefs> | undefined;
+      setNotificationPrefs({
+        scanComplete: rawPrefs?.scanComplete ?? defaultNotificationPrefs.scanComplete,
+        criticalIssues: rawPrefs?.criticalIssues ?? defaultNotificationPrefs.criticalIssues,
+        weeklyDigest: rawPrefs?.weeklyDigest ?? defaultNotificationPrefs.weeklyDigest,
+        productUpdates: rawPrefs?.productUpdates ?? defaultNotificationPrefs.productUpdates,
+      });
 
       setUserData(userData);
       setProfileForm({ name: userData.name, email: userData.email });
@@ -144,6 +175,88 @@ export default function SettingsPage() {
     }
   };
 
+  const handleSaveNotifications = async () => {
+    setSavingNotifications(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { error } = await supabase.auth.updateUser({
+        data: {
+          ...(user.user_metadata || {}),
+          notification_prefs: notificationPrefs,
+        },
+      });
+
+      if (error) {
+        console.error("Error saving notification preferences:", error);
+        return;
+      }
+
+      setNotificationsSaved(true);
+      setTimeout(() => setNotificationsSaved(false), 2000);
+    } catch (error) {
+      console.error("Error saving notification preferences:", error);
+    } finally {
+      setSavingNotifications(false);
+    }
+  };
+
+  const handlePasswordUpdate = async () => {
+    setPasswordMessage(null);
+    if (passwordForm.newPassword.length < 8) {
+      setPasswordMessage("Password must be at least 8 characters.");
+      return;
+    }
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      setPasswordMessage("Passwords do not match.");
+      return;
+    }
+
+    setSavingPassword(true);
+    try {
+      const { error } = await supabase.auth.updateUser({
+        password: passwordForm.newPassword,
+      });
+
+      if (error) {
+        setPasswordMessage(error.message || "Failed to update password.");
+        return;
+      }
+
+      setPasswordForm({ newPassword: "", confirmPassword: "" });
+      setPasswordMessage("Password updated successfully.");
+    } catch (error) {
+      console.error("Error updating password:", error);
+      setPasswordMessage("Failed to update password.");
+    } finally {
+      setSavingPassword(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    const confirmed = window.confirm("This will permanently delete your account and scan history. This action cannot be undone. Continue?");
+    if (!confirmed) return;
+
+    setDeletingAccount(true);
+    try {
+      const res = await fetch("/api/account/delete", { method: "DELETE" });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        window.alert(data.message || "Failed to delete account.");
+        return;
+      }
+
+      await supabase.auth.signOut();
+      window.location.href = "/";
+    } catch (error) {
+      console.error("Error deleting account:", error);
+      window.alert("Failed to delete account.");
+    } finally {
+      setDeletingAccount(false);
+    }
+  };
+
   const getPlanDisplayName = (plan: string) => {
     switch (plan) {
       case "pro": return "Pro";
@@ -154,6 +267,11 @@ export default function SettingsPage() {
   };
 
   const getPlanFeatures = (plan: string) => {
+    if (userData) {
+      if (userData.scans_limit >= 999999) return "Unlimited scans";
+      return `${userData.scans_limit} scans / month`;
+    }
+
     switch (plan) {
       case "pro": return "30 scans / month";
       case "unlimited": return "Unlimited scans";
@@ -414,15 +532,33 @@ export default function SettingsPage() {
                       <div className="p-5 rounded-2xl" style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}>
                         <p className="text-sm font-medium mb-4" style={{ fontFamily: "var(--font-ui)" }}>Change Password</p>
                         <div className="flex flex-col gap-3">
-                          {["Current password", "New password", "Confirm new password"].map((f) => (
-                            <input key={f} type="password" placeholder={f}
-                              className="w-full px-4 py-3 rounded-lg bg-transparent outline-none text-sm"
-                              style={{ background: "var(--surface-3)", border: "1px solid var(--border)", color: "var(--text-primary)", fontFamily: "var(--font-label)" }} />
-                          ))}
+                          <input
+                            type="password"
+                            placeholder="New password"
+                            value={passwordForm.newPassword}
+                            onChange={(e) => setPasswordForm(prev => ({ ...prev, newPassword: e.target.value }))}
+                            className="w-full px-4 py-3 rounded-lg bg-transparent outline-none text-sm"
+                            style={{ background: "var(--surface-3)", border: "1px solid var(--border)", color: "var(--text-primary)", fontFamily: "var(--font-label)" }}
+                          />
+                          <input
+                            type="password"
+                            placeholder="Confirm new password"
+                            value={passwordForm.confirmPassword}
+                            onChange={(e) => setPasswordForm(prev => ({ ...prev, confirmPassword: e.target.value }))}
+                            className="w-full px-4 py-3 rounded-lg bg-transparent outline-none text-sm"
+                            style={{ background: "var(--surface-3)", border: "1px solid var(--border)", color: "var(--text-primary)", fontFamily: "var(--font-label)" }} />
                         </div>
-                        <button className="mt-4 px-5 py-2 rounded-lg text-sm font-medium transition-all"
+                        {passwordMessage && (
+                          <p style={{ fontSize: "12px", marginTop: 10, color: passwordMessage.includes("success") ? "var(--guard-monetize)" : "var(--sev-high)", fontFamily: "var(--font-label)" }}>
+                            {passwordMessage}
+                          </p>
+                        )}
+                        <button
+                          onClick={handlePasswordUpdate}
+                          disabled={savingPassword}
+                          className="mt-4 px-5 py-2 rounded-lg text-sm font-medium transition-all disabled:opacity-60"
                           style={{ background: "var(--surface-3)", border: "1px solid var(--border)", color: "var(--text-primary)", fontFamily: "var(--font-label)" }}>
-                          Update Password
+                          {savingPassword ? "Updating..." : "Update Password"}
                         </button>
                       </div>
 
@@ -432,10 +568,13 @@ export default function SettingsPage() {
                         <p style={{ fontSize: "12px", color: "var(--text-tertiary)", fontFamily: "var(--font-label)", marginBottom: 16 }}>
                           Permanently delete your account and all scan data.
                         </p>
-                        <button className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all"
+                        <button
+                          onClick={handleDeleteAccount}
+                          disabled={deletingAccount}
+                          className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all disabled:opacity-60"
                           style={{ background: "rgba(232,64,64,0.1)", border: "1px solid rgba(232,64,64,0.3)", color: "var(--sev-critical)", fontFamily: "var(--font-label)" }}>
                           <Trash2 size={13} />
-                          Delete Account
+                          {deletingAccount ? "Deleting..." : "Delete Account"}
                         </button>
                       </div>
                     </div>
@@ -449,10 +588,10 @@ export default function SettingsPage() {
                     </h2>
                     <div className="flex flex-col gap-3">
                       {[
-                        { label: "Scan complete", desc: "Get notified when a scan finishes", enabled: true },
-                        { label: "Critical issues found", desc: "Alert when critical severity issues are detected", enabled: true },
-                        { label: "Weekly digest", desc: "Weekly summary of your scan history", enabled: false },
-                        { label: "Product updates", desc: "New features and improvements", enabled: false },
+                        { key: "scanComplete", label: "Scan complete", desc: "Get notified when a scan finishes" },
+                        { key: "criticalIssues", label: "Critical issues found", desc: "Alert when critical severity issues are detected" },
+                        { key: "weeklyDigest", label: "Weekly digest", desc: "Weekly summary of your scan history" },
+                        { key: "productUpdates", label: "Product updates", desc: "New features and improvements" },
                       ].map((notif) => (
                         <div key={notif.label} className="flex items-center justify-between p-4 rounded-xl"
                           style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}>
@@ -461,13 +600,77 @@ export default function SettingsPage() {
                             <p style={{ fontSize: "12px", color: "var(--text-tertiary)", fontFamily: "var(--font-label)" }}>{notif.desc}</p>
                           </div>
                           <button
+                            onClick={() => setNotificationPrefs((prev) => ({
+                              ...prev,
+                              [notif.key]: !prev[notif.key as keyof NotificationPrefs],
+                            }))}
                             className="w-10 h-6 rounded-full relative transition-colors duration-200 flex-shrink-0"
-                            style={{ background: notif.enabled ? "var(--accent)" : "var(--obsidian-5)" }}>
+                            style={{ background: notificationPrefs[notif.key as keyof NotificationPrefs] ? "var(--accent)" : "var(--obsidian-5)" }}>
                             <span className="absolute top-1 w-4 h-4 rounded-full bg-white transition-transform duration-200"
-                              style={{ transform: notif.enabled ? "translateX(18px)" : "translateX(2px)", boxShadow: "0 1px 3px rgba(0,0,0,0.3)" }} />
+                              style={{ transform: notificationPrefs[notif.key as keyof NotificationPrefs] ? "translateX(18px)" : "translateX(2px)", boxShadow: "0 1px 3px rgba(0,0,0,0.3)" }} />
                           </button>
                         </div>
                       ))}
+                      <button
+                        onClick={handleSaveNotifications}
+                        disabled={savingNotifications}
+                        className="self-start mt-1 px-5 py-2 rounded-lg text-sm font-medium transition-all disabled:opacity-60"
+                        style={{ background: notificationsSaved ? "var(--guard-monetize-glow)" : "var(--accent)", color: notificationsSaved ? "var(--guard-monetize)" : "var(--obsidian)", border: notificationsSaved ? "1px solid rgba(64,200,122,0.3)" : "none", fontFamily: "var(--font-ui)" }}
+                      >
+                        {savingNotifications ? "Saving..." : notificationsSaved ? "Saved!" : "Save Notification Preferences"}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {activeTab === "support" && (
+                  <div>
+                    <h2 className="text-lg font-semibold mb-6" style={{ fontFamily: "var(--font-ui)", letterSpacing: "-0.02em" }}>
+                      Support & Requests
+                    </h2>
+                    <div className="flex flex-col gap-4">
+                      <div className="p-5 rounded-2xl" style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}>
+                        <div className="flex items-start justify-between gap-4">
+                          <div>
+                            <p className="text-sm font-medium mb-1" style={{ fontFamily: "var(--font-ui)" }}>Get help</p>
+                            <p style={{ fontSize: "12px", color: "var(--text-tertiary)", fontFamily: "var(--font-label)" }}>
+                              Need support with scans, billing, or account issues?
+                            </p>
+                          </div>
+                          <a
+                            href="mailto:support@shipguard.ai?subject=ShipGuard%20Support%20Request"
+                            className="px-4 py-2 rounded-lg text-sm font-medium"
+                            style={{ background: "var(--surface-3)", border: "1px solid var(--border)", color: "var(--text-primary)", fontFamily: "var(--font-label)" }}
+                          >
+                            Email Support
+                          </a>
+                        </div>
+                      </div>
+
+                      <div className="p-5 rounded-2xl" style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}>
+                        <div className="flex items-start justify-between gap-4">
+                          <div>
+                            <p className="text-sm font-medium mb-1" style={{ fontFamily: "var(--font-ui)" }}>Request a feature</p>
+                            <p style={{ fontSize: "12px", color: "var(--text-tertiary)", fontFamily: "var(--font-label)" }}>
+                              Share ideas and vote on upcoming improvements.
+                            </p>
+                          </div>
+                          <a
+                            href="mailto:support@shipguard.ai?subject=ShipGuard%20Feature%20Request"
+                            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium"
+                            style={{ background: "var(--accent)", color: "var(--obsidian)", fontFamily: "var(--font-ui)" }}
+                          >
+                            <MessageSquarePlus size={14} />
+                            Send Request
+                          </a>
+                        </div>
+                      </div>
+
+                      <div className="p-4 rounded-xl" style={{ background: "rgba(251,191,36,0.08)", border: "1px solid rgba(251,191,36,0.25)" }}>
+                        <p style={{ fontSize: "12px", color: "var(--text-secondary)", fontFamily: "var(--font-label)", lineHeight: "1.6" }}>
+                          ShipGuard AI may occasionally miss issues or produce false positives. Always review critical security and compliance findings before production decisions.
+                        </p>
+                      </div>
                     </div>
                   </div>
                 )}

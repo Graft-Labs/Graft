@@ -807,6 +807,25 @@ export default function NewScanPage() {
               <Link href="/pricing" style={{ color: "var(--accent)" }}>Upgrade for unlimited</Link>
             </p>
 
+            <div
+              className="mt-4 p-3 rounded-lg"
+              style={{
+                background: "rgba(251,191,36,0.08)",
+                border: "1px solid rgba(251,191,36,0.25)",
+              }}
+            >
+              <p
+                style={{
+                  fontSize: "12px",
+                  color: "var(--text-secondary)",
+                  fontFamily: "var(--font-label)",
+                  lineHeight: "1.6",
+                }}
+              >
+                ShipGuard AI can make mistakes. Verify important security and compliance findings before shipping to production.
+              </p>
+            </div>
+
           </div>
         </div>
       </main>

@@ -171,6 +171,12 @@ export default function DashboardPage() {
   const avgScore = scans.length > 0 
     ? Math.round(scans.reduce((acc, s) => acc + (s.overall_score || 0), 0) / scans.length)
     : 0;
+  const completedScans = scans.filter((s) => s.status === "complete").length;
+  const scansUsed = user?.scans_used ?? 0;
+  const scansLimit = user?.scans_limit ?? 3;
+  const scansRemaining = scansLimit >= 999999 ? "Unlimited" : Math.max(scansLimit - scansUsed, 0);
+  const planLabel = (user?.plan || "free").charAt(0).toUpperCase() + (user?.plan || "free").slice(1);
+  const displayName = user?.name?.trim() || user?.email?.split("@")[0] || "Builder";
 
   return (
     <div className="flex min-h-screen" style={{ background: "var(--obsidian)" }}>
@@ -232,16 +238,18 @@ export default function DashboardPage() {
                   className="text-xs font-semibold uppercase tracking-widest mb-1"
                   style={{ color: "var(--accent)", fontFamily: "var(--font-label)" }}
                 >
-                  Free Plan
+                  {planLabel} Plan
                 </p>
                 <h2
                   className="text-2xl mb-1"
                   style={{ fontFamily: "var(--font-ui)",  }}
                 >
-                  Good morning, Builder
+                  Welcome back, {displayName}
                 </h2>
                 <p style={{ fontSize: "13px", color: "var(--text-secondary)", fontFamily: "var(--font-label)" }}>
-                  You have 1 free scan remaining this month.
+                  {scansLimit >= 999999
+                    ? "You have unlimited scans available."
+                    : `You have ${scansRemaining} scan${Number(scansRemaining) === 1 ? "" : "s"} remaining this month.`}
                 </p>
               </div>
               <div className="hidden sm:flex flex-col items-end gap-2">
@@ -249,31 +257,33 @@ export default function DashboardPage() {
                   className="flex items-center gap-2 px-3 py-1.5 rounded-lg"
                   style={{ background: "var(--obsidian-2)", border: "1px solid var(--border)" }}
                 >
-                  <span style={{ fontSize: "12px", color: "var(--text-tertiary)", fontFamily: "var(--font-label)" }}>
-                    Scans used
-                  </span>
-                  <span style={{ fontSize: "18px", color: "var(--accent)", fontFamily: "var(--font-ui)",  }}>
-                    0/1
-                  </span>
-                </div>
-                <Link
-                  href="/pricing"
-                  className="text-xs font-medium"
-                  style={{ color: "var(--accent)", fontFamily: "var(--font-label)" }}
-                >
-                  Upgrade for unlimited →
-                </Link>
+                    <span style={{ fontSize: "12px", color: "var(--text-tertiary)", fontFamily: "var(--font-label)" }}>
+                      Scans used
+                    </span>
+                    <span style={{ fontSize: "18px", color: "var(--accent)", fontFamily: "var(--font-ui)",  }}>
+                      {scansLimit >= 999999 ? `${scansUsed}/∞` : `${scansUsed}/${scansLimit}`}
+                    </span>
+                  </div>
+                {scansLimit < 999999 && (
+                  <Link
+                    href="/pricing"
+                    className="text-xs font-medium"
+                    style={{ color: "var(--accent)", fontFamily: "var(--font-label)" }}
+                  >
+                    Upgrade for unlimited →
+                  </Link>
+                )}
               </div>
             </div>
 
             {/* Stats row */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-              {[
-                { label: "Total Scans", value: scans.length, icon: FileText, color: "var(--accent)" },
-                { label: "Avg. Score", value: avgScore, icon: TrendingUp, color: "var(--guard-scale)" },
-                { label: "Critical Issues", value: totalIssues, icon: XCircle, color: "var(--guard-security)" },
-                { label: "Issues Fixed", value: 7, icon: CheckCircle, color: "var(--guard-monetize)" },
-              ].map((stat) => {
+                {[
+                  { label: "Total Scans", value: scans.length, icon: FileText, color: "var(--accent)" },
+                  { label: "Avg. Score", value: avgScore, icon: TrendingUp, color: "var(--guard-scale)" },
+                  { label: "Critical Issues", value: totalIssues, icon: XCircle, color: "var(--guard-security)" },
+                  { label: "Completed Scans", value: completedScans, icon: CheckCircle, color: "var(--guard-monetize)" },
+                ].map((stat) => {
                 const Icon = stat.icon;
                 return (
                   <div
@@ -418,37 +428,39 @@ export default function DashboardPage() {
             </div>
 
             {/* Empty state CTA */}
-            <div
-              className="p-8 rounded-2xl text-center border-dashed"
-              style={{ border: "2px dashed var(--border)", background: "var(--obsidian-1)" }}
-            >
+            {scans.length === 0 && (
               <div
-                className="w-12 h-12 rounded-xl flex items-center justify-center mx-auto mb-4"
-                style={{ background: "var(--accent-glow)", border: "1px solid var(--border-amber)" }}
+                className="p-8 rounded-2xl text-center border-dashed"
+                style={{ border: "2px dashed var(--border)", background: "var(--obsidian-1)" }}
               >
-                <PlusCircle size={22} style={{ color: "var(--accent)" }} />
+                <div
+                  className="w-12 h-12 rounded-xl flex items-center justify-center mx-auto mb-4"
+                  style={{ background: "var(--accent-glow)", border: "1px solid var(--border-amber)" }}
+                >
+                  <PlusCircle size={22} style={{ color: "var(--accent)" }} />
+                </div>
+                <p
+                  className="font-medium mb-1"
+                  style={{ fontFamily: "var(--font-ui)", letterSpacing: "-0.01em" }}
+                >
+                  Scan a new repository
+                </p>
+                <p
+                  className="text-sm mb-4"
+                  style={{ color: "var(--text-secondary)", fontFamily: "var(--font-label)" }}
+                >
+                  Paste any GitHub URL and get a full production-readiness report
+                </p>
+                <Link
+                  href="/scan/new"
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200"
+                  style={{ background: "var(--accent)", color: "var(--obsidian)", fontFamily: "var(--font-ui)" }}
+                >
+                  <Github size={15} />
+                  Start a scan
+                </Link>
               </div>
-              <p
-                className="font-medium mb-1"
-                style={{ fontFamily: "var(--font-ui)", letterSpacing: "-0.01em" }}
-              >
-                Scan a new repository
-              </p>
-              <p
-                className="text-sm mb-4"
-                style={{ color: "var(--text-secondary)", fontFamily: "var(--font-label)" }}
-              >
-                Paste any GitHub URL and get a full production-readiness report
-              </p>
-              <Link
-                href="/scan/new"
-                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200"
-                style={{ background: "var(--accent)", color: "var(--obsidian)", fontFamily: "var(--font-ui)" }}
-              >
-                <Github size={15} />
-                Start a scan
-              </Link>
-            </div>
+            )}
           </div>
         </div>
       </main>
