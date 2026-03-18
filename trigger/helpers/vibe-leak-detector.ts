@@ -819,7 +819,7 @@ function checkAuthEndpointNoRateLimit(f: FileResult): VibeIssue[] {
 
   if (!isAuthRoute && !isWebhookRoute) return []
 
-  const hasRateLimit = /ratelimit|rate.?limit|upstash|express-rate-limit|bottleneck|limiter/i.test(f.content)
+  const hasRateLimit = /ratelimit|rate.?limit|upstash|express-rate-limit|bottleneck|limiter|allowWebhookRequest|WEBHOOK_LIMIT_PER_MINUTE/i.test(f.content)
   if (!hasRateLimit) {
     if (isWebhookRoute) {
       return [issue(f.rel, 1, f.lines[0] ?? '', {

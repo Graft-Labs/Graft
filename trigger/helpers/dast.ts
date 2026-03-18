@@ -30,9 +30,13 @@ export async function runDastChecks(input: DastInput): Promise<DastResult> {
   const checksFailed: string[] = []
   const issues: ExternalIssueInput[] = []
 
-  const middlewareTs = await readSafe(join(input.cloneDir, 'middleware.ts'))
-  const middlewareJs = await readSafe(join(input.cloneDir, 'middleware.js'))
-  const middleware = middlewareTs || middlewareJs
+  const middleware =
+    (await readSafe(join(input.cloneDir, 'middleware.ts'))) ||
+    (await readSafe(join(input.cloneDir, 'middleware.js'))) ||
+    (await readSafe(join(input.cloneDir, 'app/middleware.ts'))) ||
+    (await readSafe(join(input.cloneDir, 'app/middleware.js'))) ||
+    (await readSafe(join(input.cloneDir, 'src/middleware.ts'))) ||
+    (await readSafe(join(input.cloneDir, 'src/middleware.js')))
   checksExecuted.push('auth-middleware-protection')
 
   if (input.framework === 'nextjs') {

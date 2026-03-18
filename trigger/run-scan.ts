@@ -566,7 +566,11 @@ export const runScanTask = task({
 
       const fileChecks: ToolOutputs['file_checks'] = {
         // Distribution / SEO
-        env_example:              String(await check('.env.example')),
+        env_example:              String(
+          (await check('.env.example')) ||
+          (await check('apps/web/.env.example')) ||
+          (await check('packages/web/.env.example'))
+        ),
         robots_txt:               String(
           (await check('public/robots.txt')) ||
           (await check('app/robots.ts')) ||
