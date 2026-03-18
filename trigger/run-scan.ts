@@ -522,7 +522,7 @@ export const runScanTask = task({
           k.includes('slowapi') ||
           k.includes('limiter')
         ) ||
-        (await runTool('grep -Rni "rate.?limit\|429\|Too Many Requests" app/api pages/api 2>/dev/null | head -5 || true', cloneDir)).trim().length > 0
+        (await runTool('grep -RniE "rate.?limit|429|Too Many Requests" app/api pages/api 2>/dev/null || true', cloneDir)).trim().length > 0
 
       // Check .gitignore for .env exposure
       const gitignoreContent = await readFileSafe(join(cloneDir, '.gitignore')) || ''
