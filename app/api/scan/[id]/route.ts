@@ -105,6 +105,7 @@ export async function POST(
     const issuesToInsert = issues.map(issue => ({
       scan_id: scanId,
       guard: issue.guard,
+      category: issue.category,
       severity: issue.severity,
       title: issue.title,
       description: issue.description,

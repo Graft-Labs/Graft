@@ -88,8 +88,24 @@ export interface ToolOutputs {
   }
   // Vibe-leak-detector issues (in-process regex/AST scanner)
   vibe_issues?:     VibeIssueInput[]
+  // External phased scans
+  osint_issues?:    ExternalIssueInput[]
+  dast_issues?:     ExternalIssueInput[]
   osv_skipped:      boolean
   osv_skip_reason:  string | null
+}
+
+export interface ExternalIssueInput {
+  guard: string
+  category: string
+  severity: 'critical' | 'high' | 'medium' | 'low'
+  title: string
+  description: string
+  fix_suggestion: string
+  confidence?: 'confirmed' | 'likely' | 'possible'
+  file_path?: string
+  line_number?: number
+  code_snippet?: string
 }
 
 export interface EnrichedIssue {
@@ -784,6 +800,21 @@ function parseVibeIssues(vibeIssues: VibeIssueInput[]): EnrichedIssue[] {
   }))
 }
 
+function parseExternalIssues(externalIssues: ExternalIssueInput[]): EnrichedIssue[] {
+  return externalIssues.map((issue) => ({
+    guard: issue.guard,
+    category: issue.category,
+    severity: issue.severity,
+    title: issue.title,
+    description: issue.description,
+    fix_suggestion: issue.fix_suggestion,
+    confidence: issue.confidence ?? 'possible',
+    file_path: issue.file_path,
+    line_number: issue.line_number,
+    code_snippet: issue.code_snippet,
+  }))
+}
+
 // ── Main analyzer ──────────────────────────────────────────────────────────────
 
 export async function analyzeToolOutputs(outputs: ToolOutputs): Promise<EnrichedIssue[]> {
@@ -805,6 +836,14 @@ export async function analyzeToolOutputs(outputs: ToolOutputs): Promise<Enriched
   // Vibe-leak-detector — in-process regex/AST scanner (new)
   if (outputs.vibe_issues && outputs.vibe_issues.length > 0) {
     allIssues.push(...parseVibeIssues(outputs.vibe_issues))
+  }
+
+  // OSINT / DAST phased checks (external surface)
+  if (outputs.osint_issues && outputs.osint_issues.length > 0) {
+    allIssues.push(...parseExternalIssues(outputs.osint_issues))
+  }
+  if (outputs.dast_issues && outputs.dast_issues.length > 0) {
+    allIssues.push(...parseExternalIssues(outputs.dast_issues))
   }
 
   // Grep-based source code checks — deterministic, unambiguous patterns

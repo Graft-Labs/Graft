@@ -15,6 +15,9 @@ import {
 } from '@/lib/ai/analyzer'
 import { detectStack, type StackInfo } from './helpers/detect-stack'
 import { runVibeLeakDetector, type VibeIssue } from './helpers/vibe-leak-detector'
+import { getPhaseToggles, inferCandidateDomains } from './helpers/phased-config'
+import { runOsintChecks } from './helpers/osint'
+import { runDastChecks } from './helpers/dast'
 
 const execAsync = promisify(exec)
 
@@ -443,12 +446,45 @@ export const runScanTask = task({
         runVibeLeakDetector(cloneDir),
       ])
 
+      const toggles = getPhaseToggles()
+      const repoUrl = `https://github.com/${repoOwner}/${repoName}`
+      const [osintResult, dastResult] = await Promise.all([
+        toggles.osint
+          ? runOsintChecks({
+              repoOwner,
+              repoName,
+              candidateDomains: inferCandidateDomains(repoOwner, repoName, repoUrl),
+              cloneDir,
+            })
+          : Promise.resolve({
+              issues: [],
+              metadata: { checkedDomains: [], unresolvedDomains: [], suspiciousFindings: 0 },
+            }),
+        toggles.dast
+          ? runDastChecks({
+              cloneDir,
+              framework: detectedFramework,
+              stagingUrl: process.env.SHIPGUARD_DAST_STAGING_URL,
+              authHeader: process.env.SHIPGUARD_DAST_AUTH_HEADER,
+            })
+          : Promise.resolve({
+              issues: [],
+              metadata: { checksExecuted: [], checksFailed: [] },
+            }),
+      ])
+
       // LOC-based huge repo detection
       const loc = parseInt(locCount.trim() || '0', 10)
       if (loc > 20_000) {
         logger.log('huge_repo_detected', { loc, mode: 'light' })
       }
       logger.log('analysis_batch_done', { loc, vibeIssuesFound: vibeIssues.length })
+      logger.log('phased_checks_done', {
+        osintEnabled: toggles.osint,
+        dastEnabled: toggles.dast,
+        osintIssues: osintResult.issues.length,
+        dastIssues: dastResult.issues.length,
+      })
 
       // ── Step 6: File-based checks ──────────────────────────────────────────────
       logger.log('running_file_checks')
@@ -606,6 +642,8 @@ export const runScanTask = task({
         grep_checks:      grepChecks,
         file_checks:      fileChecks,
         vibe_issues:      vibeIssues,
+        osint_issues:     osintResult.issues,
+        dast_issues:      dastResult.issues,
         osv_skipped:      !lockfile,
         osv_skip_reason:  lockfile ? null : 'No lockfile found',
       }
@@ -661,6 +699,7 @@ export const runScanTask = task({
         const issuesToInsert = issues.map(issue => ({
           scan_id:      scanId,
           guard:        issue.guard,
+          category:     issue.category,
           severity:     issue.severity,
           title:        issue.title,
           description:  issue.description,
