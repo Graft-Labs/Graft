@@ -12,6 +12,7 @@ export interface GrepCheckResults {
   console_log_secrets:     string  // console.log(env/key/token/password)
   debug_mode_enabled:      string  // DEBUG=true / debug: true in non-dev config
   window_node_polyfill:    string  // window.Buffer / window.process polyfills
+  predictable_jwt_secrets: string  // common placeholder JWT/session secrets
   // Scalability
   img_tag_not_next_image:  string  // <img> instead of next/image
   images_unoptimized:      string  // images.unoptimized: true in next.config
@@ -404,6 +405,20 @@ function parseGrepChecks(g: GrepCheckResults): EnrichedIssue[] {
     })
   }
 
+  // ── S4.8 predictable JWT/session secrets ───────────────────────────────────────
+  if (g.predictable_jwt_secrets) {
+    const { file, line } = extractFile(g.predictable_jwt_secrets)
+    issues.push({
+      guard: 'security', category: 'authentication', severity: 'critical', confidence: 'confirmed',
+      title: 'Predictable JWT/session secret detected',
+      description: 'A known placeholder secret (`supersecretkey`, `your-secret-key-here`, etc.) appears in source or env files. Attackers can forge valid session/JWT tokens if this value is used in production.',
+      fix_suggestion: 'Replace with a strong random secret (at least 32 bytes), rotate all active tokens/sessions, and move the value to a server-only environment variable.\n\nExample:\n```bash\nopenssl rand -base64 48\n```',
+      code_snippet: firstLine(g.predictable_jwt_secrets),
+      file_path: file,
+      line_number: line,
+    })
+  }
+
   // ── SaaS: JWT stored in localStorage ──────────────────────────────────────────
   if (g.jwt_in_localstorage) {
     const { file, line } = extractFile(g.jwt_in_localstorage)
@@ -661,7 +676,8 @@ function parseFileChecks(fileChecks: ToolOutputs['file_checks']): EnrichedIssue[
     })
   }
 
-  if (fileChecks.not_found_page === 'false' || fileChecks.not_found_page === '0') {
+  const shouldCheckNotFound = framework !== 'nuxt'
+  if (shouldCheckNotFound && (fileChecks.not_found_page === 'false' || fileChecks.not_found_page === '0')) {
     issues.push({
       guard: 'distribution', category: 'ux', severity: 'low', confidence: 'confirmed',
       title: 'Missing custom 404 page',
@@ -804,11 +820,41 @@ export async function analyzeToolOutputs(outputs: ToolOutputs): Promise<Enriched
 function deduplicateIssues(issues: EnrichedIssue[]): EnrichedIssue[] {
   const seen = new Set<string>()
   return issues.filter(issue => {
-    const key = `${issue.title}|${issue.file_path ?? ''}|${issue.line_number ?? ''}`
+    const file = normalizeFilePath(issue.file_path)
+    const line = issue.line_number ?? ''
+    const title = normalizeIssueTitle(issue.title)
+    const category = issue.category ?? ''
+    const key = `${issue.guard}|${category}|${title}|${file}|${line}`
     if (seen.has(key)) return false
     seen.add(key)
     return true
   })
+}
+
+function normalizeFilePath(filePath?: string): string {
+  if (!filePath) return ''
+  return filePath.replace(/^\.\//, '').trim()
+}
+
+function normalizeIssueTitle(title: string): string {
+  const raw = title.toLowerCase().trim()
+
+  if (
+    raw.includes('secret env var exposed') ||
+    raw.includes('secret variable exposed') ||
+    raw.includes('vite_ prefix exposes secrets') ||
+    raw.includes('next_public_ prefix exposes secret')
+  ) {
+    return 'client_exposed_secret_env'
+  }
+
+  if (raw.includes('setinterval') && raw.includes('clearinterval')) {
+    return 'interval_without_cleanup'
+  }
+
+  return raw
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
 }
 
 // ── Score calculator ───────────────────────────────────────────────────────────

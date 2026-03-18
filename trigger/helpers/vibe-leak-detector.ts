@@ -167,6 +167,12 @@ function checkUncleanedTimers(f: FileResult): VibeIssue[] {
   if (!f.content.includes('useEffect')) return []
   if (!f.content.includes('setInterval') && !f.content.includes('setTimeout')) return []
 
+  // Precision-first guardrail: if file has explicit timer cleanup anywhere,
+  // avoid emitting this heuristic warning for the file.
+  if (f.content.includes('clearInterval(') || f.content.includes('clearTimeout(')) {
+    return []
+  }
+
   const issues: VibeIssue[] = []
 
   // Look for useEffect blocks containing setInterval/setTimeout but no clearInterval/clearTimeout/return

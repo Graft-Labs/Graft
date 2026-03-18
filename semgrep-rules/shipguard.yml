@@ -1,0 +1,88 @@
+rules:
+  - id: shipguard.security.predictable-jwt-secret
+    languages: [javascript, typescript, python]
+    severity: ERROR
+    message: "Predictable JWT/session secret detected (common placeholder value)."
+    metadata:
+      guard: security
+      category: authentication
+      confidence: confirmed
+    patterns:
+      - pattern-regex: '(?i)(jwt|session|secret|signing)[^\n=]{0,40}[=:][^\n]{0,80}(supersecretkey|your-secret-key-change-in-production|your-secret-key-here|supersecretjwtkey|secret123|mysecretkey)'
+
+  - id: shipguard.security.vite-secret-env-exposure
+    languages: [javascript, typescript, vue]
+    severity: WARNING
+    message: "Secret-like VITE_ variable is exposed to client bundle via import.meta.env."
+    metadata:
+      guard: security
+      category: secrets
+      confidence: confirmed
+    patterns:
+      - pattern-regex: 'import\.meta\.env\.VITE_(?!PUBLIC_|CLERK_PUBLISHABLE_KEY|SUPABASE_URL|SUPABASE_ANON_KEY|APP_URL)[A-Z0-9_]*(KEY|SECRET|TOKEN|PASSWORD|DATABASE|PRIVATE)'
+
+  - id: shipguard.security.next-public-secret-env-exposure
+    languages: [javascript, typescript]
+    severity: WARNING
+    message: "Secret-like NEXT_PUBLIC_ variable may be exposed in client bundle."
+    metadata:
+      guard: security
+      category: secrets
+      confidence: likely
+    patterns:
+      - pattern-regex: 'NEXT_PUBLIC_(?!POSTHOG_KEY|POSTHOG_HOST|SUPABASE_URL|SUPABASE_ANON_KEY|APP_URL|CLERK_PUBLISHABLE_KEY|FIREBASE_API|GA_ID|GTM_ID)[A-Z0-9_]*(KEY|SECRET|TOKEN|PASSWORD|PRIVATE)'
+
+  - id: shipguard.scalability.setinterval-without-cleanup
+    languages: [javascript, typescript]
+    severity: WARNING
+    message: "setInterval in useEffect without clearInterval cleanup may leak timers."
+    metadata:
+      guard: scalability
+      category: performance
+      confidence: likely
+    patterns:
+      - pattern-inside: |
+          useEffect(($CB, ...$REST) => {
+            ...
+          }, ...)
+      - pattern: |
+          setInterval(...)
+      - pattern-not: |
+          return () => {
+            ...
+            clearInterval(...)
+            ...
+          }
+
+  - id: shipguard.scalability.settimeout-without-cleanup
+    languages: [javascript, typescript]
+    severity: INFO
+    message: "setTimeout in useEffect without clearTimeout cleanup may leak callbacks."
+    metadata:
+      guard: scalability
+      category: performance
+      confidence: likely
+    patterns:
+      - pattern-inside: |
+          useEffect(($CB, ...$REST) => {
+            ...
+          }, ...)
+      - pattern: |
+          setTimeout(...)
+      - pattern-not: |
+          return () => {
+            ...
+            clearTimeout(...)
+            ...
+          }
+
+  - id: shipguard.security.supabase-rls-permit-all
+    languages: [sql]
+    severity: ERROR
+    message: "RLS policy appears to allow unrestricted access (USING true)."
+    metadata:
+      guard: security
+      category: authorization
+      confidence: confirmed
+    patterns:
+      - pattern-regex: '(?is)create\s+policy\s+.+\s+on\s+.+\s+for\s+(select|all).+using\s*\(\s*true\s*\)'

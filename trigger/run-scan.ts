@@ -18,6 +18,22 @@ import { runVibeLeakDetector, type VibeIssue } from './helpers/vibe-leak-detecto
 
 const execAsync = promisify(exec)
 
+const PUBLIC_ENV_ALLOWLIST = [
+  'VITE_CLERK_PUBLISHABLE_KEY',
+  'VITE_SUPABASE_URL',
+  'VITE_SUPABASE_ANON_KEY',
+  'VITE_PUBLIC_',
+  'NEXT_PUBLIC_POSTHOG_KEY',
+  'NEXT_PUBLIC_POSTHOG_HOST',
+  'NEXT_PUBLIC_SUPABASE_URL',
+  'NEXT_PUBLIC_SUPABASE_ANON_KEY',
+  'NEXT_PUBLIC_APP_URL',
+  'NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY',
+  'NEXT_PUBLIC_FIREBASE_API',
+  'NEXT_PUBLIC_GA_ID',
+  'NEXT_PUBLIC_GTM_ID',
+]
+
 export interface ScanTaskPayload {
   scanId: string
   repoOwner: string
@@ -105,6 +121,7 @@ async function runGrepChecks(
   allDeps: Record<string, unknown>,
 ): Promise<GrepCheckResults> {
   const g = async (cmd: string): Promise<string> => runTool(cmd, cloneDir, 30_000)
+  const publicAllowlistRegex = PUBLIC_ENV_ALLOWLIST.join('\\|')
 
   // Determine which directories to grep for frontend source code
   // React/Vite apps use src/, Next.js apps use app/ + components/ + lib/
@@ -128,6 +145,8 @@ async function runGrepChecks(
     debugModeEnabled,
     // S4.6 Node.js globals polyfilled onto window (exposes attack surface)
     windowNodePolyfill,
+    // S4.8 Predictable JWT/session secret values from common AI placeholders
+    predictableJwtSecrets,
     // ── Scalability: Performance checks ────────────────────────────────────────
     // SC2.1 <img> tags instead of next/image
     imgTagNotNextImage,
@@ -135,7 +154,7 @@ async function runGrepChecks(
     imagesUnoptimized,
     // SC3.2 Synchronous file I/O in request handlers
     syncFileIo,
-    // SC3.6 setInterval never cleared
+    // SC3.6 setInterval never cleared (file-level heuristic)
     intervalNotCleared,
     // SC3.3 console.log count in source (for noise metric)
     consoleLogCount,
@@ -151,9 +170,9 @@ async function runGrepChecks(
     viteMetaEnvSecrets,
   ] = await Promise.all([
     // S1.1
-    g(`grep -rn "VITE_.*KEY\\|VITE_.*URL\\|VITE_.*SECRET\\|VITE_.*TOKEN\\|VITE_.*PASSWORD\\|VITE_.*DATABASE" ${allSrcFiles} ${srcDirs} 2>/dev/null | head -20 || true`),
+    g(`grep -rn "VITE_.*KEY\\|VITE_.*URL\\|VITE_.*SECRET\\|VITE_.*TOKEN\\|VITE_.*PASSWORD\\|VITE_.*DATABASE" ${allSrcFiles} ${srcDirs} 2>/dev/null | grep -v "${publicAllowlistRegex}" | head -20 || true`),
     // S1.2
-    g(`grep -rn "NEXT_PUBLIC_.*SECRET\\|NEXT_PUBLIC_.*KEY\\|NEXT_PUBLIC_.*TOKEN\\|NEXT_PUBLIC_.*PASSWORD" ${allSrcFiles} . 2>/dev/null | grep -v "NEXT_PUBLIC_SUPABASE_URL\\|NEXT_PUBLIC_APP_URL\\|NEXT_PUBLIC_FIREBASE_API" | head -20 || true`),
+    g(`grep -rn "NEXT_PUBLIC_.*SECRET\\|NEXT_PUBLIC_.*KEY\\|NEXT_PUBLIC_.*TOKEN\\|NEXT_PUBLIC_.*PASSWORD" ${allSrcFiles} . 2>/dev/null | grep -v "${publicAllowlistRegex}" | head -20 || true`),
     // S1.3 — look for raw API key patterns hardcoded (not in .env files)
     g(`grep -rn "sk-[a-zA-Z0-9]\\{20,\\}\\|sk_live_[a-zA-Z0-9]\\{20,\\}\\|pk_live_[a-zA-Z0-9]\\{20,\\}\\|AIza[a-zA-Z0-9]\\{35\\}\\|ghp_[a-zA-Z0-9]\\{36\\}" ${allSrcFiles} . 2>/dev/null | grep -v "\\.env\\|test\\|spec\\|node_modules" | head -10 || true`),
     // S1.6 — ORM/DB client imported in frontend source (single-quote and double-quote variants)
@@ -164,6 +183,8 @@ async function runGrepChecks(
     g(`grep -rn "DEBUG.*=.*true\\|debug.*=.*true\\|debug: true" --include="*.py" --include="*.ts" --include="*.js" --include="*.env.example" . 2>/dev/null | grep -v "node_modules\\|\\.git\\|test\\|spec\\|webpack\\|vite\\|esbuild\\|sourceMap\\|devtools" | head -10 || true`),
     // S4.6
     g(`grep -rn "window.*Buffer\\|window.*process\\s*=\\|(window as any)\\.Buffer\\|(window as any)\\.process\\|global\\.Buffer\\s*=" ${allSrcFiles} . 2>/dev/null | grep -v "node_modules\\|\\.git" | head -10 || true`),
+    // S4.8 - predictable placeholder secrets
+    g(`grep -rn "supersecretkey\\|your-secret-key-change-in-production\\|your-secret-key-here\\|supersecretjwtkey\\|secret123\\|mysecretkey" --include="*.env" --include="*.ts" --include="*.tsx" --include="*.js" --include="*.jsx" --include="*.py" . 2>/dev/null | grep -v "node_modules\\|\\.git\\|test\\|spec" | head -20 || true`),
     // SC2.1
     g(`grep -rn "<img " --include="*.tsx" --include="*.jsx" . 2>/dev/null | grep -v "node_modules\\|\\.git\\|next/image\\|// " | head -15 || true`),
     // SC2.6
@@ -172,7 +193,7 @@ async function runGrepChecks(
     g(`grep -rn "readFileSync\\|writeFileSync\\|readdirSync\\|statSync" ${allSrcFiles} app/api pages/api 2>/dev/null | grep -v "node_modules\\|\\.git\\|test\\|spec\\|trigger.config" | head -10 || true`),
     // SC3.6 — setInterval with no cleanup. Exclude lines containing clearInterval and files where
     // request.signal / abort-based cleanup is used (Route Handler pattern).
-    g(`grep -rn "setInterval(" ${allSrcFiles} . 2>/dev/null | grep -v "node_modules\\|\\.git\\|clearInterval\\|test\\|spec\\|signal\\|abort" | head -10 || true`),
+    detectIntervalLeakCandidates(cloneDir),
     // SC3.3 — count console.log lines
     g(`grep -rn "console\\.log(" ${allSrcFiles} . 2>/dev/null | grep -v "node_modules\\|\\.git\\|test\\|spec\\|\\.next" | wc -l || echo "0"`),
     // D1.6
@@ -182,7 +203,7 @@ async function runGrepChecks(
     // SaaS: Hardcoded live API keys (sk_live_, pk_live_, whsec_) in source files
     g(`grep -rn "sk_live_[a-zA-Z0-9]\\{20,\\}\\|pk_live_[a-zA-Z0-9]\\{20,\\}\\|rk_live_[a-zA-Z0-9]\\{20,\\}\\|whsec_[a-zA-Z0-9]\\{20,\\}" ${allSrcFiles} . 2>/dev/null | grep -v "\\.env\\|node_modules\\|\\.git\\|test\\|spec" | head -10 || true`),
     // SaaS: import.meta.env.VITE_* secret vars in client bundle
-    g(`grep -rn "import\\.meta\\.env\\.VITE_.*KEY\\|import\\.meta\\.env\\.VITE_.*SECRET\\|import\\.meta\\.env\\.VITE_.*TOKEN\\|import\\.meta\\.env\\.VITE_.*DATABASE" ${allSrcFiles} ${srcDirs} 2>/dev/null | grep -v "node_modules\\|\\.git\\|test\\|spec" | head -10 || true`),
+    g(`grep -rn "import\\.meta\\.env\\.VITE_.*KEY\\|import\\.meta\\.env\\.VITE_.*SECRET\\|import\\.meta\\.env\\.VITE_.*TOKEN\\|import\\.meta\\.env\\.VITE_.*DATABASE" ${allSrcFiles} ${srcDirs} 2>/dev/null | grep -v "${publicAllowlistRegex}" | grep -v "node_modules\\|\\.git\\|test\\|spec" | head -10 || true`),
   ])
 
   // Dep-based checks (no grep needed — already have allDeps)
@@ -221,6 +242,7 @@ async function runGrepChecks(
     console_log_secrets:     consoleLogSecrets,
     debug_mode_enabled:      debugModeEnabled,
     window_node_polyfill:    windowNodePolyfill,
+    predictable_jwt_secrets: predictableJwtSecrets,
     // Scalability
     img_tag_not_next_image:  imgTagNotNextImage,
     images_unoptimized:      imagesUnoptimized,
@@ -244,6 +266,7 @@ async function runGrepChecks(
     vite_secret_env_vars:    !!viteSecretEnvVars,
     client_side_db_import:   !!clientSideDbImport,
     debug_mode_enabled:      !!debugModeEnabled,
+    predictable_jwt_secrets: !!predictableJwtSecrets,
     img_tag_not_next_image:  !!imgTagNotNextImage,
     has_rate_limiting:       hasRateLimiting,
     has_auth_library:        hasAuthLibrary,
@@ -464,11 +487,16 @@ export const runScanTask = task({
         || ''
       const hasOgMeta = rootLayoutContent.includes('og:') || rootLayoutContent.includes('openGraph')
 
+      const nuxtConfigContent = await readFileSafe(join(cloneDir, 'nuxt.config.ts'))
+        || await readFileSafe(join(cloneDir, 'nuxt.config.js'))
+        || ''
+
       // npm hallucination check for top deps
       const topDeps = Object.keys(allDeps).slice(0, 25)
       const hallucinatedPkgs = await checkHallucinatedPackages(topDeps)
 
       // Check for payment providers beyond Stripe
+      const hasStripe       = 'stripe' in allDeps || '@stripe/stripe-js' in allDeps || '@stripe/react-stripe-js' in allDeps
       const hasPaddle       = 'paddle' in allDeps || '@paddle/paddle-node-sdk' in allDeps
       const hasLemonSqueezy = '@lemonsqueezy/lemonsqueezy.js' in allDeps
       const hasRazorpay     = 'razorpay' in allDeps
@@ -478,30 +506,60 @@ export const runScanTask = task({
       const hasNextAuth     = 'next-auth' in allDeps || '@auth/core' in allDeps
       const hasClerk        = '@clerk/nextjs' in allDeps || '@clerk/clerk-react' in allDeps
       const hasSupabaseAuth = '@supabase/supabase-js' in allDeps || '@supabase/auth-helpers-nextjs' in allDeps
+      const hasNuxtAuth     = '@nuxtjs/supabase' in allDeps || '@sidebase/nuxt-auth' in allDeps
+
+      const hasNuxtSitemapModule =
+        '@nuxtjs/sitemap' in allDeps ||
+        'nuxt-simple-sitemap' in allDeps ||
+        nuxtConfigContent.includes('sitemap')
+
+      const hasNuxtRobotsModule =
+        '@nuxtjs/robots' in allDeps ||
+        nuxtConfigContent.includes('robots')
 
       const fileChecks: ToolOutputs['file_checks'] = {
         // Distribution / SEO
         env_example:              String(await check('.env.example')),
         robots_txt:               String(await check('public/robots.txt')),
         sitemap_xml:              String(
-          (await check('public/sitemap.xml')) || (await check('app/sitemap.ts')) || (await check('app/sitemap.js'))
+          (await check('public/sitemap.xml')) ||
+          (await check('app/sitemap.ts')) ||
+          (await check('app/sitemap.js')) ||
+          (await check('pages/sitemap.xml')) ||
+          (await check('pages/sitemap.ts')) ||
+          hasNuxtSitemapModule
         ),
         not_found_page:           String(
-          (await check('app/not-found.tsx')) || (await check('pages/404.tsx'))
+          (await check('app/not-found.tsx')) ||
+          (await check('pages/404.tsx')) ||
+          (await check('pages/404.vue')) ||
+          (await check('error.vue'))
         ),
         pricing_page:             String(
-          (await check('app/pricing/page.tsx')) || (await check('pages/pricing.tsx')) || (await check('pricing.html'))
+          (await check('app/pricing/page.tsx')) ||
+          (await check('pages/pricing.tsx')) ||
+          (await check('pages/pricing.vue')) ||
+          (await check('pages/pricing/index.vue')) ||
+          (await check('pricing.html'))
         ),
         privacy_policy:           String(
-          (await check('app/privacy/page.tsx')) || (await check('pages/privacy.tsx')) || (await check('privacy.html'))
+          (await check('app/privacy/page.tsx')) ||
+          (await check('pages/privacy.tsx')) ||
+          (await check('pages/privacy.vue')) ||
+          (await check('pages/privacy/index.vue')) ||
+          (await check('privacy.html'))
         ),
         terms_of_service:         String(
-          (await check('app/terms/page.tsx')) || (await check('pages/terms.tsx')) || (await check('terms.html'))
+          (await check('app/terms/page.tsx')) ||
+          (await check('pages/terms.tsx')) ||
+          (await check('pages/terms.vue')) ||
+          (await check('pages/terms/index.vue')) ||
+          (await check('terms.html'))
         ),
         manifest_json:            String(await check('public/manifest.json')),
 
         // Analytics + monitoring
-        has_stripe:               String('stripe' in allDeps),
+        has_stripe:               String(hasStripe),
         has_paddle:               String(hasPaddle),
         has_lemonsqueezy:         String(hasLemonSqueezy),
         has_razorpay:             String(hasRazorpay),
@@ -519,7 +577,7 @@ export const runScanTask = task({
         gitignore_covers_env:     String(gitignoreCoversEnv),
 
         // Auth
-        has_auth_library:         String(hasNextAuth || hasClerk || hasSupabaseAuth),
+        has_auth_library:         String(hasNextAuth || hasClerk || hasSupabaseAuth || hasNuxtAuth),
 
         // Scalability
         use_client_count:         String(useClientCount),
@@ -527,6 +585,12 @@ export const runScanTask = task({
 
         // Hallucinated packages
         hallucinated_packages:    hallucinatedPkgs.join(','),
+      }
+
+      if (detectedFramework === 'nuxt') {
+        if (fileChecks.robots_txt === 'false' && hasNuxtRobotsModule) {
+          fileChecks.robots_txt = 'true'
+        }
       }
 
       logger.log('file_checks_done', { useClientCount, hasSecurityHeaders, hasOgMeta, hallucinatedPkgs })
@@ -661,6 +725,63 @@ async function readFileSafe(path: string): Promise<string | null> {
   } catch {
     return null
   }
+}
+
+async function detectIntervalLeakCandidates(cloneDir: string): Promise<string> {
+  const files = await collectSourceFiles(cloneDir)
+  const matches: string[] = []
+
+  for (const file of files) {
+    const content = await readFileSafe(file)
+    if (!content || !content.includes('setInterval(')) continue
+
+    // Heuristic: if file has cleanup anywhere, skip to reduce false positives.
+    // We intentionally trade some recall for much better precision.
+    if (content.includes('clearInterval(')) continue
+
+    const rel = relative(cloneDir, file)
+    const lines = content.split('\n')
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i].includes('setInterval(')) {
+        matches.push(`${rel}:${i + 1}:${lines[i].trim()}`)
+        break
+      }
+    }
+  }
+
+  return matches.slice(0, 10).join('\n')
+}
+
+async function collectSourceFiles(rootDir: string): Promise<string[]> {
+  const out: string[] = []
+  const stack: string[] = [rootDir]
+  const allowedExtensions = new Set(['.ts', '.tsx', '.js', '.jsx'])
+  const skipDirs = new Set([
+    'node_modules', '.git', '.next', '.turbo', 'dist', 'build', 'out',
+    '.vercel', 'coverage', '__pycache__', '.pytest_cache', '.mypy_cache',
+  ])
+
+  while (stack.length > 0) {
+    const current = stack.pop()!
+    let entries
+    try {
+      entries = await readdir(current, { withFileTypes: true })
+    } catch {
+      continue
+    }
+
+    for (const entry of entries) {
+      const fullPath = join(current, entry.name)
+      if (entry.isDirectory()) {
+        if (!skipDirs.has(entry.name)) stack.push(fullPath)
+        continue
+      }
+      if (!entry.isFile()) continue
+      if (allowedExtensions.has(extname(entry.name))) out.push(fullPath)
+    }
+  }
+
+  return out
 }
 
 // Check if packages are likely hallucinated (< 100 downloads/week on npm)
