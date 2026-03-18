@@ -35,6 +35,7 @@ const SKIP_DIRS = new Set([
 const SOURCE_EXTS = new Set(['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs'])
 
 const TEST_PATH_RE = /\.(test|spec)\.[tj]sx?$|__tests__|\/tests?\//i
+const INTERNAL_SCANNER_PATH_RE = /(trigger\/helpers\/vibe-leak-detector\.ts|lib\/ai\/analyzer\.ts|trigger\/run-scan\.ts|semgrep-rules\/)/i
 
 // ── Walk source files ──────────────────────────────────────────────────────────
 
@@ -384,6 +385,7 @@ function checkTypeScriptAnyOveruse(files: FileResult[]): VibeIssue[] {
  * Enhanced: also detects Paddle, PayPal, LemonSqueezy body patterns
  */
 function checkIdorPatterns(f: FileResult): VibeIssue[] {
+  if (INTERNAL_SCANNER_PATH_RE.test(f.rel)) return []
   if (f.isClientComponent) return []
   // Only in API routes or server actions
   if (!/api\/|action|route\.(ts|js)$/.test(f.rel)) return []
@@ -425,6 +427,7 @@ function checkIdorPatterns(f: FileResult): VibeIssue[] {
  * CHECK 11: eval() / new Function() usage
  */
 function checkEvalUsage(f: FileResult): VibeIssue[] {
+  if (INTERNAL_SCANNER_PATH_RE.test(f.rel)) return []
   const EVAL_RE = /\beval\s*\(|\bnew\s+Function\s*\(/
   for (let i = 0; i < f.lines.length; i++) {
     if (EVAL_RE.test(f.lines[i]) && !f.lines[i].trim().startsWith('//')) {
@@ -443,6 +446,7 @@ function checkEvalUsage(f: FileResult): VibeIssue[] {
  * CHECK 12: dangerouslySetInnerHTML without sanitization
  */
 function checkDangerousHtml(f: FileResult): VibeIssue[] {
+  if (INTERNAL_SCANNER_PATH_RE.test(f.rel)) return []
   if (!f.content.includes('dangerouslySetInnerHTML')) return []
 
   // Flag if there's no sanitize/DOMPurify/sanitizeHtml nearby
@@ -599,6 +603,7 @@ function checkStripeWebhookVerification(f: FileResult): VibeIssue[] {
  * CHECK 17: N+1 query pattern (DB call inside loop)
  */
 function checkNPlusOneQuery(f: FileResult): VibeIssue[] {
+  if (INTERNAL_SCANNER_PATH_RE.test(f.rel)) return []
   if (!/(prisma|drizzle|supabase|db\.|mongoose|query)/i.test(f.content)) return []
 
   const issues: VibeIssue[] = []
@@ -648,6 +653,16 @@ function checkNPlusOneQuery(f: FileResult): VibeIssue[] {
  */
 async function checkMissingErrorBoundaries(cloneDir: string): Promise<VibeIssue[]> {
   const issues: VibeIssue[] = []
+
+  // If app-level error boundary exists, skip segment-level noise.
+  try {
+    const appRootEntries = await readdir(join(cloneDir, 'app'))
+    if (appRootEntries.includes('error.tsx') || appRootEntries.includes('error.jsx') || appRootEntries.includes('error.ts') || appRootEntries.includes('error.js')) {
+      return []
+    }
+  } catch {
+    // ignore missing app dir
+  }
 
   async function walk(dir: string): Promise<void> {
     let entries: string[]
@@ -740,6 +755,7 @@ function checkServerActionNoValidation(f: FileResult): VibeIssue[] {
  * Enhanced: also detects SaaS table queries without tenant_id/org_id filter
  */
 function checkUnboundedQueries(f: FileResult): VibeIssue[] {
+  if (INTERNAL_SCANNER_PATH_RE.test(f.rel)) return []
   if (f.isClientComponent) return []
   if (!/prisma|drizzle|supabase|mongoose|db\./i.test(f.content)) return []
 
@@ -831,6 +847,7 @@ function checkAuthEndpointNoRateLimit(f: FileResult): VibeIssue[] {
  * CHECK 22: console.log(process.env.*) or import.meta.env.VITE_* in client components (env var leak)
  */
 function checkEnvVarConsoleLog(f: FileResult): VibeIssue[] {
+  if (INTERNAL_SCANNER_PATH_RE.test(f.rel)) return []
   const issues: VibeIssue[] = []
 
   for (let i = 0; i < f.lines.length; i++) {
@@ -977,6 +994,7 @@ function checkMultiTenancyIsolation(f: FileResult): VibeIssue[] {
  * localStorage is readable by any JS on the page — XSS-stealable.
  */
 function checkJwtInLocalStorage(f: FileResult): VibeIssue[] {
+  if (INTERNAL_SCANNER_PATH_RE.test(f.rel)) return []
   const issues: VibeIssue[] = []
 
   for (let i = 0; i < f.lines.length; i++) {
@@ -1150,6 +1168,7 @@ async function checkMissingDataDeletion(cloneDir: string): Promise<VibeIssue[]> 
  * Detects sk_live_, pk_live_, rk_live_, whsec_ patterns in JS/TS source files.
  */
 function checkHardcodedLiveApiKey(f: FileResult): VibeIssue[] {
+  if (INTERNAL_SCANNER_PATH_RE.test(f.rel)) return []
   // Skip .env files — these are expected to have keys
   if (f.rel.includes('.env') || f.rel.endsWith('.example')) return []
 

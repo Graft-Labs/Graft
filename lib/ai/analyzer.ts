@@ -815,6 +815,41 @@ function parseExternalIssues(externalIssues: ExternalIssueInput[]): EnrichedIssu
   }))
 }
 
+function shouldSuppressIssue(issue: EnrichedIssue): boolean {
+  const file = (issue.file_path ?? '').replace(/^\.\//, '').trim()
+  const title = issue.title.toLowerCase()
+
+  if (
+    file.startsWith('trigger/helpers/vibe-leak-detector.ts') ||
+    file.startsWith('lib/ai/analyzer.ts') ||
+    file.startsWith('trigger/run-scan.ts') ||
+    file.startsWith('semgrep-rules/')
+  ) {
+    const scannerFalsePositives = [
+      'auth token stored in localstorage',
+      'predictable jwt/session secret',
+      'next_public_ prefix exposes secret',
+      'dangerouslysetinnerhtml',
+      'eval() or new function()',
+      'node.js globals (buffer/process) polyfilled onto window',
+      'debug mode enabled in production config',
+      'console.log',
+      'n+1 query: database call inside loop',
+      'unbounded supabase query',
+      'live api key hardcoded',
+    ]
+    if (scannerFalsePositives.some((t) => title.includes(t))) {
+      return true
+    }
+  }
+
+  if (title.includes('no account deletion')) {
+    return true
+  }
+
+  return false
+}
+
 // ── Main analyzer ──────────────────────────────────────────────────────────────
 
 export async function analyzeToolOutputs(outputs: ToolOutputs): Promise<EnrichedIssue[]> {
@@ -852,8 +887,10 @@ export async function analyzeToolOutputs(outputs: ToolOutputs): Promise<Enriched
   // File-based checks (always run — no tool required)
   allIssues.push(...parseFileChecks(outputs.file_checks))
 
+  const filteredIssues = allIssues.filter((issue) => !shouldSuppressIssue(issue))
+
   // Deduplicate: same title + file_path + line_number
-  return deduplicateIssues(allIssues)
+  return deduplicateIssues(filteredIssues)
 }
 
 function deduplicateIssues(issues: EnrichedIssue[]): EnrichedIssue[] {

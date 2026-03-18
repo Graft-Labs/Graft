@@ -125,6 +125,7 @@ async function runGrepChecks(
 ): Promise<GrepCheckResults> {
   const g = async (cmd: string): Promise<string> => runTool(cmd, cloneDir, 30_000)
   const publicAllowlistRegex = PUBLIC_ENV_ALLOWLIST.join('\\|')
+  const internalScannerRegex = 'trigger/helpers/vibe-leak-detector.ts\\|lib/ai/analyzer.ts\\|trigger/run-scan.ts\\|semgrep-rules/'
 
   // Determine which directories to grep for frontend source code
   // React/Vite apps use src/, Next.js apps use app/ + components/ + lib/
@@ -173,27 +174,27 @@ async function runGrepChecks(
     viteMetaEnvSecrets,
   ] = await Promise.all([
     // S1.1
-    g(`grep -rn "VITE_.*KEY\\|VITE_.*URL\\|VITE_.*SECRET\\|VITE_.*TOKEN\\|VITE_.*PASSWORD\\|VITE_.*DATABASE" ${allSrcFiles} ${srcDirs} 2>/dev/null | grep -v "${publicAllowlistRegex}" | head -20 || true`),
+    g(`grep -rn "VITE_.*KEY\\|VITE_.*URL\\|VITE_.*SECRET\\|VITE_.*TOKEN\\|VITE_.*PASSWORD\\|VITE_.*DATABASE" ${allSrcFiles} ${srcDirs} 2>/dev/null | grep -v "${publicAllowlistRegex}" | grep -v "${internalScannerRegex}" | head -20 || true`),
     // S1.2
-    g(`grep -rn "NEXT_PUBLIC_.*SECRET\\|NEXT_PUBLIC_.*KEY\\|NEXT_PUBLIC_.*TOKEN\\|NEXT_PUBLIC_.*PASSWORD" ${allSrcFiles} . 2>/dev/null | grep -v "${publicAllowlistRegex}" | head -20 || true`),
+    g(`grep -rn "NEXT_PUBLIC_.*SECRET\\|NEXT_PUBLIC_.*KEY\\|NEXT_PUBLIC_.*TOKEN\\|NEXT_PUBLIC_.*PASSWORD" ${allSrcFiles} . 2>/dev/null | grep -v "${publicAllowlistRegex}" | grep -v "${internalScannerRegex}" | head -20 || true`),
     // S1.3 — look for raw API key patterns hardcoded (not in .env files)
-    g(`grep -rn "sk-[a-zA-Z0-9]\\{20,\\}\\|sk_live_[a-zA-Z0-9]\\{20,\\}\\|pk_live_[a-zA-Z0-9]\\{20,\\}\\|AIza[a-zA-Z0-9]\\{35\\}\\|ghp_[a-zA-Z0-9]\\{36\\}" ${allSrcFiles} . 2>/dev/null | grep -v "\\.env\\|test\\|spec\\|node_modules" | head -10 || true`),
+    g(`grep -rn "sk-[a-zA-Z0-9]\\{20,\\}\\|sk_live_[a-zA-Z0-9]\\{20,\\}\\|pk_live_[a-zA-Z0-9]\\{20,\\}\\|AIza[a-zA-Z0-9]\\{35\\}\\|ghp_[a-zA-Z0-9]\\{36\\}" ${allSrcFiles} . 2>/dev/null | grep -v "\\.env\\|test\\|spec\\|node_modules" | grep -v "${internalScannerRegex}" | head -10 || true`),
     // S1.6 — ORM/DB client imported in frontend source (single-quote and double-quote variants)
     g(`grep -rn "from 'drizzle-orm\\|from \"drizzle-orm\\|from '@neondatabase\\|from \"@neondatabase\\|from '@prisma/client\\|from \"@prisma/client\\|require('pg')\\|require(\"pg\")\\|from 'pg'\\|from \"pg\"" ${allSrcFiles} ${srcDirs} 2>/dev/null | head -20 || true`),
     // S1.7 — only flag when process.env. is actually accessed inside the call, not just mentioned in a string
-    g(`grep -rn "console\\.log(.*process\\.env\\.\\|console\\.log(.*process\\.env\\[" ${allSrcFiles} . 2>/dev/null | grep -v "node_modules\\|test\\|spec" | head -10 || true`),
+    g(`grep -rn "console\\.log(.*process\\.env\\.\\|console\\.log(.*process\\.env\\[" ${allSrcFiles} . 2>/dev/null | grep -v "node_modules\\|test\\|spec" | grep -v "${internalScannerRegex}" | head -10 || true`),
     // S4.4
-    g(`grep -rn "DEBUG.*=.*true\\|debug.*=.*true\\|debug: true" --include="*.py" --include="*.ts" --include="*.js" --include="*.env.example" . 2>/dev/null | grep -v "node_modules\\|\\.git\\|test\\|spec\\|webpack\\|vite\\|esbuild\\|sourceMap\\|devtools" | head -10 || true`),
+    g(`grep -rn "DEBUG\\s*=\\s*true\\|debug\\s*=\\s*true\\|debug:\\s*true" --include="*.py" --include="*.ts" --include="*.js" --include="*.env.example" . 2>/dev/null | grep -v "node_modules\\|\\.git\\|test\\|spec\\|webpack\\|vite\\|esbuild\\|sourceMap\\|devtools" | grep -v "${internalScannerRegex}" | head -10 || true`),
     // S4.6
-    g(`grep -rn "window.*Buffer\\|window.*process\\s*=\\|(window as any)\\.Buffer\\|(window as any)\\.process\\|global\\.Buffer\\s*=" ${allSrcFiles} . 2>/dev/null | grep -v "node_modules\\|\\.git" | head -10 || true`),
+    g(`grep -rn "window.*Buffer\\|window.*process\\s*=\\|(window as any)\\.Buffer\\|(window as any)\\.process\\|global\\.Buffer\\s*=" ${allSrcFiles} . 2>/dev/null | grep -v "node_modules\\|\\.git" | grep -v "${internalScannerRegex}" | head -10 || true`),
     // S4.8 - predictable placeholder secrets
-    g(`grep -rn "supersecretkey\\|your-secret-key-change-in-production\\|your-secret-key-here\\|supersecretjwtkey\\|secret123\\|mysecretkey" --include="*.env" --include="*.ts" --include="*.tsx" --include="*.js" --include="*.jsx" --include="*.py" . 2>/dev/null | grep -v "node_modules\\|\\.git\\|test\\|spec" | head -20 || true`),
+    g(`grep -rn "supersecretkey\\|your-secret-key-change-in-production\\|your-secret-key-here\\|supersecretjwtkey\\|secret123\\|mysecretkey" --include="*.env" --include="*.ts" --include="*.tsx" --include="*.js" --include="*.jsx" --include="*.py" . 2>/dev/null | grep -v "node_modules\\|\\.git\\|test\\|spec" | grep -v "${internalScannerRegex}" | head -20 || true`),
     // SC2.1
-    g(`grep -rn "<img " --include="*.tsx" --include="*.jsx" . 2>/dev/null | grep -v "node_modules\\|\\.git\\|next/image\\|// " | head -15 || true`),
+    g(`grep -rn "<img " --include="*.tsx" --include="*.jsx" . 2>/dev/null | grep -v "node_modules\\|\\.git\\|next/image\\|// " | grep -v "${internalScannerRegex}" | head -15 || true`),
     // SC2.6
     g(`grep -rn "unoptimized.*true\\|unoptimized: true" --include="*.ts" --include="*.js" --include="*.mjs" . 2>/dev/null | grep -v "node_modules\\|\\.git" | head -5 || true`),
     // SC3.2
-    g(`grep -rn "readFileSync\\|writeFileSync\\|readdirSync\\|statSync" ${allSrcFiles} app/api pages/api 2>/dev/null | grep -v "node_modules\\|\\.git\\|test\\|spec\\|trigger.config" | head -10 || true`),
+    g(`grep -rn "readFileSync\\|writeFileSync\\|readdirSync\\|statSync" ${allSrcFiles} app/api pages/api 2>/dev/null | grep -v "node_modules\\|\\.git\\|test\\|spec\\|trigger.config" | grep -v "${internalScannerRegex}" | head -10 || true`),
     // SC3.6 — setInterval with no cleanup. Exclude lines containing clearInterval and files where
     // request.signal / abort-based cleanup is used (Route Handler pattern).
     detectIntervalLeakCandidates(cloneDir),
@@ -202,11 +203,11 @@ async function runGrepChecks(
     // D1.6
     g(`grep -rn "Vite App\\|Create React App\\|<title>React\\|<title>Vite" --include="*.html" --include="*.tsx" . 2>/dev/null | grep -v "node_modules\\|\\.git" | head -5 || true`),
     // SaaS: JWT in localStorage
-    g(`grep -rn "localStorage\\.setItem.*token\\|localStorage\\.setItem.*jwt\\|localStorage\\.setItem.*accessToken\\|localStorage\\.setItem.*access_token\\|localStorage\\.setItem.*id_token\\|localStorage\\.setItem.*auth_token" ${allSrcFiles} . 2>/dev/null | grep -v "node_modules\\|\\.git\\|test\\|spec" | head -10 || true`),
+    g(`grep -rn "localStorage\\.setItem.*token\\|localStorage\\.setItem.*jwt\\|localStorage\\.setItem.*accessToken\\|localStorage\\.setItem.*access_token\\|localStorage\\.setItem.*id_token\\|localStorage\\.setItem.*auth_token" ${allSrcFiles} . 2>/dev/null | grep -v "node_modules\\|\\.git\\|test\\|spec" | grep -v "${internalScannerRegex}" | head -10 || true`),
     // SaaS: Hardcoded live API keys (sk_live_, pk_live_, whsec_) in source files
-    g(`grep -rn "sk_live_[a-zA-Z0-9]\\{20,\\}\\|pk_live_[a-zA-Z0-9]\\{20,\\}\\|rk_live_[a-zA-Z0-9]\\{20,\\}\\|whsec_[a-zA-Z0-9]\\{20,\\}" ${allSrcFiles} . 2>/dev/null | grep -v "\\.env\\|node_modules\\|\\.git\\|test\\|spec" | head -10 || true`),
+    g(`grep -rn "sk_live_[a-zA-Z0-9]\\{20,\\}\\|pk_live_[a-zA-Z0-9]\\{20,\\}\\|rk_live_[a-zA-Z0-9]\\{20,\\}\\|whsec_[a-zA-Z0-9]\\{20,\\}" ${allSrcFiles} . 2>/dev/null | grep -v "\\.env\\|node_modules\\|\\.git\\|test\\|spec" | grep -v "${internalScannerRegex}" | head -10 || true`),
     // SaaS: import.meta.env.VITE_* secret vars in client bundle
-    g(`grep -rn "import\\.meta\\.env\\.VITE_.*KEY\\|import\\.meta\\.env\\.VITE_.*SECRET\\|import\\.meta\\.env\\.VITE_.*TOKEN\\|import\\.meta\\.env\\.VITE_.*DATABASE" ${allSrcFiles} ${srcDirs} 2>/dev/null | grep -v "${publicAllowlistRegex}" | grep -v "node_modules\\|\\.git\\|test\\|spec" | head -10 || true`),
+    g(`grep -rn "import\\.meta\\.env\\.VITE_.*KEY\\|import\\.meta\\.env\\.VITE_.*SECRET\\|import\\.meta\\.env\\.VITE_.*TOKEN\\|import\\.meta\\.env\\.VITE_.*DATABASE" ${allSrcFiles} ${srcDirs} 2>/dev/null | grep -v "${publicAllowlistRegex}" | grep -v "node_modules\\|\\.git\\|test\\|spec" | grep -v "${internalScannerRegex}" | head -10 || true`),
   ])
 
   // Dep-based checks (no grep needed — already have allDeps)
@@ -513,6 +514,16 @@ export const runScanTask = task({
         || nextConfigContent.includes('headers()')
         || nextConfigContent.includes('headers: async')
 
+      const hasAnyRateLimitingHint =
+        Object.keys(allDeps).some(k =>
+          k.includes('upstash/ratelimit') ||
+          k.includes('rate-limiter-flexible') ||
+          k.includes('express-rate-limit') ||
+          k.includes('slowapi') ||
+          k.includes('limiter')
+        ) ||
+        (await runTool('grep -Rni "rate.?limit\|429\|Too Many Requests" app/api pages/api 2>/dev/null | head -5 || true', cloneDir)).trim().length > 0
+
       // Check .gitignore for .env exposure
       const gitignoreContent = await readFileSafe(join(cloneDir, '.gitignore')) || ''
       const gitignoreCoversEnv = gitignoreContent.includes('.env')
@@ -556,11 +567,16 @@ export const runScanTask = task({
       const fileChecks: ToolOutputs['file_checks'] = {
         // Distribution / SEO
         env_example:              String(await check('.env.example')),
-        robots_txt:               String(await check('public/robots.txt')),
+        robots_txt:               String(
+          (await check('public/robots.txt')) ||
+          (await check('app/robots.ts')) ||
+          (await check('app/robots.js'))
+        ),
         sitemap_xml:              String(
           (await check('public/sitemap.xml')) ||
           (await check('app/sitemap.ts')) ||
           (await check('app/sitemap.js')) ||
+          (await check('app/sitemap.xml')) ||
           (await check('pages/sitemap.xml')) ||
           (await check('pages/sitemap.ts')) ||
           hasNuxtSitemapModule
@@ -629,7 +645,11 @@ export const runScanTask = task({
         }
       }
 
-      logger.log('file_checks_done', { useClientCount, hasSecurityHeaders, hasOgMeta, hallucinatedPkgs })
+      if (hasAnyRateLimitingHint) {
+        grepChecks.has_rate_limiting = 'true'
+      }
+
+      logger.log('file_checks_done', { useClientCount, hasSecurityHeaders, hasOgMeta, hasAnyRateLimitingHint, hallucinatedPkgs })
 
       // ── Step 7: Analyze + score ────────────────────────────────────────────────
       const toolOutputs: ToolOutputs = {

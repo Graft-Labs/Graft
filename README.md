@@ -63,7 +63,7 @@ You can also keep local values in `.env.local` for local development.
 ### 4) Phase toggles
 
 ```bash
-SHIPGUARD_PHASE_OSINT=true
+SHIPGUARD_PHASE_OSINT=false
 SHIPGUARD_PHASE_DAST=true
 SHIPGUARD_PHASE_POLICY_REPLAY=true
 ```

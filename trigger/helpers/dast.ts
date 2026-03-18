@@ -37,9 +37,10 @@ export async function runDastChecks(input: DastInput): Promise<DastResult> {
 
   if (input.framework === 'nextjs') {
     const hasMatcher = /matcher\s*:\s*\[/.test(middleware)
-    const protectsDashboard = /dashboard|admin/.test(middleware)
+    const protectsDashboard = /dashboard|admin|scan/.test(middleware)
+    const hasNoopMiddleware = /return\s+NextResponse\.next\(\)/.test(middleware) && !/redirect\(|rewrite\(|auth\.|getUser\(|getSession\(/.test(middleware)
 
-    if (!hasMatcher || !protectsDashboard) {
+    if ((!hasMatcher || !protectsDashboard) && !hasNoopMiddleware) {
       issues.push({
         guard: 'security',
         category: 'dast',

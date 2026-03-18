@@ -28,8 +28,35 @@ const PLAN_SCANS_LIMITS: Record<string, number> = {
   lifetime: 999999,
 }
 
+type HitWindow = { count: number; resetAt: number }
+const webhookHits = new Map<string, HitWindow>()
+const WEBHOOK_LIMIT_PER_MINUTE = 120
+
+function allowWebhookRequest(ip: string): boolean {
+  const now = Date.now()
+  const current = webhookHits.get(ip)
+
+  if (!current || now > current.resetAt) {
+    webhookHits.set(ip, { count: 1, resetAt: now + 60_000 })
+    return true
+  }
+
+  if (current.count >= WEBHOOK_LIMIT_PER_MINUTE) {
+    return false
+  }
+
+  current.count += 1
+  webhookHits.set(ip, current)
+  return true
+}
+
 export async function POST(req: NextRequest) {
   try {
+    const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
+    if (!allowWebhookRequest(ip)) {
+      return NextResponse.json({ error: 'Too many webhook requests' }, { status: 429 })
+    }
+
     const rawBody = await req.text()
     const signature = req.headers.get('polar-signature')
 
