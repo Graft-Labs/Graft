@@ -127,10 +127,6 @@ export default function NewScanPage() {
   const [frameworkDetected, setFrameworkDetected] = useState(false);
   const [detectingFramework, setDetectingFramework] = useState(false);
 
-  // Manual URL fallback
-  const [manualUrl, setManualUrl] = useState("");
-  const [useManual, setUseManual] = useState(false);
-
   // Scan state
   const [scanning, setScanning] = useState(false);
   const [scanId, setScanId] = useState<string | null>(null);
@@ -268,9 +264,7 @@ export default function NewScanPage() {
   // ── Trigger the scan ──────────────────────────────────────────────────────
 
   const handleScan = async () => {
-    const repoUrl = useManual
-      ? manualUrl.trim()
-      : selectedRepo
+    const repoUrl = selectedRepo
       ? `https://github.com/${selectedRepo.full_name}`
       : "";
 
@@ -283,7 +277,7 @@ export default function NewScanPage() {
     setSteps([]);
 
     posthog.capture("scan_run_clicked", {
-      mode: useManual ? "manual_url" : "repo_picker",
+      mode: "repo_picker",
       framework,
       branch: selectedBranch,
     });
@@ -334,7 +328,7 @@ export default function NewScanPage() {
     r.name.toLowerCase().includes(repoSearch.toLowerCase()) ||
     (r.description ?? "").toLowerCase().includes(repoSearch.toLowerCase())
   );
-  const canScan = useManual ? !!manualUrl.trim() : !!selectedRepo;
+  const canScan = !!selectedRepo;
 
   // ─── GitHub banner ────────────────────────────────────────────────────────
 
@@ -379,9 +373,7 @@ export default function NewScanPage() {
   // ─── Scanning view ────────────────────────────────────────────────────────
 
   if (scanning) {
-    const displayRepo = useManual
-      ? manualUrl
-      : selectedRepo?.full_name ?? "your-app";
+    const displayRepo = selectedRepo?.full_name ?? "your-app";
 
     const activeStepLabel = steps.find(s => s.status === "active")?.label
       ?? steps.find(s => s.key === currentStep)?.label
@@ -483,55 +475,25 @@ export default function NewScanPage() {
               </p>
             </div>
 
-            {/* ── Repo picker / manual toggle ─────────────────────────────────── */}
+            {/* ── Repository picker (GitHub required) ─────────────────────────── */}
             <div className="mb-5">
               <div className="flex items-center gap-2 mb-3">
                 <p className="text-xs font-semibold uppercase tracking-widest"
                   style={{ color: "var(--text-tertiary)", fontFamily: "var(--font-label)" }}>
                   Repository
                 </p>
-                <div className="flex-1" />
-                <button onClick={() => setUseManual(!useManual)}
-                  className="text-xs px-2.5 py-1 rounded-lg transition-colors"
-                  style={{
-                    background: useManual ? "var(--surface-3)" : "transparent",
-                    color: useManual ? "var(--text-primary)" : "var(--text-tertiary)",
-                    border: `1px solid ${useManual ? "var(--border-hover)" : "transparent"}`,
-                    fontFamily: "var(--font-label)",
-                  }}>
-                  {useManual ? "Use picker" : "Enter URL manually"}
-                </button>
               </div>
 
-              {useManual ? (
-                /* Manual URL input */
-                <div className="flex items-center gap-3 px-4 py-3.5 rounded-xl"
-                  style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}>
-                  <Github size={16} style={{ color: "var(--text-tertiary)", flexShrink: 0 }} />
-                  <input
-                    type="url"
-                    value={manualUrl}
-                    onChange={e => setManualUrl(e.target.value)}
-                    placeholder="https://github.com/username/repository"
-                    className="flex-1 bg-transparent outline-none text-sm"
-                    style={{ color: "var(--text-primary)", fontFamily: "var(--font-label)" }}
-                  />
-                  {manualUrl && (
-                    <button onClick={() => setManualUrl("")}>
-                      <X size={14} style={{ color: "var(--text-tertiary)" }} />
-                    </button>
-                  )}
-                </div>
-              ) : githubConnected === false ? (
+              {githubConnected === false ? (
                 /* Not connected */
                 <div className="p-5 rounded-xl text-center"
                   style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}>
                   <Github size={24} className="mx-auto mb-3" style={{ color: "var(--text-tertiary)" }} />
                   <p style={{ fontSize: "14px", color: "var(--text-primary)", fontFamily: "var(--font-label)", marginBottom: 4 }}>
-                    Connect GitHub to browse your repositories
+                    Connect GitHub to run scans
                   </p>
                   <p style={{ fontSize: "12px", color: "var(--text-tertiary)", fontFamily: "var(--font-label)", marginBottom: 16 }}>
-                    Or use "Enter URL manually" above for public repos
+                    ShipGuard requires GitHub connection and repository selection before scanning.
                   </p>
                   <Link href="/dashboard/settings"
                     className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium"

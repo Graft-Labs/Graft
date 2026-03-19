@@ -24,8 +24,9 @@ const navItems = [
 export default function DashboardSidebar() {
   const pathname = usePathname();
   const router = useRouter();
-  const [user, setUser] = useState<any>(null);
-  const [userData, setUserData] = useState<{ plan: string; scans_used: number; scans_limit: number } | null>(null);
+  const [user, setUser] = useState<{ email?: string | null; user_metadata?: { full_name?: string; name?: string; avatar_url?: string } } | null>(null);
+  const [userData, setUserData] = useState<{ plan: string; scans_used: number; scans_limit: number; name?: string | null; email?: string | null; avatar_url?: string | null } | null>(null);
+  const [loadingUser, setLoadingUser] = useState(true);
 
   // Fetch user on load
   useEffect(() => {
@@ -37,11 +38,13 @@ export default function DashboardSidebar() {
       if (user) {
         const { data } = await supabase
           .from('users')
-          .select('plan, scans_used, scans_limit')
+          .select('plan, scans_used, scans_limit, name, email, avatar_url')
           .eq('id', user.id)
           .single();
         setUserData(data);
       }
+
+      setLoadingUser(false);
     }
     fetchUser();
   }, []);
@@ -54,9 +57,9 @@ export default function DashboardSidebar() {
   };
 
   // Get user info from GitHub metadata or email
-  const userEmail = user?.email || "user@example.com";
-  const userName = user?.user_metadata?.full_name || user?.user_metadata?.name || userEmail.split("@")[0];
-  const avatarUrl = user?.user_metadata?.avatar_url;
+  const userEmail = userData?.email || user?.email || "";
+  const userName = userData?.name || user?.user_metadata?.full_name || user?.user_metadata?.name || (userEmail ? userEmail.split("@")[0] : "");
+  const avatarUrl = userData?.avatar_url || user?.user_metadata?.avatar_url || null;
 
   // Plan display
   const plan = userData?.plan || 'free';
@@ -183,10 +186,12 @@ export default function DashboardSidebar() {
 
         {/* User */}
         <div className="flex items-center gap-3 px-3 py-2">
-          {avatarUrl ? (
+          {loadingUser ? (
+            <div className="w-7 h-7 rounded-full flex-shrink-0" style={{ background: "var(--obsidian-4)" }} />
+          ) : avatarUrl ? (
             <img
               src={avatarUrl}
-              alt={userName}
+              alt={userName || "User avatar"}
               className="w-7 h-7 rounded-full flex-shrink-0"
             />
           ) : (
@@ -194,7 +199,7 @@ export default function DashboardSidebar() {
               className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold flex-shrink-0"
               style={{ background: "var(--obsidian-4)", color: "var(--primary)", fontFamily: "var(--font-ui)" }}
             >
-              {userName.charAt(0).toUpperCase()}
+              {(userName || "U").charAt(0).toUpperCase()}
             </div>
           )}
           <div className="flex-1 min-w-0">
@@ -202,13 +207,13 @@ export default function DashboardSidebar() {
               className="text-xs font-medium truncate"
               style={{ color: "var(--text-primary)", fontFamily: "var(--font-label)" }}
             >
-              {userName}
+              {loadingUser ? "Loading..." : userName || "Account"}
             </p>
             <p
               className="text-xs truncate"
               style={{ color: "var(--text-tertiary)", fontFamily: "var(--font-label)" }}
             >
-              {userEmail}
+              {loadingUser ? "" : userEmail}
             </p>
           </div>
           <button

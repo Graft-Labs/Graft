@@ -449,7 +449,7 @@ export default function DashboardPage() {
                   className="text-sm mb-4"
                   style={{ color: "var(--text-secondary)", fontFamily: "var(--font-label)" }}
                 >
-                  Paste any GitHub URL and get a full production-readiness report
+                  Connect GitHub and select a repository to get a full production-readiness report
                 </p>
                 <Link
                   href="/scan/new"

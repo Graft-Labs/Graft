@@ -84,15 +84,23 @@ export async function POST(request: NextRequest) {
       githubToken = userRow?.github_token ?? null
     }
 
-    const repoCheckRes = await fetch(
-      `https://api.github.com/repos/${repoOwner}/${repoName}`,
-      {
-        headers: {
-          Accept: 'application/vnd.github+json',
-          ...(githubToken ? { Authorization: `Bearer ${githubToken}` } : {}),
+    if (!githubToken) {
+      logScan('github_required', { traceId, userId: user.id })
+      return NextResponse.json(
+        {
+          error: 'github_not_connected',
+          message: 'GitHub connection is required to start a scan. Connect GitHub in Settings.',
         },
-      }
-    )
+        { status: 400 }
+      )
+    }
+
+    const repoCheckRes = await fetch(`https://api.github.com/repos/${repoOwner}/${repoName}`, {
+      headers: {
+        Accept: 'application/vnd.github+json',
+        Authorization: `Bearer ${githubToken}`,
+      },
+    })
 
     if (repoCheckRes.ok) {
       const repoData = await repoCheckRes.json()
@@ -104,21 +112,6 @@ export async function POST(request: NextRequest) {
     // If GitHub API is unreachable, default isPrivate=false and let the scan proceed
 
     logScan('repo_parsed', { traceId, repoOwner, repoName, isPrivate })
-
-    if (isPrivate && !githubToken) {
-      logScan('private_repo_without_token', { traceId })
-      await captureServerEvent(user.id, 'scan_private_repo_without_github', {
-        traceId,
-        repo: repoUrl,
-      })
-      return NextResponse.json(
-        {
-          error: 'github_not_connected',
-          message: 'Private repos require GitHub connection. Please connect your GitHub account in Settings.',
-        },
-        { status: 400 }
-      )
-    }
 
     // ── Rate limiting ────────────────────────────────────────────────────────
     // First, auto-expire any pending/scanning rows older than 15 minutes —
@@ -157,7 +150,7 @@ export async function POST(request: NextRequest) {
     // Get user's plan and scan limits
     const { data: userData } = await supabase
       .from('users')
-      .select('plan, scans_used, scans_limit')
+      .select('name, email, avatar_url, plan, scans_used, scans_limit')
       .eq('id', user.id)
       .single()
 
@@ -188,19 +181,16 @@ export async function POST(request: NextRequest) {
 
     // ─────────────────────────────────────────────────────────────────────────
 
-    const userName =
-      (user.user_metadata?.full_name as string | undefined) ||
-      (user.user_metadata?.name as string | undefined) ||
-      null
-    const userAvatar =
-      (user.user_metadata?.avatar_url as string | undefined) || null
+    const userName = userData?.name ?? null
+    const userAvatar = userData?.avatar_url ?? null
+    const userEmail = userData?.email ?? user.email
 
     const { error: userUpsertError } = await supabase
       .from('users')
       .upsert(
         {
           id: user.id,
-          email: user.email,
+          email: userEmail,
           name: userName,
           avatar_url: userAvatar,
           plan: plan,

@@ -40,6 +40,7 @@ interface UserData {
   email: string;
   name: string;
   avatar_url?: string | null;
+  github_token?: string | null;
   plan: string;
   scans_used: number;
   scans_limit: number;
@@ -89,14 +90,15 @@ export default function SettingsPage() {
 
       const { data: userRecord } = await supabase
         .from("users")
-        .select("plan, scans_used, scans_limit")
+        .select("name, email, avatar_url, github_token, plan, scans_used, scans_limit")
         .eq("id", user.id)
         .single();
 
       const userData: UserData = {
-        email: user.email || "",
-        name: user.user_metadata?.full_name || user.user_metadata?.name || "",
-        avatar_url: user.user_metadata?.avatar_url || null,
+        email: userRecord?.email || user.email || "",
+        name: userRecord?.name || user.user_metadata?.full_name || user.user_metadata?.name || "",
+        avatar_url: userRecord?.avatar_url || user.user_metadata?.avatar_url || null,
+        github_token: userRecord?.github_token || null,
         plan: userRecord?.plan || "free",
         scans_used: userRecord?.scans_used || 0,
         scans_limit: userRecord?.scans_limit || 3,
@@ -132,11 +134,14 @@ export default function SettingsPage() {
         return;
       }
 
-      const identities = user.identities || [];
-      const githubIdentity = identities.find(
-        (id: { provider: string }) => id.provider === "github"
-      );
-      setGithubConnected(!!githubIdentity);
+      const { data: userRecord } = await supabase
+        .from("users")
+        .select("github_token")
+        .eq("id", user.id)
+        .single();
+
+      const hasGithubIdentity = (user.identities || []).some((id: { provider: string }) => id.provider === "github");
+      setGithubConnected(Boolean(userRecord?.github_token) && hasGithubIdentity);
     } catch (error) {
       console.error("Error checking GitHub status:", error);
       setGithubConnected(false);
@@ -145,6 +150,16 @@ export default function SettingsPage() {
   }, [supabase]);
 
   const handleGithubConnect = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    const current = userData?.avatar_url || user?.user_metadata?.avatar_url || null;
+
+    if (user?.id && current) {
+      await supabase
+        .from("users")
+        .update({ avatar_url: current })
+        .eq("id", user.id);
+    }
+
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "github",
       options: {
@@ -172,10 +187,36 @@ export default function SettingsPage() {
         return;
       }
 
+      await supabase
+        .from("users")
+        .update({ name: profileForm.name })
+        .eq("id", user.id);
+
+      setUserData((prev) => (prev ? { ...prev, name: profileForm.name } : prev));
+
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch (error) {
       console.error("Error saving profile:", error);
+    }
+  };
+
+  const handleGithubDisconnect = async () => {
+    setLoadingGithub(true);
+    try {
+      const res = await fetch("/api/github/disconnect", { method: "POST" });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        console.error("GitHub disconnect failed:", data?.message || "Unknown error");
+        return;
+      }
+
+      setGithubConnected(false);
+      setUserData((prev) => (prev ? { ...prev, github_token: null } : prev));
+    } catch (error) {
+      console.error("Error disconnecting GitHub:", error);
+    } finally {
+      setLoadingGithub(false);
     }
   };
 
@@ -437,14 +478,22 @@ export default function SettingsPage() {
                             Checking...
                           </div>
                         ) : githubConnected ? (
-                          <button
-                            onClick={handleGithubConnect}
-                            className="px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2"
-                            style={{ background: "var(--guard-monetize-glow)", color: "var(--guard-monetize)", border: "1px solid rgba(64,200,122,0.3)", fontFamily: "var(--font-label)" }}
-                          >
-                            <CheckCircle size={14} />
-                            Connected
-                          </button>
+                          <div className="flex items-center gap-2">
+                            <div
+                              className="px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2"
+                              style={{ background: "var(--guard-monetize-glow)", color: "var(--guard-monetize)", border: "1px solid rgba(64,200,122,0.3)", fontFamily: "var(--font-label)" }}
+                            >
+                              <CheckCircle size={14} />
+                              Connected
+                            </div>
+                            <button
+                              onClick={handleGithubDisconnect}
+                              className="px-4 py-2 rounded-lg text-sm font-medium transition-all"
+                              style={{ background: "rgba(232,64,64,0.1)", color: "var(--sev-critical)", border: "1px solid rgba(232,64,64,0.3)", fontFamily: "var(--font-label)" }}
+                            >
+                              Disconnect
+                            </button>
+                          </div>
                         ) : (
                           <button
                             onClick={handleGithubConnect}
@@ -455,19 +504,11 @@ export default function SettingsPage() {
                           </button>
                         )}
                       </div>
-                      {!githubConnected && (
-                        <div className="p-4 rounded-xl" style={{ background: "var(--obsidian-1)", border: "1px solid var(--border)" }}>
-                          <p style={{ fontSize: "13px", color: "var(--text-secondary)", fontFamily: "var(--font-label)" }}>
-                            <strong style={{ color: "var(--text-primary)" }}>Why connect GitHub?</strong>
-                            <br />
-                            • Scan private repositories
-                            <br />
-                            • Access repository metadata
-                            <br />
-                            • Enable auto-fix via GitHub PRs (coming soon)
-                          </p>
-                        </div>
-                      )}
+                      <div className="p-4 rounded-xl" style={{ background: "var(--obsidian-1)", border: "1px solid var(--border)" }}>
+                        <p style={{ fontSize: "13px", color: "var(--text-secondary)", fontFamily: "var(--font-label)" }}>
+                          GitHub is mandatory for scans. Connect a GitHub account to create and run repository scans.
+                        </p>
+                      </div>
                     </div>
                   </div>
                 )}
