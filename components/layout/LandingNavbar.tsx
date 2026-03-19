@@ -8,7 +8,7 @@ import Image from "next/image";
 
 const navLinks = [
   { href: "/", label: "Home" },
-  { href: "/pricing", label: "Pricing" },
+  { href: "#pricing", label: "Pricing" },
 ];
 
 export default function LandingNavbar() {
@@ -25,16 +25,19 @@ export default function LandingNavbar() {
   return (
     <header
       className={cn(
-        "fixed top-4 left-1/2 -translate-x-1/2 z-50 transition-all duration-300 w-[95%] max-w-5xl rounded-2xl",
+        "fixed top-4 left-1/2 -translate-x-1/2 z-50 transition-all duration-300 w-[95%] max-w-5xl rounded-full",
         scrolled
           ? "bg-white/80 backdrop-blur-xl border border-gray-200 shadow-sm"
           : "bg-transparent border border-transparent"
       )}
     >
       <div className="px-6 h-16 flex items-center justify-between">
-        {/* Logo */}
+        {/* Logo and Name */}
         <Link href="/" className="flex items-center gap-3 group">
-          <Image src="/ShipGuard.svg" alt="ShipGuard AI" width={140} height={32} className="h-8 w-auto" />
+          <Image src="/ShipGuard.svg" alt="ShipGuard AI" width={32} height={32} className="h-8 w-auto" />
+          <span className="font-bold text-lg tracking-tight text-gray-900" style={{ fontFamily: "var(--font-landing-heading)" }}>
+            ShipGuard AI
+          </span>
         </Link>
 
         {/* Desktop Nav */}
@@ -45,9 +48,9 @@ export default function LandingNavbar() {
               href={link.href}
               className={cn(
                 "text-sm transition-colors duration-150 font-medium",
-                pathname === link.href
-                  ? "text-[#0000EE]"
-                  : "text-gray-600 hover:text-gray-900"
+                pathname === link.href && link.href !== "#pricing"
+                  ? "text-[#000000]"
+                  : "text-gray-500 hover:text-gray-900"
               )}
               style={{ fontFamily: "var(--font-landing-body)" }}
             >
@@ -56,20 +59,13 @@ export default function LandingNavbar() {
           ))}
         </nav>
 
-        {/* CTA */}
+        {/* CTA - Only Sign In */}
         <div className="hidden md:flex items-center gap-3">
           <Link
             href="/auth/login"
-            className="text-sm px-4 py-2 font-medium text-gray-600 hover:text-gray-900 transition-colors duration-150"
-            style={{ fontFamily: "var(--font-landing-body)" }}
+            className="landing-btn-secondary px-6 py-2.5 text-sm"
           >
             Sign in
-          </Link>
-          <Link
-            href="/auth/signup"
-            className="landing-btn-primary px-5 py-2.5 text-sm"
-          >
-            Start Free Scan
           </Link>
         </div>
 
@@ -101,7 +97,7 @@ export default function LandingNavbar() {
               onClick={() => setMobileOpen(false)}
               className={cn(
                 "text-sm font-medium",
-                pathname === link.href ? "text-[#0000EE]" : "text-gray-600"
+                pathname === link.href ? "text-[#000000]" : "text-gray-600"
               )}
               style={{ fontFamily: "var(--font-landing-body)" }}
             >
@@ -112,17 +108,9 @@ export default function LandingNavbar() {
             <Link
               href="/auth/login"
               onClick={() => setMobileOpen(false)}
-              className="text-sm text-center py-2 font-medium text-gray-600"
-              style={{ fontFamily: "var(--font-landing-body)" }}
+              className="landing-btn-secondary w-full py-3 text-sm"
             >
               Sign in
-            </Link>
-            <Link
-              href="/auth/signup"
-              onClick={() => setMobileOpen(false)}
-              className="landing-btn-primary w-full py-3 text-sm"
-            >
-              Start Free Scan
             </Link>
           </div>
         </div>

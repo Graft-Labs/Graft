@@ -36,7 +36,7 @@ export default function PrivacyPage() {
   const updated = "March 18, 2026";
 
   return (
-    <div className="min-h-screen" style={{ background: "var(--obsidian)" }}>
+    <div className="min-h-screen" style={{ background: "var(--landing-bg)" }}>
       <div className="noise-overlay" />
       <Navbar />
 
@@ -45,13 +45,13 @@ export default function PrivacyPage() {
           <div
             className="rounded-2xl p-8 md:p-10 mb-8"
             style={{
-              background: "var(--surface-2)",
-              border: "1px solid var(--border)",
+              background: "#FFFFFF",
+              border: "1px solid var(--landing-border)",
             }}
           >
             <p
               className="text-xs font-semibold uppercase tracking-widest mb-4"
-              style={{ color: "var(--accent)", fontFamily: "var(--font-label)" }}
+              style={{ color: "var(--landing-primary)", fontFamily: "var(--font-label)" }}
             >
               Legal
             </p>
@@ -63,7 +63,7 @@ export default function PrivacyPage() {
             </h1>
             <p
               className="text-sm"
-              style={{ color: "var(--text-tertiary)", fontFamily: "var(--font-label)" }}
+              style={{ color: "var(--landing-text-secondary)", fontFamily: "var(--font-label)" }}
             >
               Last updated: {updated}
             </p>
@@ -75,20 +75,20 @@ export default function PrivacyPage() {
                 key={section.title}
                 className="rounded-xl p-6"
                 style={{
-                  background: "var(--surface-2)",
-                  border: "1px solid var(--border)",
+                  background: "#FFFFFF",
+                  border: "1px solid var(--landing-border)",
                 }}
               >
                 <h2
                   className="text-lg mb-2"
-                  style={{ fontFamily: "var(--font-ui)", color: "var(--text-primary)" }}
+                  style={{ fontFamily: "var(--font-ui)", color: "var(--landing-text)" }}
                 >
                   {section.title}
                 </h2>
                 <p
                   style={{
                     fontFamily: "var(--font-label)",
-                    color: "var(--text-secondary)",
+                    color: "var(--landing-text-secondary)",
                     fontSize: "14px",
                     lineHeight: "1.7",
                   }}

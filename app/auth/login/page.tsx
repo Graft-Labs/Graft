@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { Github, Mail, Eye, EyeOff, ArrowRight, Shield } from "lucide-react";
+import { Github, Mail, Eye, EyeOff, ArrowRight, Shield, CheckCircle, AlertTriangle, Lock } from "lucide-react";
 import { createClient } from "@/lib/supabase";
+import Image from "next/image";
 
 function GoogleIcon() {
   return (
@@ -32,29 +33,23 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // This function handles the form submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError("");
 
-    // Create Supabase client (this connects to your database)
     const supabase = createClient();
-
-    // Try to sign in with email and password
     const { data, error: signInError } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
 
-    // If there's an error, show it to the user
     if (signInError) {
       setError(signInError.message);
       setLoading(false);
       return;
     }
 
-    // If successful, redirect to dashboard
     if (data.user) {
       router.push("/dashboard");
     } else {
@@ -63,379 +58,183 @@ export default function LoginPage() {
   };
 
   return (
-    <div
-      className="min-h-screen flex"
-      style={{ background: "var(--obsidian)" }}
-    >
+    <div className="min-h-screen flex bg-white font-sans text-gray-900 selection:bg-[#3079FF]/20">
+      
       {/* Left panel — decorative */}
-      <div
-        className="hidden lg:flex flex-col justify-between w-1/2 p-16 relative overflow-hidden"
-        style={{
-          background: "var(--obsidian-1)",
-          borderRight: "1px solid var(--border)",
-        }}
-      >
-        {/* Grid background */}
-        <div className="absolute inset-0 grid-pattern opacity-30" />
-
-        {/* Amber glow */}
-        <div
-          className="absolute bottom-0 left-0 w-[500px] h-[400px] pointer-events-none"
-          style={{
-            background:
-              "radial-gradient(ellipse at bottom left, rgba(232,160,32,0.12) 0%, transparent 70%)",
-          }}
-        />
+      <div className="hidden lg:flex flex-col justify-between w-1/2 p-16 relative overflow-hidden bg-[#FAFAFA] border-r border-gray-100">
+        
+        {/* Subtle Background Elements */}
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,rgba(48,121,255,0.05)_0%,transparent_70%)] pointer-events-none" />
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,#f0f0f0_1px,transparent_1px),linear-gradient(to_bottom,#f0f0f0_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_80%_80%_at_50%_50%,#000_20%,transparent_100%)] opacity-30 pointer-events-none" />
 
         {/* Logo */}
-        <div className="relative flex items-center gap-3">
-          <div
-            className="w-9 h-9 rounded-lg flex items-center justify-center"
-            style={{
-              background: "var(--accent)",
-              fontFamily: "var(--font-ui)",
-              fontSize: "18px",
-              color: "var(--obsidian)",
-              fontWeight: 700,
-            }}
-          >
-            SG
-          </div>
-          <span
-            style={{
-              fontFamily: "var(--font-ui)",
-              fontWeight: 600,
-              letterSpacing: "-0.02em",
-            }}
-          >
-            ShipGuard <span style={{ color: "var(--accent)" }}>AI</span>
+        <Link href="/" className="relative flex items-center gap-3 w-fit z-10 group">
+          <Image src="/ShipGuard.svg" alt="ShipGuard AI" width={32} height={32} className="h-8 w-auto group-hover:scale-105 transition-transform" />
+          <span className="font-bold text-lg tracking-tight text-gray-900" style={{ fontFamily: "var(--font-landing-heading)" }}>
+            ShipGuard AI
           </span>
-        </div>
+        </Link>
 
         {/* Center copy */}
-        <div className="relative">
-          <p
-            className="text-xs font-semibold uppercase tracking-widest mb-4"
-            style={{ color: "var(--accent)", fontFamily: "var(--font-label)" }}
-          >
+        <div className="relative z-10 max-w-lg mt-12">
+          <p className="text-xs font-semibold uppercase tracking-widest mb-4 text-[#3079FF]">
             Production readiness
           </p>
-          <h2
-            className="text-4xl leading-tight mb-6"
-            style={{ fontFamily: "var(--font-ui)" }}
-          >
-            Know before you ship.
-            <br />
+          <h2 className="text-4xl md:text-5xl font-bold tracking-tight text-gray-900 mb-6 leading-[1.1]" style={{ fontFamily: "var(--font-landing-heading)" }}>
+            Know before you <span className="font-garamond italic font-normal">ship</span>.<br/>
             Fix before they find out.
           </h2>
 
-          {/* Mini guard score cards */}
-          <div className="flex flex-col gap-3 max-w-sm">
-            {[
-              {
-                label: "Security Guard",
-                score: 34,
-                color: "var(--guard-security)",
-              },
-              {
-                label: "Monetization Guard",
-                score: 28,
-                color: "var(--guard-monetize)",
-              },
-              {
-                label: "Distribution Guard",
-                score: 52,
-                color: "var(--guard-distrib)",
-              },
-            ].map((g) => (
-              <div
-                key={g.label}
-                className="flex items-center gap-4 p-3 rounded-lg"
-                style={{
-                  background: "var(--surface-3)",
-                  border: "1px solid var(--border)",
-                }}
-              >
-                <Shield size={14} style={{ color: g.color }} />
-                <span
-                  style={{
-                    flex: 1,
-                    fontSize: "13px",
-                    color: "var(--text-secondary)",
-                    fontFamily: "var(--font-label)",
-                  }}
-                >
-                  {g.label}
-                </span>
-                <div className="flex items-center gap-2">
-                  <div
-                    className="w-24 h-1.5 rounded-full"
-                    style={{ background: "var(--obsidian-5)" }}
-                  >
-                    <div
-                      style={{
-                        width: `${g.score}%`,
-                        height: "100%",
-                        background: g.color,
-                        borderRadius: "9999px",
-                      }}
-                    />
-                  </div>
-                  <span
-                    style={{
-                      fontSize: "12px",
-                      color: g.color,
-                      fontFamily: "var(--font-ui)",
-                      fontWeight: 600,
-                      width: 24,
-                      textAlign: "right",
-                    }}
-                  >
-                    {g.score}
-                  </span>
+          <p className="text-lg text-gray-600 mb-12 font-light leading-relaxed">
+            Secure your AI-generated React and Next.js applications automatically. Prevent leaks and performance bottlenecks instantly.
+          </p>
+
+          {/* Mini feature tags */}
+          <div className="flex flex-wrap gap-3">
+             {['Automated Scans', 'Deep Architectural Context', 'GitHub Integration', 'Instant Fixes'].map((feature, i) => (
+                <div key={i} className="flex items-center gap-2 px-4 py-2 rounded-full border border-gray-200 bg-white/60 backdrop-blur-sm text-sm font-medium text-gray-700 shadow-sm">
+                  <CheckCircle className="w-4 h-4 text-[#3079FF]" />
+                  {feature}
                 </div>
-              </div>
-            ))}
+             ))}
           </div>
         </div>
 
         {/* Bottom quote */}
-        <div className="relative">
-          <p
-            className="text-sm italic"
-            style={{
-              color: "var(--text-tertiary)",
-              fontFamily: "var(--font-ui)",
-            }}
-          >
-            &ldquo;ShipGuard found an exposed Stripe key and 3 CVEs I
-            didn&apos;t know about. Fixed everything in a day.&rdquo;
+        <div className="relative z-10 mt-12 p-6 rounded-2xl bg-white border border-gray-100 shadow-sm">
+          <p className="text-sm text-gray-700 leading-relaxed italic mb-3 font-garamond text-lg">
+            &ldquo;ShipGuard found an exposed Supabase key in my API route right before I deployed. Saved me a massive headache.&rdquo;
           </p>
-          <p
-            className="text-xs mt-1"
-            style={{
-              color: "var(--text-tertiary)",
-              fontFamily: "var(--font-label)",
-            }}
-          >
-            — Priya S., indie hacker
-          </p>
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-sm">P</div>
+            <p className="text-sm font-medium text-gray-900">
+              Priya S. <span className="text-gray-500 font-normal">Indie Hacker</span>
+            </p>
+          </div>
         </div>
       </div>
 
       {/* Right panel — form */}
-      <div className="flex-1 flex items-center justify-center p-8">
-        <div className="w-full max-w-sm">
+      <div className="flex-1 flex items-center justify-center p-8 bg-white relative z-10">
+        <div className="w-full max-w-[380px]">
+          
           {/* Mobile logo */}
-          <div className="flex items-center gap-3 mb-10 lg:hidden">
-            <div
-              className="w-8 h-8 rounded flex items-center justify-center text-xs font-bold"
-              style={{
-                background: "var(--accent)",
-                color: "var(--obsidian)",
-                fontFamily: "var(--font-ui)",
-                fontSize: "16px",
-              }}
-            >
-              SG
-            </div>
-            <span
-              style={{
-                fontFamily: "var(--font-ui)",
-                fontWeight: 600,
-                letterSpacing: "-0.02em",
-              }}
-            >
-              ShipGuard <span style={{ color: "var(--accent)" }}>AI</span>
+          <div className="flex items-center gap-3 mb-12 lg:hidden justify-center">
+            <Image src="/ShipGuard.svg" alt="ShipGuard AI" width={32} height={32} className="h-8 w-auto" />
+            <span className="font-bold text-lg tracking-tight text-gray-900" style={{ fontFamily: "var(--font-landing-heading)" }}>
+              ShipGuard AI
             </span>
           </div>
 
-          <div className="mb-8">
-            <h1
-              className="text-3xl mb-2"
-              style={{ fontFamily: "var(--font-ui)" }}
-            >
+          <div className="mb-8 text-center lg:text-left">
+            <h1 className="text-3xl font-bold tracking-tight text-gray-900 mb-2" style={{ fontFamily: "var(--font-landing-heading)" }}>
               Welcome back
             </h1>
-            <p
-              style={{
-                color: "var(--text-secondary)",
-                fontSize: "14px",
-                fontFamily: "var(--font-label)",
-              }}
-            >
+            <p className="text-gray-500 text-sm">
               Sign in to your ShipGuard account
             </p>
           </div>
 
-          {/* Error message */}
           {error && (
-            <div
-              className="mb-4 p-3 rounded-lg text-sm"
-              style={{
-                background: "rgba(239, 68, 68, 0.1)",
-                border: "1px solid rgba(239, 68, 68, 0.3)",
-                color: "#ef4444",
-              }}
-            >
+            <div className="mb-6 p-4 rounded-xl text-sm bg-red-50 text-red-600 border border-red-100 flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4" />
               {error}
             </div>
           )}
 
-          {/* GitHub OAuth */}
-          <button
-            type="button"
-            onClick={async () => {
-              const supabase = createClient();
-              await supabase.auth.signInWithOAuth({
-                provider: "github",
-                options: {
-                  redirectTo: getAuthRedirectUrl(),
-                  scopes: "repo read:org user:email",
-                },
-              });
-            }}
-            className="w-full flex items-center justify-center gap-3 py-3 rounded-lg mb-3 font-medium text-sm transition-all duration-200 hover:-translate-y-px"
-            style={{
-              background: "var(--surface-3)",
-              border: "1px solid var(--border)",
-              color: "var(--text-primary)",
-              fontFamily: "var(--font-ui)",
-            }}
-          >
-            <Github size={17} />
-            Continue with GitHub
-          </button>
+          {/* Social Auth */}
+          <div className="space-y-3 mb-8">
+            <button
+              type="button"
+              onClick={async () => {
+                const supabase = createClient();
+                await supabase.auth.signInWithOAuth({
+                  provider: "github",
+                  options: {
+                    redirectTo: getAuthRedirectUrl(),
+                    scopes: "repo read:org user:email",
+                  },
+                });
+              }}
+              className="w-full flex items-center justify-center gap-3 py-3 rounded-full border border-gray-200 bg-white text-gray-900 font-medium text-sm hover:bg-gray-50 transition-colors shadow-sm"
+            >
+              <Github className="w-5 h-5" />
+              Continue with GitHub
+            </button>
 
-          {/* Google OAuth */}
-          <button
-            type="button"
-            onClick={async () => {
-              const supabase = createClient();
-              await supabase.auth.signInWithOAuth({
-                provider: "google",
-                options: {
-                  redirectTo: getAuthRedirectUrl(),
-                },
-              });
-            }}
-            className="w-full flex items-center justify-center gap-3 py-3 rounded-lg mb-6 font-medium text-sm transition-all duration-200 hover:-translate-y-px"
-            style={{
-              background: "var(--surface-3)",
-              border: "1px solid var(--border)",
-              color: "var(--text-primary)",
-              fontFamily: "var(--font-ui)",
-            }}
-          >
-            <GoogleIcon />
-            Continue with Google
-          </button>
+            <button
+              type="button"
+              onClick={async () => {
+                const supabase = createClient();
+                await supabase.auth.signInWithOAuth({
+                  provider: "google",
+                  options: {
+                    redirectTo: getAuthRedirectUrl(),
+                  },
+                });
+              }}
+              className="w-full flex items-center justify-center gap-3 py-3 rounded-full border border-gray-200 bg-white text-gray-900 font-medium text-sm hover:bg-gray-50 transition-colors shadow-sm"
+            >
+              <GoogleIcon />
+              Continue with Google
+            </button>
+          </div>
 
           {/* Divider */}
-          <div className="flex items-center gap-4 mb-6">
-            <div
-              className="flex-1 h-px"
-              style={{ background: "var(--border)" }}
-            />
-            <span
-              style={{
-                color: "var(--text-tertiary)",
-                fontSize: "12px",
-                fontFamily: "var(--font-label)",
-              }}
-            >
-              or with email
-            </span>
-            <div
-              className="flex-1 h-px"
-              style={{ background: "var(--border)" }}
-            />
+          <div className="flex items-center gap-4 mb-8">
+            <div className="flex-1 h-px bg-gray-200" />
+            <span className="text-xs text-gray-400 font-medium uppercase tracking-wider">or with email</span>
+            <div className="flex-1 h-px bg-gray-200" />
           </div>
 
           {/* Form */}
-          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-            {/* Email */}
+          <form onSubmit={handleSubmit} className="flex flex-col gap-5">
             <div>
-              <label
-                className="block text-xs font-medium mb-1.5"
-                style={{
-                  color: "var(--text-secondary)",
-                  fontFamily: "var(--font-label)",
-                }}
-              >
+              <label className="block text-sm font-medium text-gray-700 mb-2">
                 Email
               </label>
-              <div
-                className="flex items-center gap-3 px-4 py-3 rounded-lg transition-all"
-                style={{
-                  background: "var(--surface-2)",
-                  border: "1px solid var(--border)",
-                }}
-              >
-                <Mail size={15} style={{ color: "var(--text-tertiary)" }} />
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Mail className="h-5 w-5 text-gray-400" />
+                </div>
                 <input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="you@example.com"
-                  className="flex-1 bg-transparent outline-none text-sm"
-                  style={{
-                    color: "var(--text-primary)",
-                    fontFamily: "var(--font-label)",
-                  }}
+                  className="block w-full pl-10 pr-3 py-3 border border-gray-200 rounded-xl text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#3079FF]/20 focus:border-[#3079FF] transition-all bg-white"
                   required
                 />
               </div>
             </div>
 
-            {/* Password */}
             <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label
-                  className="text-xs font-medium"
-                  style={{
-                    color: "var(--text-secondary)",
-                    fontFamily: "var(--font-label)",
-                  }}
-                >
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-sm font-medium text-gray-700">
                   Password
                 </label>
-                <Link
-                  href="/auth/forgot-password"
-                  className="text-xs transition-colors"
-                  style={{
-                    color: "var(--accent)",
-                    fontFamily: "var(--font-label)",
-                  }}
-                >
+                <Link href="/auth/forgot-password" className="text-sm text-[#3079FF] hover:text-[#0000EE] font-medium transition-colors">
                   Forgot password?
                 </Link>
               </div>
-              <div
-                className="flex items-center gap-3 px-4 py-3 rounded-lg"
-                style={{
-                  background: "var(--surface-2)",
-                  border: "1px solid var(--border)",
-                }}
-              >
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Lock className="h-5 w-5 text-gray-400" />
+                </div>
                 <input
                   type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="flex-1 bg-transparent outline-none text-sm"
-                  style={{
-                    color: "var(--text-primary)",
-                    fontFamily: "var(--font-label)",
-                  }}
+                  className="block w-full pl-10 pr-10 py-3 border border-gray-200 rounded-xl text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#3079FF]/20 focus:border-[#3079FF] transition-all bg-white"
                   required
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="opacity-40 hover:opacity-70 transition-opacity"
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 transition-colors"
                 >
-                  {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                  {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                 </button>
               </div>
             </div>
@@ -443,38 +242,23 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-3 rounded-lg font-semibold text-sm flex items-center justify-center gap-2 mt-2 transition-all duration-200 hover:-translate-y-0.5 disabled:opacity-60 disabled:translate-y-0"
-              style={{
-                background: "var(--accent)",
-                color: "var(--obsidian)",
-                fontFamily: "var(--font-ui)",
-                boxShadow: "0 4px 20px var(--accent-glow-strong)",
-              }}
+              className="w-full py-3.5 rounded-full font-medium text-sm flex items-center justify-center gap-2 mt-2 transition-all duration-200 disabled:opacity-70 bg-[#111827] text-white hover:bg-black shadow-lg shadow-gray-900/10 hover:shadow-xl hover:shadow-gray-900/20 active:scale-[0.98]"
             >
               {loading ? (
-                <div className="w-4 h-4 rounded-full border-2 border-current border-t-transparent animate-spin" />
+                <div className="w-5 h-5 rounded-full border-2 border-white/30 border-t-white animate-spin" />
               ) : (
                 <>
                   Sign in
-                  <ArrowRight size={15} />
+                  <ArrowRight className="w-4 h-4" />
                 </>
               )}
             </button>
           </form>
 
-          <p
-            className="text-center text-sm mt-6"
-            style={{
-              color: "var(--text-tertiary)",
-              fontFamily: "var(--font-label)",
-            }}
-          >
+          <p className="text-center text-sm mt-8 text-gray-500">
             Don&apos;t have an account?{" "}
-            <Link
-              href="/auth/signup"
-              style={{ color: "var(--accent)", fontWeight: 500 }}
-            >
-              Sign up free
+            <Link href="/auth/signup" className="text-[#111827] font-semibold hover:underline">
+              Sign up for free
             </Link>
           </p>
         </div>

@@ -72,22 +72,22 @@ export default function DashboardSidebar() {
     <aside
       className="hidden lg:flex flex-col w-60 h-screen sticky top-0 border-r"
       style={{
-        background: "var(--obsidian-1)",
-        borderColor: "var(--border)",
+        background: "var(--landing-surface)",
+        borderColor: "var(--landing-border)",
       }}
     >
       {/* Logo */}
       <div
         className="h-16 flex items-center px-6 border-b"
-        style={{ borderColor: "var(--border)" }}
+        style={{ borderColor: "var(--landing-border)" }}
       >
         <Link href="/" className="flex items-center gap-3">
           <div
             className="w-7 h-7 rounded flex items-center justify-center text-xs font-bold"
             style={{
-              background: "var(--primary)",
-              color: "var(--secondary)",
-              fontFamily: "var(--font-ui)",
+              background: "var(--landing-primary)",
+              color: "#FFFFFF",
+              fontFamily: "var(--font-landing-heading)",
               fontSize: "14px",
             }}
           >
@@ -95,9 +95,9 @@ export default function DashboardSidebar() {
           </div>
           <span
             className="font-semibold text-sm"
-            style={{ fontFamily: "var(--font-ui)", letterSpacing: "-0.02em" }}
+            style={{ fontFamily: "var(--font-landing-heading)", letterSpacing: "-0.02em" }}
           >
-            ShipGuard <span style={{ color: "var(--primary)" }}>AI</span>
+            ShipGuard <span style={{ color: "var(--landing-primary)" }}>AI</span>
           </span>
         </Link>
       </div>
@@ -118,10 +118,10 @@ export default function DashboardSidebar() {
                   : "opacity-60 hover:opacity-80"
               )}
               style={{
-                background: isActive ? "var(--primary-glow)" : "transparent",
-                color: isActive ? "var(--primary)" : "var(--text-primary)",
-                border: isActive ? "1px solid var(--border-amber)" : "1px solid transparent",
-                fontFamily: "var(--font-label)",
+                background: isActive ? "rgba(48, 121, 255, 0.1)" : "transparent",
+                color: isActive ? "var(--landing-primary)" : "var(--landing-text)",
+                border: isActive ? "1px solid rgba(48, 121, 255, 0.2)" : "1px solid transparent",
+                fontFamily: "var(--font-landing-body)",
               }}
             >
               <Icon size={16} strokeWidth={isActive ? 2 : 1.5} />
@@ -130,9 +130,9 @@ export default function DashboardSidebar() {
                 <span
                   className="ml-auto text-xs px-1.5 py-0.5 rounded"
                   style={{
-                    background: "var(--primary)",
-                    color: "var(--secondary)",
-                    fontFamily: "var(--font-label)",
+                    background: "var(--landing-primary)",
+                    color: "#FFFFFF",
+                    fontFamily: "var(--font-landing-body)",
                     fontSize: "10px",
                     fontWeight: 700,
                   }}
@@ -148,23 +148,23 @@ export default function DashboardSidebar() {
       {/* User / Bottom */}
       <div
         className="p-3 border-t"
-        style={{ borderColor: "var(--border)" }}
+        style={{ borderColor: "var(--landing-border)" }}
       >
         {/* Plan badge */}
         <div
           className="flex items-center justify-between px-3 py-2 rounded-lg mb-2"
-          style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}
+          style={{ background: "#FFFFFF", border: "1px solid var(--landing-border)" }}
         >
           <div>
             <p
               className="text-xs font-medium"
-              style={{ color: "var(--text-primary)", fontFamily: "var(--font-label)" }}
+              style={{ color: "var(--landing-text)", fontFamily: "var(--font-landing-body)" }}
             >
               {planDisplay}
             </p>
             <p
               className="text-xs"
-              style={{ color: "var(--text-tertiary)", fontFamily: "var(--font-label)" }}
+              style={{ color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)" }}
             >
               {scansDisplay}
             </p>
@@ -174,9 +174,9 @@ export default function DashboardSidebar() {
             href="/pricing"
             className="text-xs font-semibold px-2 py-1 rounded"
             style={{
-              background: "var(--primary)",
-              color: "var(--secondary)",
-              fontFamily: "var(--font-label)",
+              background: "var(--landing-primary)",
+              color: "#FFFFFF",
+              fontFamily: "var(--font-landing-body)",
             }}
           >
             Upgrade
@@ -187,7 +187,7 @@ export default function DashboardSidebar() {
         {/* User */}
         <div className="flex items-center gap-3 px-3 py-2">
           {loadingUser ? (
-            <div className="w-7 h-7 rounded-full flex-shrink-0" style={{ background: "var(--obsidian-4)" }} />
+            <div className="w-7 h-7 rounded-full flex-shrink-0" style={{ background: "var(--landing-border)" }} />
           ) : avatarUrl ? (
             <img
               src={avatarUrl}
@@ -197,7 +197,7 @@ export default function DashboardSidebar() {
           ) : (
             <div
               className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold flex-shrink-0"
-              style={{ background: "var(--obsidian-4)", color: "var(--primary)", fontFamily: "var(--font-ui)" }}
+              style={{ background: "var(--landing-border)", color: "var(--landing-primary)", fontFamily: "var(--font-landing-heading)" }}
             >
               {(userName || "U").charAt(0).toUpperCase()}
             </div>
@@ -205,13 +205,13 @@ export default function DashboardSidebar() {
           <div className="flex-1 min-w-0">
             <p
               className="text-xs font-medium truncate"
-              style={{ color: "var(--text-primary)", fontFamily: "var(--font-label)" }}
+              style={{ color: "var(--landing-text)", fontFamily: "var(--font-landing-body)" }}
             >
               {loadingUser ? "Loading..." : userName || "Account"}
             </p>
             <p
               className="text-xs truncate"
-              style={{ color: "var(--text-tertiary)", fontFamily: "var(--font-label)" }}
+              style={{ color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)" }}
             >
               {loadingUser ? "" : userEmail}
             </p>
@@ -221,7 +221,7 @@ export default function DashboardSidebar() {
             title="Sign out"
             onClick={handleLogout}
           >
-            <LogOut size={14} style={{ color: "var(--text-primary)" }} />
+            <LogOut size={14} style={{ color: "var(--landing-text)" }} />
           </button>
         </div>
       </div>

@@ -326,12 +326,12 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="flex min-h-screen" style={{ background: "var(--obsidian)" }}>
+    <div className="flex min-h-screen" style={{ background: "var(--landing-bg)" }}>
       <DashboardSidebar />
       <main className="flex-1 flex flex-col min-w-0">
         <div className="h-16 flex items-center px-6 border-b flex-shrink-0"
-          style={{ borderColor: "var(--border)", background: "var(--obsidian-1)" }}>
-          <h1 className="text-base font-semibold" style={{ fontFamily: "var(--font-ui)", letterSpacing: "-0.02em" }}>
+          style={{ borderColor: "var(--landing-border)", background: "var(--landing-surface)" }}>
+          <h1 className="text-base font-semibold" style={{ fontFamily: "var(--font-landing-heading)", letterSpacing: "-0.02em" }}>
             Settings
           </h1>
         </div>
@@ -355,10 +355,10 @@ export default function SettingsPage() {
                         }}
                         className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm text-left transition-all"
                         style={{
-                          background: activeTab === tab.id ? "var(--accent-glow)" : "transparent",
-                          color: activeTab === tab.id ? "var(--accent)" : "var(--text-secondary)",
-                          border: activeTab === tab.id ? "1px solid var(--border-amber)" : "1px solid transparent",
-                          fontFamily: "var(--font-label)",
+                          background: activeTab === tab.id ? "rgba(48, 121, 255, 0.1)" : "transparent",
+                          color: activeTab === tab.id ? "var(--landing-primary)" : "var(--landing-text-secondary)",
+                          border: activeTab === tab.id ? "1px solid var(--landing-border)" : "1px solid transparent",
+                          fontFamily: "var(--font-landing-body)",
                         }}>
                         <Icon size={15} />
                         {tab.label}
@@ -372,17 +372,17 @@ export default function SettingsPage() {
               <div className="flex-1 min-w-0">
                 {activeTab === "profile" && (
                   <div>
-                    <h2 className="text-lg font-semibold mb-6" style={{ fontFamily: "var(--font-ui)", letterSpacing: "-0.02em" }}>
+                    <h2 className="text-lg font-semibold mb-6" style={{ fontFamily: "var(--font-landing-heading)", letterSpacing: "-0.02em" }}>
                       Profile Settings
                     </h2>
                     {loadingUser ? (
                       <div className="flex items-center justify-center p-12">
-                        <Loader2 size={24} className="animate-spin" style={{ color: "var(--accent)" }} />
+                        <Loader2 size={24} className="animate-spin" style={{ color: "var(--landing-primary)" }} />
                       </div>
                     ) : (
                       <>
                         <div className="flex flex-col gap-5 p-6 rounded-2xl mb-5"
-                          style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}>
+                          style={{ background: "#FFFFFF", border: "1px solid var(--landing-border)" }}>
                           {/* Avatar */}
                           <div className="flex items-center gap-4">
                             {userData?.avatar_url ? (
@@ -391,17 +391,17 @@ export default function SettingsPage() {
                                 src={userData.avatar_url}
                                 alt={profileForm.name || "Profile avatar"}
                                 className="w-16 h-16 rounded-2xl object-cover"
-                                style={{ border: "1px solid var(--border)" }}
+                                style={{ border: "1px solid var(--landing-border)" }}
                               />
                             ) : (
                               <div className="w-16 h-16 rounded-2xl flex items-center justify-center text-xl font-bold"
-                                style={{ background: "var(--accent-glow)", border: "1px solid var(--border-amber)", color: "var(--accent)", fontFamily: "var(--font-ui)" }}>
+                                style={{ background: "rgba(48, 121, 255, 0.1)", border: "1px solid rgba(48, 121, 255, 0.2)", color: "var(--landing-primary)", fontFamily: "var(--font-landing-heading)" }}>
                                 {(profileForm.name || profileForm.email || "U").charAt(0).toUpperCase()}
                               </div>
                             )}
                             <div>
-                              <p className="text-sm font-medium" style={{ fontFamily: "var(--font-ui)" }}>Profile Picture</p>
-                              <p style={{ fontSize: "12px", color: "var(--text-tertiary)", fontFamily: "var(--font-label)" }}>
+                              <p className="text-sm font-medium" style={{ fontFamily: "var(--font-landing-heading)" }}>Profile Picture</p>
+                              <p style={{ fontSize: "12px", color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)" }}>
                                 {userData?.avatar_url ? "Synced from your auth provider" : "Auto-generated from your initials"}
                               </p>
                             </div>
@@ -410,7 +410,7 @@ export default function SettingsPage() {
                           {/* Fields */}
                           <div>
                             <label className="block text-xs font-medium mb-1.5"
-                              style={{ color: "var(--text-secondary)", fontFamily: "var(--font-label)" }}>
+                              style={{ color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)" }}>
                               Full Name
                             </label>
                             <input 
@@ -419,13 +419,13 @@ export default function SettingsPage() {
                               onChange={(e) => setProfileForm(prev => ({ ...prev, name: e.target.value }))}
                               placeholder="Your name" 
                               className="w-full px-4 py-3 rounded-lg bg-transparent outline-none text-sm"
-                              style={{ background: "var(--surface-3)", border: "1px solid var(--border)", color: "var(--text-primary)", fontFamily: "var(--font-label)" }} 
+                              style={{ background: "#F3F4F6", border: "1px solid var(--landing-border)", color: "var(--landing-text)", fontFamily: "var(--font-landing-body)" }} 
                             />
                           </div>
 
                           <div>
                             <label className="block text-xs font-medium mb-1.5"
-                              style={{ color: "var(--text-secondary)", fontFamily: "var(--font-label)" }}>
+                              style={{ color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)" }}>
                               Email
                             </label>
                             <input 
@@ -433,9 +433,9 @@ export default function SettingsPage() {
                               value={profileForm.email}
                               disabled
                               className="w-full px-4 py-3 rounded-lg bg-transparent outline-none text-sm opacity-60"
-                              style={{ background: "var(--surface-3)", border: "1px solid var(--border)", color: "var(--text-primary)", fontFamily: "var(--font-label)" }} 
+                              style={{ background: "#F3F4F6", border: "1px solid var(--landing-border)", color: "var(--landing-text)", fontFamily: "var(--font-landing-body)" }} 
                             />
-                            <p style={{ fontSize: "11px", color: "var(--text-tertiary)", fontFamily: "var(--font-label)", marginTop: 4 }}>
+                            <p style={{ fontSize: "11px", color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)", marginTop: 4 }}>
                               Email cannot be changed
                             </p>
                           </div>
@@ -443,7 +443,7 @@ export default function SettingsPage() {
 
                         <button onClick={handleSave}
                           className="flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold transition-all"
-                          style={{ background: saved ? "var(--guard-monetize-glow)" : "var(--accent)", color: saved ? "var(--guard-monetize)" : "var(--obsidian)", border: saved ? "1px solid rgba(64,200,122,0.3)" : "none", fontFamily: "var(--font-ui)" }}>
+                          style={{ background: saved ? "var(--guard-monetize-glow)" : "var(--landing-primary)", color: saved ? "var(--guard-monetize)" : "#FFFFFF", border: saved ? "1px solid rgba(64,200,122,0.3)" : "none", fontFamily: "var(--font-landing-heading)" }}>
                           {saved ? <><CheckCircle size={14} /> Saved!</> : "Save Changes"}
                         </button>
                       </>
@@ -453,27 +453,27 @@ export default function SettingsPage() {
 
                 {activeTab === "integrations" && (
                   <div>
-                    <h2 className="text-lg font-semibold mb-6" style={{ fontFamily: "var(--font-ui)", letterSpacing: "-0.02em" }}>
+                    <h2 className="text-lg font-semibold mb-6" style={{ fontFamily: "var(--font-landing-heading)", letterSpacing: "-0.02em" }}>
                       Integrations
                     </h2>
                     <div className="flex flex-col gap-4">
                       <div className="flex items-center justify-between p-5 rounded-2xl"
-                        style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}>
+                        style={{ background: "#FFFFFF", border: "1px solid var(--landing-border)" }}>
                         <div className="flex items-center gap-4">
                           <div className="w-10 h-10 rounded-xl flex items-center justify-center"
-                            style={{ background: "var(--obsidian-3)", border: "1px solid var(--border)" }}>
-                            <Github size={18} style={{ color: "var(--text-secondary)" }} />
+                            style={{ background: "var(--landing-surface)", border: "1px solid var(--landing-border)" }}>
+                            <Github size={18} style={{ color: "var(--landing-text-secondary)" }} />
                           </div>
                           <div>
-                            <p className="text-sm font-medium" style={{ fontFamily: "var(--font-ui)" }}>GitHub</p>
-                            <p style={{ fontSize: "12px", color: "var(--text-tertiary)", fontFamily: "var(--font-label)" }}>
+                            <p className="text-sm font-medium" style={{ fontFamily: "var(--font-landing-heading)" }}>GitHub</p>
+                            <p style={{ fontSize: "12px", color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)" }}>
                               Connect your GitHub account to scan private repositories
                             </p>
                           </div>
                         </div>
                         {loadingGithub ? (
                           <div className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm"
-                            style={{ background: "var(--surface-3)", color: "var(--text-tertiary)", fontFamily: "var(--font-label)" }}>
+                            style={{ background: "#F3F4F6", color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)" }}>
                             <Loader2 size={14} className="animate-spin" />
                             Checking...
                           </div>
@@ -481,7 +481,7 @@ export default function SettingsPage() {
                           <div className="flex items-center gap-2">
                             <div
                               className="px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2"
-                              style={{ background: "var(--guard-monetize-glow)", color: "var(--guard-monetize)", border: "1px solid rgba(64,200,122,0.3)", fontFamily: "var(--font-label)" }}
+                              style={{ background: "var(--guard-monetize-glow)", color: "var(--guard-monetize)", border: "1px solid rgba(64,200,122,0.3)", fontFamily: "var(--font-landing-body)" }}
                             >
                               <CheckCircle size={14} />
                               Connected
@@ -489,7 +489,7 @@ export default function SettingsPage() {
                             <button
                               onClick={handleGithubDisconnect}
                               className="px-4 py-2 rounded-lg text-sm font-medium transition-all"
-                              style={{ background: "rgba(232,64,64,0.1)", color: "var(--sev-critical)", border: "1px solid rgba(232,64,64,0.3)", fontFamily: "var(--font-label)" }}
+                              style={{ background: "rgba(232,64,64,0.1)", color: "var(--sev-critical)", border: "1px solid rgba(232,64,64,0.3)", fontFamily: "var(--font-landing-body)" }}
                             >
                               Disconnect
                             </button>
@@ -498,14 +498,14 @@ export default function SettingsPage() {
                           <button
                             onClick={handleGithubConnect}
                             className="px-4 py-2 rounded-lg text-sm font-medium transition-all"
-                            style={{ background: "var(--surface-3)", color: "var(--text-primary)", border: "1px solid var(--border)", fontFamily: "var(--font-label)" }}
+                            style={{ background: "#F3F4F6", color: "var(--landing-text)", border: "1px solid var(--landing-border)", fontFamily: "var(--font-landing-body)" }}
                           >
                             Connect
                           </button>
                         )}
                       </div>
-                      <div className="p-4 rounded-xl" style={{ background: "var(--obsidian-1)", border: "1px solid var(--border)" }}>
-                        <p style={{ fontSize: "13px", color: "var(--text-secondary)", fontFamily: "var(--font-label)" }}>
+                      <div className="p-4 rounded-xl" style={{ background: "var(--landing-surface)", border: "1px solid var(--landing-border)" }}>
+                        <p style={{ fontSize: "13px", color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)" }}>
                           GitHub is mandatory for scans. Connect a GitHub account to create and run repository scans.
                         </p>
                       </div>
@@ -515,29 +515,29 @@ export default function SettingsPage() {
 
                 {activeTab === "billing" && (
                   <div>
-                    <h2 className="text-lg font-semibold mb-6" style={{ fontFamily: "var(--font-ui)", letterSpacing: "-0.02em" }}>
+                    <h2 className="text-lg font-semibold mb-6" style={{ fontFamily: "var(--font-landing-heading)", letterSpacing: "-0.02em" }}>
                       Billing & Plan
                     </h2>
 
                     {loadingUser ? (
                       <div className="flex items-center justify-center p-12">
-                        <Loader2 size={24} className="animate-spin" style={{ color: "var(--accent)" }} />
+                        <Loader2 size={24} className="animate-spin" style={{ color: "var(--landing-primary)" }} />
                       </div>
                     ) : userData ? (
                       <>
                         {/* Current plan */}
                         <div className="p-6 rounded-2xl mb-5"
-                          style={{ background: "var(--accent-glow)", border: "1px solid var(--border-amber)" }}>
+                          style={{ background: "rgba(48, 121, 255, 0.1)", border: "1px solid rgba(48, 121, 255, 0.2)" }}>
                           <div className="flex items-center justify-between">
                             <div>
-                              <p style={{ fontSize: "12px", color: "var(--accent)", fontFamily: "var(--font-label)", marginBottom: 4 }}>Current Plan</p>
-                              <p className="text-2xl" style={{ fontFamily: "var(--font-ui)", color: "var(--accent)" }}>{getPlanDisplayName(userData.plan)}</p>
-                              <p style={{ fontSize: "13px", color: "var(--text-secondary)", fontFamily: "var(--font-label)" }}>{getPlanFeatures(userData.plan)}</p>
+                              <p style={{ fontSize: "12px", color: "var(--landing-primary)", fontFamily: "var(--font-landing-body)", marginBottom: 4 }}>Current Plan</p>
+                              <p className="text-2xl" style={{ fontFamily: "var(--font-landing-heading)", color: "var(--landing-primary)" }}>{getPlanDisplayName(userData.plan)}</p>
+                              <p style={{ fontSize: "13px", color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)" }}>{getPlanFeatures(userData.plan)}</p>
                             </div>
                             {userData.plan !== "unlimited" && userData.plan !== "lifetime" && (
                               <Link href="/pricing"
                                 className="px-5 py-2.5 rounded-xl text-sm font-semibold transition-all"
-                                style={{ background: "var(--accent)", color: "var(--obsidian)", fontFamily: "var(--font-ui)" }}>
+                                style={{ background: "var(--landing-primary)", color: "#FFFFFF", fontFamily: "var(--font-landing-heading)" }}>
                                 Upgrade to Pro
                               </Link>
                             )}
@@ -545,20 +545,20 @@ export default function SettingsPage() {
                         </div>
 
                         <div className="p-5 rounded-2xl"
-                          style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}>
-                          <p className="text-sm font-medium mb-1" style={{ fontFamily: "var(--font-ui)" }}>Usage this month</p>
+                          style={{ background: "#FFFFFF", border: "1px solid var(--landing-border)" }}>
+                          <p className="text-sm font-medium mb-1" style={{ fontFamily: "var(--font-landing-heading)" }}>Usage this month</p>
                           <div className="flex items-center gap-3 mt-3">
-                            <div className="flex-1 h-2 rounded-full" style={{ background: "var(--obsidian-5)" }}>
+                            <div className="flex-1 h-2 rounded-full" style={{ background: "var(--landing-border)" }}>
                               <div style={{ 
                                 width: userData.scans_limit === 999999 
                                   ? "100%" 
                                   : `${Math.min((userData.scans_used / userData.scans_limit) * 100, 100)}%`, 
                                 height: "100%", 
-                                background: userData.scans_used >= userData.scans_limit ? "var(--sev-critical)" : "var(--accent)", 
+                                background: userData.scans_used >= userData.scans_limit ? "var(--sev-critical)" : "var(--landing-primary)", 
                                 borderRadius: "9999px" 
                               }} />
                             </div>
-                            <span style={{ fontSize: "12px", color: "var(--text-secondary)", fontFamily: "var(--font-label)" }}>
+                            <span style={{ fontSize: "12px", color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)" }}>
                               {userData.scans_limit === 999999 
                                 ? "Unlimited" 
                                 : `${userData.scans_used}/${userData.scans_limit} scans`
@@ -569,8 +569,8 @@ export default function SettingsPage() {
                       </>
                     ) : (
                       <div className="p-6 rounded-2xl"
-                        style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}>
-                        <p style={{ color: "var(--text-secondary)", fontFamily: "var(--font-label)" }}>Unable to load billing info</p>
+                        style={{ background: "#FFFFFF", border: "1px solid var(--landing-border)" }}>
+                        <p style={{ color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)" }}>Unable to load billing info</p>
                       </div>
                     )}
                   </div>
@@ -578,14 +578,14 @@ export default function SettingsPage() {
 
                 {activeTab === "security" && (
                   <div>
-                    <h2 className="text-lg font-semibold mb-6" style={{ fontFamily: "var(--font-ui)", letterSpacing: "-0.02em" }}>
+                    <h2 className="text-lg font-semibold mb-6" style={{ fontFamily: "var(--font-landing-heading)", letterSpacing: "-0.02em" }}>
                       Security
                     </h2>
 
                     <div className="flex flex-col gap-4">
                       {/* Change password */}
-                      <div className="p-5 rounded-2xl" style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}>
-                        <p className="text-sm font-medium mb-4" style={{ fontFamily: "var(--font-ui)" }}>Change Password</p>
+                      <div className="p-5 rounded-2xl" style={{ background: "#FFFFFF", border: "1px solid var(--landing-border)" }}>
+                        <p className="text-sm font-medium mb-4" style={{ fontFamily: "var(--font-landing-heading)" }}>Change Password</p>
                         <div className="flex flex-col gap-3">
                           <input
                             type="password"
@@ -593,7 +593,7 @@ export default function SettingsPage() {
                             value={passwordForm.newPassword}
                             onChange={(e) => setPasswordForm(prev => ({ ...prev, newPassword: e.target.value }))}
                             className="w-full px-4 py-3 rounded-lg bg-transparent outline-none text-sm"
-                            style={{ background: "var(--surface-3)", border: "1px solid var(--border)", color: "var(--text-primary)", fontFamily: "var(--font-label)" }}
+                            style={{ background: "#F3F4F6", border: "1px solid var(--landing-border)", color: "var(--landing-text)", fontFamily: "var(--font-landing-body)" }}
                           />
                           <input
                             type="password"
@@ -601,10 +601,10 @@ export default function SettingsPage() {
                             value={passwordForm.confirmPassword}
                             onChange={(e) => setPasswordForm(prev => ({ ...prev, confirmPassword: e.target.value }))}
                             className="w-full px-4 py-3 rounded-lg bg-transparent outline-none text-sm"
-                            style={{ background: "var(--surface-3)", border: "1px solid var(--border)", color: "var(--text-primary)", fontFamily: "var(--font-label)" }} />
+                            style={{ background: "#F3F4F6", border: "1px solid var(--landing-border)", color: "var(--landing-text)", fontFamily: "var(--font-landing-body)" }} />
                         </div>
                         {passwordMessage && (
-                          <p style={{ fontSize: "12px", marginTop: 10, color: passwordMessage.includes("success") ? "var(--guard-monetize)" : "var(--sev-high)", fontFamily: "var(--font-label)" }}>
+                          <p style={{ fontSize: "12px", marginTop: 10, color: passwordMessage.includes("success") ? "var(--guard-monetize)" : "var(--sev-high)", fontFamily: "var(--font-landing-body)" }}>
                             {passwordMessage}
                           </p>
                         )}
@@ -612,22 +612,22 @@ export default function SettingsPage() {
                           onClick={handlePasswordUpdate}
                           disabled={savingPassword}
                           className="mt-4 px-5 py-2 rounded-lg text-sm font-medium transition-all disabled:opacity-60"
-                          style={{ background: "var(--surface-3)", border: "1px solid var(--border)", color: "var(--text-primary)", fontFamily: "var(--font-label)" }}>
+                          style={{ background: "#F3F4F6", border: "1px solid var(--landing-border)", color: "var(--landing-text)", fontFamily: "var(--font-landing-body)" }}>
                           {savingPassword ? "Updating..." : "Update Password"}
                         </button>
                       </div>
 
                       {/* Danger zone */}
                       <div className="p-5 rounded-2xl" style={{ background: "rgba(232,64,64,0.04)", border: "1px solid rgba(232,64,64,0.2)" }}>
-                        <p className="text-sm font-medium mb-1" style={{ fontFamily: "var(--font-ui)", color: "var(--sev-critical)" }}>Danger Zone</p>
-                        <p style={{ fontSize: "12px", color: "var(--text-tertiary)", fontFamily: "var(--font-label)", marginBottom: 16 }}>
+                        <p className="text-sm font-medium mb-1" style={{ fontFamily: "var(--font-landing-heading)", color: "var(--sev-critical)" }}>Danger Zone</p>
+                        <p style={{ fontSize: "12px", color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)", marginBottom: 16 }}>
                           Permanently delete your account and all scan data.
                         </p>
                         <button
                           onClick={handleDeleteAccount}
                           disabled={deletingAccount}
                           className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all disabled:opacity-60"
-                          style={{ background: "rgba(232,64,64,0.1)", border: "1px solid rgba(232,64,64,0.3)", color: "var(--sev-critical)", fontFamily: "var(--font-label)" }}>
+                          style={{ background: "rgba(232,64,64,0.1)", border: "1px solid rgba(232,64,64,0.3)", color: "var(--sev-critical)", fontFamily: "var(--font-landing-body)" }}>
                           <Trash2 size={13} />
                           {deletingAccount ? "Deleting..." : "Delete Account"}
                         </button>
@@ -638,7 +638,7 @@ export default function SettingsPage() {
 
                 {activeTab === "notifications" && (
                   <div>
-                    <h2 className="text-lg font-semibold mb-6" style={{ fontFamily: "var(--font-ui)", letterSpacing: "-0.02em" }}>
+                    <h2 className="text-lg font-semibold mb-6" style={{ fontFamily: "var(--font-landing-heading)", letterSpacing: "-0.02em" }}>
                       Notification Preferences
                     </h2>
                     <div className="flex flex-col gap-3">
@@ -649,10 +649,10 @@ export default function SettingsPage() {
                         { key: "productUpdates", label: "Product updates", desc: "New features and improvements" },
                       ].map((notif) => (
                         <div key={notif.label} className="flex items-center justify-between p-4 rounded-xl"
-                          style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}>
+                          style={{ background: "#FFFFFF", border: "1px solid var(--landing-border)" }}>
                           <div>
-                            <p className="text-sm font-medium" style={{ fontFamily: "var(--font-ui)" }}>{notif.label}</p>
-                            <p style={{ fontSize: "12px", color: "var(--text-tertiary)", fontFamily: "var(--font-label)" }}>{notif.desc}</p>
+                            <p className="text-sm font-medium" style={{ fontFamily: "var(--font-landing-heading)" }}>{notif.label}</p>
+                            <p style={{ fontSize: "12px", color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)" }}>{notif.desc}</p>
                           </div>
                           <button
                             onClick={() => setNotificationPrefs((prev) => ({
@@ -660,7 +660,7 @@ export default function SettingsPage() {
                               [notif.key]: !prev[notif.key as keyof NotificationPrefs],
                             }))}
                             className="w-10 h-6 rounded-full relative transition-colors duration-200 flex-shrink-0"
-                            style={{ background: notificationPrefs[notif.key as keyof NotificationPrefs] ? "var(--accent)" : "var(--obsidian-5)" }}>
+                            style={{ background: notificationPrefs[notif.key as keyof NotificationPrefs] ? "var(--landing-primary)" : "var(--landing-border)" }}>
                             <span className="absolute top-1 w-4 h-4 rounded-full bg-white transition-transform duration-200"
                               style={{ transform: notificationPrefs[notif.key as keyof NotificationPrefs] ? "translateX(18px)" : "translateX(2px)", boxShadow: "0 1px 3px rgba(0,0,0,0.3)" }} />
                           </button>
@@ -670,7 +670,7 @@ export default function SettingsPage() {
                         onClick={handleSaveNotifications}
                         disabled={savingNotifications}
                         className="self-start mt-1 px-5 py-2 rounded-lg text-sm font-medium transition-all disabled:opacity-60"
-                        style={{ background: notificationsSaved ? "var(--guard-monetize-glow)" : "var(--accent)", color: notificationsSaved ? "var(--guard-monetize)" : "var(--obsidian)", border: notificationsSaved ? "1px solid rgba(64,200,122,0.3)" : "none", fontFamily: "var(--font-ui)" }}
+                        style={{ background: notificationsSaved ? "var(--guard-monetize-glow)" : "var(--landing-primary)", color: notificationsSaved ? "var(--guard-monetize)" : "#FFFFFF", border: notificationsSaved ? "1px solid rgba(64,200,122,0.3)" : "none", fontFamily: "var(--font-landing-heading)" }}
                       >
                         {savingNotifications ? "Saving..." : notificationsSaved ? "Saved!" : "Save Notification Preferences"}
                       </button>
@@ -680,15 +680,15 @@ export default function SettingsPage() {
 
                 {activeTab === "support" && (
                   <div>
-                    <h2 className="text-lg font-semibold mb-6" style={{ fontFamily: "var(--font-ui)", letterSpacing: "-0.02em" }}>
+                    <h2 className="text-lg font-semibold mb-6" style={{ fontFamily: "var(--font-landing-heading)", letterSpacing: "-0.02em" }}>
                       Support & Requests
                     </h2>
                     <div className="flex flex-col gap-4">
-                      <div className="p-5 rounded-2xl" style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}>
+                      <div className="p-5 rounded-2xl" style={{ background: "#FFFFFF", border: "1px solid var(--landing-border)" }}>
                         <div className="flex items-start justify-between gap-4">
                           <div>
-                            <p className="text-sm font-medium mb-1" style={{ fontFamily: "var(--font-ui)" }}>Get help</p>
-                            <p style={{ fontSize: "12px", color: "var(--text-tertiary)", fontFamily: "var(--font-label)" }}>
+                            <p className="text-sm font-medium mb-1" style={{ fontFamily: "var(--font-landing-heading)" }}>Get help</p>
+                            <p style={{ fontSize: "12px", color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)" }}>
                               Need support with scans, billing, or account issues?
                             </p>
                           </div>
@@ -698,7 +698,7 @@ export default function SettingsPage() {
                               target="_blank"
                               rel="noreferrer noopener"
                               className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium"
-                              style={{ background: "var(--surface-3)", border: "1px solid var(--border)", color: "var(--text-primary)", fontFamily: "var(--font-label)" }}
+                              style={{ background: "#F3F4F6", border: "1px solid var(--landing-border)", color: "var(--landing-text)", fontFamily: "var(--font-landing-body)" }}
                             >
                               Open Support Form
                               <ExternalLink size={13} />
@@ -706,7 +706,7 @@ export default function SettingsPage() {
                           ) : (
                             <span
                               className="px-4 py-2 rounded-lg text-xs"
-                              style={{ background: "var(--obsidian-1)", border: "1px solid var(--border)", color: "var(--text-tertiary)", fontFamily: "var(--font-label)" }}
+                              style={{ background: "var(--landing-surface)", border: "1px solid var(--landing-border)", color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)" }}
                             >
                               Set NEXT_PUBLIC_SUPPORT_FORM_URL
                             </span>
@@ -714,11 +714,11 @@ export default function SettingsPage() {
                         </div>
                       </div>
 
-                      <div className="p-5 rounded-2xl" style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}>
+                      <div className="p-5 rounded-2xl" style={{ background: "#FFFFFF", border: "1px solid var(--landing-border)" }}>
                         <div className="flex items-start justify-between gap-4">
                           <div>
-                            <p className="text-sm font-medium mb-1" style={{ fontFamily: "var(--font-ui)" }}>Request a feature</p>
-                            <p style={{ fontSize: "12px", color: "var(--text-tertiary)", fontFamily: "var(--font-label)" }}>
+                            <p className="text-sm font-medium mb-1" style={{ fontFamily: "var(--font-landing-heading)" }}>Request a feature</p>
+                            <p style={{ fontSize: "12px", color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)" }}>
                               Share ideas and vote on upcoming improvements.
                             </p>
                           </div>
@@ -728,7 +728,7 @@ export default function SettingsPage() {
                               target="_blank"
                               rel="noreferrer noopener"
                               className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium"
-                              style={{ background: "var(--accent)", color: "var(--obsidian)", fontFamily: "var(--font-ui)" }}
+                              style={{ background: "var(--landing-primary)", color: "#FFFFFF", fontFamily: "var(--font-landing-heading)" }}
                             >
                               <MessageSquarePlus size={14} />
                               Send Request
@@ -736,7 +736,7 @@ export default function SettingsPage() {
                           ) : (
                             <span
                               className="px-4 py-2 rounded-lg text-xs"
-                              style={{ background: "var(--obsidian-1)", border: "1px solid var(--border)", color: "var(--text-tertiary)", fontFamily: "var(--font-label)" }}
+                              style={{ background: "var(--landing-surface)", border: "1px solid var(--landing-border)", color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)" }}
                             >
                               Set NEXT_PUBLIC_FEATURE_REQUEST_FORM_URL
                             </span>
@@ -745,7 +745,7 @@ export default function SettingsPage() {
                       </div>
 
                       <div className="p-4 rounded-xl" style={{ background: "rgba(251,191,36,0.08)", border: "1px solid rgba(251,191,36,0.25)" }}>
-                        <p style={{ fontSize: "12px", color: "var(--text-secondary)", fontFamily: "var(--font-label)", lineHeight: "1.6" }}>
+                        <p style={{ fontSize: "12px", color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)", lineHeight: "1.6" }}>
                           ShipGuard AI may occasionally miss issues or produce false positives. Always review critical security and compliance findings before production decisions.
                         </p>
                       </div>

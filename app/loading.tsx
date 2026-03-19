@@ -5,8 +5,8 @@ export default function AppLoading() {
         minHeight: "100vh",
         display: "grid",
         placeItems: "center",
-        background: "var(--obsidian)",
-        color: "var(--text-secondary)",
+        background: "var(--landing-bg)",
+        color: "var(--landing-text-secondary)",
         fontFamily: "var(--font-label)",
       }}
     >
@@ -17,7 +17,7 @@ export default function AppLoading() {
             width: 14,
             height: 14,
             borderRadius: 999,
-            border: "2px solid var(--accent)",
+            border: "2px solid var(--landing-primary)",
             borderTopColor: "transparent",
           }}
         />

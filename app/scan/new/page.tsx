@@ -334,7 +334,7 @@ export default function NewScanPage() {
 
   if (showGithubBanner) {
     return (
-      <div className="flex min-h-screen" style={{ background: "var(--obsidian)" }}>
+      <div className="flex min-h-screen" style={{ background: "var(--landing-bg)" }}>
         <DashboardSidebar />
         <main className="flex-1 flex flex-col min-w-0">
           <TopBar />
@@ -344,21 +344,21 @@ export default function NewScanPage() {
                 style={{ background: "rgba(232,64,64,0.1)", border: "1px solid rgba(232,64,64,0.2)" }}>
                 <Github size={28} style={{ color: "var(--guard-security)" }} />
               </div>
-              <h2 className="text-2xl mb-2" style={{ fontFamily: "var(--font-ui)" }}>
+              <h2 className="text-2xl mb-2" style={{ fontFamily: "var(--font-landing-heading)" }}>
                 GitHub Connection Required
               </h2>
-              <p style={{ color: "var(--text-secondary)", fontSize: "14px", fontFamily: "var(--font-label)", marginBottom: 24 }}>
+              <p style={{ color: "var(--landing-text-secondary)", fontSize: "14px", fontFamily: "var(--font-landing-body)", marginBottom: 24 }}>
                 Private repos require GitHub to be connected in Settings.
               </p>
               <div className="flex gap-3">
                 <button onClick={() => setShowGithubBanner(false)}
                   className="flex-1 py-3 rounded-xl font-medium text-sm"
-                  style={{ background: "var(--surface-2)", color: "var(--text-primary)", border: "1px solid var(--border)", fontFamily: "var(--font-label)" }}>
+                  style={{ background: "#FFFFFF", color: "var(--landing-text)", border: "1px solid var(--landing-border)", fontFamily: "var(--font-landing-body)" }}>
                   Go Back
                 </button>
                 <Link href="/dashboard/settings"
                   className="flex-1 py-3 rounded-xl font-medium text-sm flex items-center justify-center gap-2"
-                  style={{ background: "var(--accent)", color: "var(--obsidian)", fontFamily: "var(--font-label)" }}>
+                  style={{ background: "var(--landing-primary)", color: "#FFFFFF", fontFamily: "var(--font-landing-body)" }}>
                   <Github size={15} />
                   Connect GitHub
                 </Link>
@@ -380,38 +380,38 @@ export default function NewScanPage() {
       ?? "Initializing…";
 
     return (
-      <div className="flex min-h-screen" style={{ background: "var(--obsidian)" }}>
+      <div className="flex min-h-screen" style={{ background: "var(--landing-bg)" }}>
         <DashboardSidebar />
         <main className="flex-1 flex items-center justify-center p-8">
           <div className="max-w-md w-full text-center">
             {/* Animated icon */}
             <div className="relative w-24 h-24 mx-auto mb-8">
               <div className="w-24 h-24 rounded-2xl flex items-center justify-center animate-pulse-accent"
-                style={{ background: "var(--accent-glow)", border: "1px solid var(--border-amber)" }}>
-                <Shield size={40} style={{ color: "var(--accent)" }} />
+                style={{ background: "rgba(48, 121, 255, 0.1)", border: "1px solid rgba(48, 121, 255, 0.2)" }}>
+                <Shield size={40} style={{ color: "var(--landing-primary)" }} />
               </div>
               <div className="absolute inset-0 overflow-hidden rounded-2xl pointer-events-none" style={{ opacity: 0.5 }}>
                 <div className="w-full h-0.5 animate-scan-line"
-                  style={{ background: "linear-gradient(90deg, transparent, var(--accent), transparent)" }} />
+                  style={{ background: "linear-gradient(90deg, transparent, var(--landing-primary), transparent)" }} />
               </div>
             </div>
 
-            <h2 className="text-2xl mb-1" style={{ fontFamily: "var(--font-ui)" }}>
+            <h2 className="text-2xl mb-1" style={{ fontFamily: "var(--font-landing-heading)" }}>
               Scanning your repository
             </h2>
-            <p style={{ color: "var(--text-secondary)", fontSize: "13px", fontFamily: "var(--font-label)", marginBottom: 8 }}>
+            <p style={{ color: "var(--landing-text-secondary)", fontSize: "13px", fontFamily: "var(--font-landing-body)", marginBottom: 8 }}>
               {displayRepo}
             </p>
-            <p style={{ color: "var(--accent)", fontSize: "12px", fontFamily: "var(--font-label)", marginBottom: 24 }}>
+            <p style={{ color: "var(--landing-primary)", fontSize: "12px", fontFamily: "var(--font-landing-body)", marginBottom: 24 }}>
               {activeStepLabel}
             </p>
 
             {/* Progress bar */}
-            <div className="h-1.5 rounded-full mb-6 overflow-hidden" style={{ background: "var(--obsidian-4)" }}>
+            <div className="h-1.5 rounded-full mb-6 overflow-hidden" style={{ background: "var(--landing-border)" }}>
               <div className="h-full rounded-full transition-all duration-700"
                 style={{
                   width: `${percent || 5}%`,
-                  background: "linear-gradient(90deg, var(--accent-muted), var(--accent-bright))",
+                  background: "linear-gradient(90deg, #60A5FA, #2563EB)",
                 }} />
             </div>
 
@@ -422,21 +422,21 @@ export default function NewScanPage() {
                   <div key={step.key}
                     className="flex items-center gap-3 py-1.5 px-3 rounded-lg transition-all duration-300"
                     style={{
-                      background: step.status === "active" ? "var(--accent-glow)" : "transparent",
+                      background: step.status === "active" ? "rgba(48, 121, 255, 0.1)" : "transparent",
                       opacity: step.status === "done" ? 0.45 : step.status === "active" ? 1 : 0.25,
                     }}>
                     {step.status === "done" ? (
                       <CheckCircle size={12} style={{ color: "var(--guard-monetize)", flexShrink: 0 }} />
                     ) : step.status === "active" ? (
                       <div className="w-3 h-3 rounded-full border-2 border-t-transparent animate-spin flex-shrink-0"
-                        style={{ borderColor: "var(--accent)", borderTopColor: "transparent" }} />
+                        style={{ borderColor: "var(--landing-primary)", borderTopColor: "transparent" }} />
                     ) : (
-                      <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ border: "1px solid var(--border)" }} />
+                      <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ border: "1px solid var(--landing-border)" }} />
                     )}
                     <span style={{
                       fontSize: "12px",
-                      color: step.status === "active" ? "var(--accent)" : "var(--text-secondary)",
-                      fontFamily: "var(--font-label)",
+                      color: step.status === "active" ? "var(--landing-primary)" : "var(--landing-text-secondary)",
+                      fontFamily: "var(--font-landing-body)",
                     }}>
                       {step.label}
                     </span>
@@ -453,7 +453,7 @@ export default function NewScanPage() {
   // ─── Main form ────────────────────────────────────────────────────────────
 
   return (
-    <div className="flex min-h-screen" style={{ background: "var(--obsidian)" }}>
+    <div className="flex min-h-screen" style={{ background: "var(--landing-bg)" }}>
       <DashboardSidebar />
       <main className="flex-1 flex flex-col min-w-0">
         <TopBar />
@@ -464,13 +464,13 @@ export default function NewScanPage() {
               <div className="flex items-center gap-3 p-4 rounded-xl mb-6"
                 style={{ background: "rgba(232,64,64,0.06)", border: "1px solid rgba(232,64,64,0.25)" }}>
                 <AlertTriangle size={16} style={{ color: "var(--guard-security)", flexShrink: 0 }} />
-                <p style={{ fontSize: "13px", color: "var(--text-primary)", fontFamily: "var(--font-label)" }}>{error}</p>
+                <p style={{ fontSize: "13px", color: "var(--landing-text)", fontFamily: "var(--font-landing-body)" }}>{error}</p>
               </div>
             )}
 
             <div className="mb-6">
-              <h1 className="text-3xl mb-1" style={{ fontFamily: "var(--font-ui)" }}>New Scan</h1>
-              <p style={{ color: "var(--text-secondary)", fontSize: "14px", fontFamily: "var(--font-label)" }}>
+              <h1 className="text-3xl mb-1" style={{ fontFamily: "var(--font-landing-heading)" }}>New Scan</h1>
+              <p style={{ color: "var(--landing-text-secondary)", fontSize: "14px", fontFamily: "var(--font-landing-body)" }}>
                 Select a repository to check for production-readiness issues
               </p>
             </div>
@@ -479,7 +479,7 @@ export default function NewScanPage() {
             <div className="mb-5">
               <div className="flex items-center gap-2 mb-3">
                 <p className="text-xs font-semibold uppercase tracking-widest"
-                  style={{ color: "var(--text-tertiary)", fontFamily: "var(--font-label)" }}>
+                  style={{ color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)" }}>
                   Repository
                 </p>
               </div>
@@ -487,17 +487,17 @@ export default function NewScanPage() {
               {githubConnected === false ? (
                 /* Not connected */
                 <div className="p-5 rounded-xl text-center"
-                  style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}>
-                  <Github size={24} className="mx-auto mb-3" style={{ color: "var(--text-tertiary)" }} />
-                  <p style={{ fontSize: "14px", color: "var(--text-primary)", fontFamily: "var(--font-label)", marginBottom: 4 }}>
+                  style={{ background: "#FFFFFF", border: "1px solid var(--landing-border)" }}>
+                  <Github size={24} className="mx-auto mb-3" style={{ color: "var(--landing-text-secondary)" }} />
+                  <p style={{ fontSize: "14px", color: "var(--landing-text)", fontFamily: "var(--font-landing-body)", marginBottom: 4 }}>
                     Connect GitHub to run scans
                   </p>
-                  <p style={{ fontSize: "12px", color: "var(--text-tertiary)", fontFamily: "var(--font-label)", marginBottom: 16 }}>
+                  <p style={{ fontSize: "12px", color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)", marginBottom: 16 }}>
                     ShipGuard requires GitHub connection and repository selection before scanning.
                   </p>
                   <Link href="/dashboard/settings"
                     className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium"
-                    style={{ background: "var(--accent)", color: "var(--obsidian)", fontFamily: "var(--font-label)" }}>
+                    style={{ background: "var(--landing-primary)", color: "#FFFFFF", fontFamily: "var(--font-landing-body)" }}>
                     <Github size={14} />
                     Connect GitHub
                   </Link>
@@ -505,22 +505,22 @@ export default function NewScanPage() {
               ) : loadingRepos ? (
                 /* Loading */
                 <div className="p-8 rounded-xl text-center"
-                  style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}>
+                  style={{ background: "#FFFFFF", border: "1px solid var(--landing-border)" }}>
                   <div className="w-6 h-6 rounded-full border-2 border-t-transparent animate-spin mx-auto mb-2"
-                    style={{ borderColor: "var(--accent)", borderTopColor: "transparent" }} />
-                  <p style={{ fontSize: "13px", color: "var(--text-tertiary)", fontFamily: "var(--font-label)" }}>
+                    style={{ borderColor: "var(--landing-primary)", borderTopColor: "transparent" }} />
+                  <p style={{ fontSize: "13px", color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)" }}>
                     Loading repositories…
                   </p>
                 </div>
               ) : reposError ? (
                 /* Error loading repos */
                 <div className="p-5 rounded-xl text-center"
-                  style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}>
+                  style={{ background: "#FFFFFF", border: "1px solid var(--landing-border)" }}>
                   <AlertTriangle size={20} className="mx-auto mb-2" style={{ color: "var(--sev-high)" }} />
-                  <p style={{ fontSize: "13px", color: "var(--text-secondary)", fontFamily: "var(--font-label)", marginBottom: 8 }}>{reposError}</p>
+                  <p style={{ fontSize: "13px", color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)", marginBottom: 8 }}>{reposError}</p>
                   <button onClick={() => { setReposError(null); setLoadingRepos(true); window.location.reload(); }}
                     className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg"
-                    style={{ background: "var(--surface-3)", color: "var(--text-secondary)", border: "1px solid var(--border)", fontFamily: "var(--font-label)" }}>
+                    style={{ background: "#F3F4F6", color: "var(--landing-text-secondary)", border: "1px solid var(--landing-border)", fontFamily: "var(--font-landing-body)" }}>
                     <RefreshCw size={11} /> Retry
                   </button>
                 </div>
@@ -533,35 +533,35 @@ export default function NewScanPage() {
                       style={{ background: "rgba(251,191,36,0.08)", border: "1px solid rgba(251,191,36,0.25)" }}>
                       <AlertTriangle size={15} className="flex-shrink-0 mt-0.5" style={{ color: "#f59e0b" }} />
                       <div className="flex-1 min-w-0">
-                        <p style={{ fontSize: "12px", color: "var(--text-secondary)", fontFamily: "var(--font-label)", lineHeight: 1.5 }}>
+                        <p style={{ fontSize: "12px", color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)", lineHeight: 1.5 }}>
                           Organization repos are hidden because your GitHub token is missing the <code style={{ fontSize: "11px" }}>read:org</code> scope.
                           {" "}<Link href="/dashboard/settings" className="underline" style={{ color: "#f59e0b" }}>Reconnect GitHub in Settings</Link> to see org repos.
                         </p>
                       </div>
-                      <button onClick={() => setNeedsReauth(false)} style={{ color: "var(--text-tertiary)", lineHeight: 1 }}>
+                      <button onClick={() => setNeedsReauth(false)} style={{ color: "var(--landing-text-secondary)", lineHeight: 1 }}>
                         <X size={13} />
                       </button>
                     </div>
                   )}
                   <div className="rounded-xl overflow-hidden"
-                    style={{ border: "1px solid var(--border)", background: "var(--surface-2)" }}>
+                    style={{ border: "1px solid var(--landing-border)", background: "#FFFFFF" }}>
                   <div className="flex" style={{ minHeight: 320 }}>
                     {/* Namespace sidebar */}
                     <div className="flex flex-col gap-0.5 p-2 border-r overflow-y-auto"
-                      style={{ borderColor: "var(--border)", width: 160, flexShrink: 0 }}>
+                      style={{ borderColor: "var(--landing-border)", width: 160, flexShrink: 0 }}>
                       {namespaces.map(ns => (
                         <button key={ns.namespace}
                           onClick={() => { setActiveNamespace(ns.namespace); setRepoSearch(""); setSelectedRepo(null); }}
                           className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-left transition-colors w-full"
                           style={{
-                            background: activeNamespace === ns.namespace ? "var(--surface-3)" : "transparent",
+                            background: activeNamespace === ns.namespace ? "#F3F4F6" : "transparent",
                             border: `1px solid ${activeNamespace === ns.namespace ? "var(--border-hover)" : "transparent"}`,
                           }}>
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img src={ns.avatar} alt={ns.namespace}
                             className="w-5 h-5 rounded-full flex-shrink-0"
                             onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
-                          <span className="truncate" style={{ fontSize: "12px", color: activeNamespace === ns.namespace ? "var(--text-primary)" : "var(--text-secondary)", fontFamily: "var(--font-label)" }}>
+                          <span className="truncate" style={{ fontSize: "12px", color: activeNamespace === ns.namespace ? "var(--landing-text)" : "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)" }}>
                             {ns.namespace}
                           </span>
                         </button>
@@ -572,19 +572,19 @@ export default function NewScanPage() {
                     <div className="flex-1 flex flex-col min-w-0">
                       {/* Search */}
                       <div className="flex items-center gap-2 px-3 py-2.5 border-b"
-                        style={{ borderColor: "var(--border)" }}>
-                        <Search size={13} style={{ color: "var(--text-tertiary)", flexShrink: 0 }} />
+                        style={{ borderColor: "var(--landing-border)" }}>
+                        <Search size={13} style={{ color: "var(--landing-text-secondary)", flexShrink: 0 }} />
                         <input
                           type="text"
                           value={repoSearch}
                           onChange={e => setRepoSearch(e.target.value)}
                           placeholder="Search repositories…"
                           className="flex-1 bg-transparent outline-none text-xs"
-                          style={{ color: "var(--text-primary)", fontFamily: "var(--font-label)" }}
+                          style={{ color: "var(--landing-text)", fontFamily: "var(--font-landing-body)" }}
                         />
                         {repoSearch && (
                           <button onClick={() => setRepoSearch("")}>
-                            <X size={12} style={{ color: "var(--text-tertiary)" }} />
+                            <X size={12} style={{ color: "var(--landing-text-secondary)" }} />
                           </button>
                         )}
                       </div>
@@ -592,7 +592,7 @@ export default function NewScanPage() {
                       <div className="overflow-y-auto flex-1" style={{ maxHeight: 300 }}>
                         {filteredRepos.length === 0 ? (
                           <div className="flex items-center justify-center h-24">
-                            <p style={{ fontSize: "12px", color: "var(--text-tertiary)", fontFamily: "var(--font-label)" }}>
+                            <p style={{ fontSize: "12px", color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)" }}>
                               No repositories found
                             </p>
                           </div>
@@ -603,25 +603,25 @@ export default function NewScanPage() {
                               onClick={() => setSelectedRepo(repo)}
                               className="w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-white/[0.02]"
                               style={{
-                                background: isSelected ? "var(--accent-glow)" : "transparent",
-                                borderLeft: isSelected ? "2px solid var(--accent)" : "2px solid transparent",
+                                background: isSelected ? "rgba(48, 121, 255, 0.1)" : "transparent",
+                                borderLeft: isSelected ? "2px solid var(--landing-primary)" : "2px solid transparent",
                               }}>
                               {/* Language dot */}
                               <div className="w-2.5 h-2.5 rounded-full flex-shrink-0"
                                 style={{ background: repo.language ? (LANG_COLORS[repo.language] ?? "var(--border)") : "var(--border)" }} />
                               <div className="flex-1 min-w-0">
-                                <p className="truncate" style={{ fontSize: "13px", color: isSelected ? "var(--accent)" : "var(--text-primary)", fontFamily: "var(--font-label)", fontWeight: isSelected ? 600 : 400 }}>
+                                <p className="truncate" style={{ fontSize: "13px", color: isSelected ? "var(--landing-primary)" : "var(--landing-text)", fontFamily: "var(--font-landing-body)", fontWeight: isSelected ? 600 : 400 }}>
                                   {repo.name}
                                 </p>
                                 {repo.description && (
-                                  <p className="truncate" style={{ fontSize: "11px", color: "var(--text-tertiary)", fontFamily: "var(--font-label)", marginTop: 1 }}>
+                                  <p className="truncate" style={{ fontSize: "11px", color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)", marginTop: 1 }}>
                                     {repo.description}
                                   </p>
                                 )}
                               </div>
                               {repo.private && (
                                 <span className="flex-shrink-0 text-xs px-1.5 py-0.5 rounded"
-                                  style={{ background: "var(--obsidian-4)", color: "var(--text-tertiary)", fontFamily: "var(--font-label)", fontSize: "10px" }}>
+                                  style={{ background: "var(--landing-border)", color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)", fontSize: "10px" }}>
                                   private
                                 </span>
                               )}
@@ -635,14 +635,14 @@ export default function NewScanPage() {
                   {/* Selected repo footer */}
                   {selectedRepo && (
                     <div className="flex items-center justify-between gap-3 px-4 py-3 border-t"
-                      style={{ borderColor: "var(--border)", background: "var(--obsidian-1)" }}>
+                      style={{ borderColor: "var(--landing-border)", background: "var(--landing-surface)" }}>
                       <div className="flex items-center gap-2 min-w-0">
-                        <Github size={13} style={{ color: "var(--accent)", flexShrink: 0 }} />
-                        <span className="truncate text-sm" style={{ color: "var(--accent)", fontFamily: "var(--font-label)" }}>
+                        <Github size={13} style={{ color: "var(--landing-primary)", flexShrink: 0 }} />
+                        <span className="truncate text-sm" style={{ color: "var(--landing-primary)", fontFamily: "var(--font-landing-body)" }}>
                           {selectedRepo.full_name}
                         </span>
                         <a href={`https://github.com/${selectedRepo.full_name}`} target="_blank" rel="noopener noreferrer">
-                          <ExternalLink size={11} style={{ color: "var(--text-tertiary)" }} />
+                          <ExternalLink size={11} style={{ color: "var(--landing-text-secondary)" }} />
                         </a>
                       </div>
                       {/* Branch picker */}
@@ -650,19 +650,19 @@ export default function NewScanPage() {
                         <button
                           onClick={() => setBranchOpen(!branchOpen)}
                           className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs transition-colors"
-                          style={{ background: "var(--surface-3)", border: "1px solid var(--border)", color: "var(--text-secondary)", fontFamily: "var(--font-label)" }}>
+                          style={{ background: "#F3F4F6", border: "1px solid var(--landing-border)", color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)" }}>
                           <GitBranch size={11} />
                           {loadingBranches ? "…" : selectedBranch}
                           <ChevronDown size={11} style={{ transform: branchOpen ? "rotate(180deg)" : undefined, transition: "transform 0.15s" }} />
                         </button>
                         {branchOpen && branches.length > 0 && (
                           <div className="absolute right-0 bottom-full mb-1 rounded-xl overflow-hidden z-50"
-                            style={{ background: "var(--surface-3)", border: "1px solid var(--border)", minWidth: 140, maxHeight: 200, overflowY: "auto" }}>
+                            style={{ background: "#F3F4F6", border: "1px solid var(--landing-border)", minWidth: 140, maxHeight: 200, overflowY: "auto" }}>
                             {branches.map(b => (
                               <button key={b}
                                 onClick={() => { setSelectedBranch(b); setBranchOpen(false); }}
                                 className="w-full flex items-center gap-2 px-3 py-2 text-left text-xs hover:bg-white/[0.04] transition-colors"
-                                style={{ color: b === selectedBranch ? "var(--accent)" : "var(--text-secondary)", fontFamily: "var(--font-label)" }}>
+                                style={{ color: b === selectedBranch ? "var(--landing-primary)" : "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)" }}>
                                 <GitBranch size={10} />
                                 {b}
                               </button>
@@ -681,18 +681,18 @@ export default function NewScanPage() {
             <div className="mb-5">
               <div className="flex items-center gap-2 mb-2">
                 <p className="text-xs font-semibold uppercase tracking-widest"
-                  style={{ color: "var(--text-tertiary)", fontFamily: "var(--font-label)" }}>
+                  style={{ color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)" }}>
                   Framework
                 </p>
                 {frameworkDetected && (
                   <span className="text-xs px-2 py-0.5 rounded-full"
-                    style={{ background: "rgba(251,191,36,0.08)", color: "#f59e0b", border: "1px solid rgba(251,191,36,0.25)", fontFamily: "var(--font-label)" }}>
+                    style={{ background: "rgba(251,191,36,0.08)", color: "#f59e0b", border: "1px solid rgba(251,191,36,0.25)", fontFamily: "var(--font-landing-body)" }}>
                     auto-detected
                   </span>
                 )}
                 {detectingFramework && (
                   <div className="w-3.5 h-3.5 rounded-full border-2 border-t-transparent animate-spin"
-                    style={{ borderColor: "var(--accent)", borderTopColor: "transparent" }} />
+                    style={{ borderColor: "var(--landing-primary)", borderTopColor: "transparent" }} />
                 )}
               </div>
               <div className="relative">
@@ -701,10 +701,10 @@ export default function NewScanPage() {
                   onChange={e => { setFramework(e.target.value); setFrameworkDetected(false); }}
                   className="w-full px-4 py-3 rounded-xl text-sm appearance-none cursor-pointer"
                   style={{
-                    background: "var(--surface-2)",
-                    border: "1px solid var(--border)",
-                    color: "var(--text-primary)",
-                    fontFamily: "var(--font-label)",
+                    background: "#FFFFFF",
+                    border: "1px solid var(--landing-border)",
+                    color: "var(--landing-text)",
+                    fontFamily: "var(--font-landing-body)",
                     outline: "none",
                   }}>
                   {FRAMEWORK_OPTIONS.map(opt => (
@@ -712,10 +712,10 @@ export default function NewScanPage() {
                   ))}
                 </select>
                 <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none"
-                  style={{ color: "var(--text-tertiary)" }} />
+                  style={{ color: "var(--landing-text-secondary)" }} />
               </div>
               {framework === "unknown" && (
-                <p className="text-xs mt-1.5" style={{ color: "var(--text-tertiary)", fontFamily: "var(--font-label)" }}>
+                <p className="text-xs mt-1.5" style={{ color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)" }}>
                   Framework-specific checks will be skipped. Universal checks (secrets, CVEs, OWASP) still run.
                 </p>
               )}
@@ -724,7 +724,7 @@ export default function NewScanPage() {
             {/* ── Guards preview ────────────────────────────────────────────── */}
             <div className="mb-6">
               <p className="text-xs font-semibold uppercase tracking-widest mb-3"
-                style={{ color: "var(--text-tertiary)", fontFamily: "var(--font-label)" }}>
+                style={{ color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)" }}>
                 Guards to run
               </p>
               <div className="grid grid-cols-4 gap-2">
@@ -733,9 +733,9 @@ export default function NewScanPage() {
                   return (
                     <div key={g.key}
                       className="flex items-center gap-2 p-3 rounded-xl"
-                      style={{ background: "var(--surface-2)", border: `1px solid ${g.color}22` }}>
+                      style={{ background: "#FFFFFF", border: `1px solid ${g.color}22` }}>
                       <Icon size={13} style={{ color: g.color, flexShrink: 0 }} />
-                      <span style={{ fontSize: "12px", color: "var(--text-secondary)", fontFamily: "var(--font-label)" }}>
+                      <span style={{ fontSize: "12px", color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)" }}>
                         {g.label}
                       </span>
                     </div>
@@ -750,10 +750,10 @@ export default function NewScanPage() {
               disabled={!canScan}
               className="w-full py-4 rounded-xl font-semibold text-base flex items-center justify-center gap-3 transition-all duration-200 hover:-translate-y-0.5 disabled:opacity-40 disabled:cursor-not-allowed disabled:translate-y-0"
               style={{
-                background: "var(--accent)",
-                color: "var(--obsidian)",
-                fontFamily: "var(--font-ui)",
-                boxShadow: "0 8px 32px var(--accent-glow-strong)",
+                background: "var(--landing-primary)",
+                color: "#FFFFFF",
+                fontFamily: "var(--font-landing-heading)",
+                boxShadow: "0 8px 32px rgba(48, 121, 255, 0.3)",
               }}>
               <Shield size={18} />
               Run Production Scan
@@ -761,9 +761,9 @@ export default function NewScanPage() {
             </button>
 
             <p className="text-center text-xs mt-4"
-              style={{ color: "var(--text-tertiary)", fontFamily: "var(--font-label)" }}>
+              style={{ color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)" }}>
               Uses 1 of your free monthly scans &nbsp;·&nbsp;
-              <Link href="/pricing" style={{ color: "var(--accent)" }}>Upgrade for unlimited</Link>
+              <Link href="/pricing" style={{ color: "var(--landing-primary)" }}>Upgrade for unlimited</Link>
             </p>
 
             <div
@@ -776,8 +776,8 @@ export default function NewScanPage() {
               <p
                 style={{
                   fontSize: "12px",
-                  color: "var(--text-secondary)",
-                  fontFamily: "var(--font-label)",
+                  color: "var(--landing-text-secondary)",
+                  fontFamily: "var(--font-landing-body)",
                   lineHeight: "1.6",
                 }}
               >
@@ -797,16 +797,16 @@ export default function NewScanPage() {
 function TopBar() {
   return (
     <div className="h-16 flex items-center px-6 border-b flex-shrink-0"
-      style={{ borderColor: "var(--border)", background: "var(--obsidian-1)" }}>
+      style={{ borderColor: "var(--landing-border)", background: "var(--landing-surface)" }}>
       <div className="flex items-center gap-4">
         <Link href="/dashboard"
           className="flex items-center gap-1.5 text-sm transition-colors"
-          style={{ color: "var(--text-tertiary)", fontFamily: "var(--font-label)" }}>
+          style={{ color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)" }}>
           <ChevronLeft size={15} />
           Dashboard
         </Link>
         <span style={{ color: "var(--border)", fontSize: "14px" }}>/</span>
-        <span style={{ fontSize: "14px", color: "var(--text-primary)", fontFamily: "var(--font-label)" }}>
+        <span style={{ fontSize: "14px", color: "var(--landing-text)", fontFamily: "var(--font-landing-body)" }}>
           New Scan
         </span>
       </div>

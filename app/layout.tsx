@@ -35,7 +35,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en" >
       <body
         className={`${geist.variable} ${geistMono.variable} antialiased`}
         style={{ fontFamily: "var(--font-geist), system-ui, sans-serif" }}

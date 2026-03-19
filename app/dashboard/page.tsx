@@ -79,7 +79,7 @@ function FrameworkPill({ framework }: { framework: string | null }) {
         background: "rgba(139,92,246,0.12)",
         color: "#a78bfa",
         border: "1px solid rgba(139,92,246,0.25)",
-        fontFamily: "var(--font-label)",
+        fontFamily: "var(--font-landing-body)",
       }}
     >
       {label}
@@ -95,7 +95,7 @@ function ScorePill({ score }: { score: number }) {
       style={{
         background: `${color}18`,
         color: color,
-        fontFamily: "var(--font-ui)",
+        fontFamily: "var(--font-landing-heading)",
       }}
     >
       {score}
@@ -106,15 +106,15 @@ function ScorePill({ score }: { score: number }) {
 function StatusBadge({ status }: { status: string }) {
   const map = {
     complete: { label: "Complete", color: "var(--guard-monetize)", bg: "var(--guard-monetize-glow)" },
-    scanning: { label: "Scanning…", color: "var(--accent)", bg: "var(--accent-glow)" },
+    scanning: { label: "Scanning…", color: "var(--landing-primary)", bg: "rgba(48, 121, 255, 0.1)" },
     failed: { label: "Failed", color: "var(--guard-security)", bg: "var(--guard-security-glow)" },
-    pending: { label: "Pending", color: "var(--text-tertiary)", bg: "rgba(107,103,98,0.12)" },
+    pending: { label: "Pending", color: "var(--landing-text-secondary)", bg: "rgba(107,103,98,0.12)" },
   };
   const s = map[status as keyof typeof map] || map.pending;
   return (
     <span
       className="text-xs px-2 py-0.5 rounded-full font-medium"
-      style={{ background: s.bg, color: s.color, border: `1px solid ${s.color}33`, fontFamily: "var(--font-label)" }}
+      style={{ background: s.bg, color: s.color, border: `1px solid ${s.color}33`, fontFamily: "var(--font-landing-body)" }}
     >
       {s.label}
     </span>
@@ -179,19 +179,19 @@ export default function DashboardPage() {
   const displayName = user?.name?.trim() || user?.email?.split("@")[0] || "Builder";
 
   return (
-    <div className="flex min-h-screen" style={{ background: "var(--obsidian)" }}>
+    <div className="flex min-h-screen" style={{ background: "var(--landing-bg)" }}>
       <DashboardSidebar />
 
       <main className="flex-1 flex flex-col min-w-0">
         {/* Top bar */}
         <div
           className="h-16 flex items-center justify-between px-6 border-b flex-shrink-0"
-          style={{ borderColor: "var(--border)", background: "var(--obsidian-1)" }}
+          style={{ borderColor: "var(--landing-border)", background: "var(--landing-surface)" }}
         >
           <div>
             <h1
               className="text-base font-semibold"
-              style={{ fontFamily: "var(--font-ui)", letterSpacing: "-0.02em" }}
+              style={{ fontFamily: "var(--font-landing-heading)", letterSpacing: "-0.02em" }}
             >
               Dashboard
             </h1>
@@ -199,21 +199,21 @@ export default function DashboardPage() {
           <div className="flex items-center gap-3">
             <button
               className="relative p-2 rounded-lg transition-colors"
-              style={{ color: "var(--text-tertiary)" }}
+              style={{ color: "var(--landing-text-secondary)" }}
             >
               <Bell size={17} />
               <span
                 className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full"
-                style={{ background: "var(--accent)" }}
+                style={{ background: "var(--landing-primary)" }}
               />
             </button>
             <Link
               href="/scan/new"
               className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 hover:-translate-y-0.5"
               style={{
-                background: "var(--accent)",
-                color: "var(--obsidian)",
-                fontFamily: "var(--font-ui)",
+                background: "var(--landing-primary)",
+                color: "#FFFFFF",
+                fontFamily: "var(--font-landing-heading)",
               }}
             >
               <PlusCircle size={15} />
@@ -229,24 +229,24 @@ export default function DashboardPage() {
             <div
               className="flex items-center justify-between p-6 rounded-2xl mb-6"
               style={{
-                background: "linear-gradient(135deg, var(--accent-glow) 0%, var(--surface-2) 60%)",
-                border: "1px solid var(--border-amber)",
+                background: "linear-gradient(135deg, rgba(48, 121, 255, 0.05) 0%, #FFFFFF 60%)",
+                border: "1px solid rgba(48, 121, 255, 0.2)",
               }}
             >
               <div>
                 <p
                   className="text-xs font-semibold uppercase tracking-widest mb-1"
-                  style={{ color: "var(--accent)", fontFamily: "var(--font-label)" }}
+                  style={{ color: "var(--landing-primary)", fontFamily: "var(--font-landing-body)" }}
                 >
                   {planLabel} Plan
                 </p>
                 <h2
                   className="text-2xl mb-1"
-                  style={{ fontFamily: "var(--font-ui)",  }}
+                  style={{ fontFamily: "var(--font-landing-heading)",  }}
                 >
                   Welcome back, {displayName}
                 </h2>
-                <p style={{ fontSize: "13px", color: "var(--text-secondary)", fontFamily: "var(--font-label)" }}>
+                <p style={{ fontSize: "13px", color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)" }}>
                   {scansLimit >= 999999
                     ? "You have unlimited scans available."
                     : `You have ${scansRemaining} scan${Number(scansRemaining) === 1 ? "" : "s"} remaining this month.`}
@@ -255,12 +255,12 @@ export default function DashboardPage() {
               <div className="hidden sm:flex flex-col items-end gap-2">
                 <div
                   className="flex items-center gap-2 px-3 py-1.5 rounded-lg"
-                  style={{ background: "var(--obsidian-2)", border: "1px solid var(--border)" }}
+                  style={{ background: "#FFFFFF", border: "1px solid var(--landing-border)" }}
                 >
-                    <span style={{ fontSize: "12px", color: "var(--text-tertiary)", fontFamily: "var(--font-label)" }}>
+                    <span style={{ fontSize: "12px", color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)" }}>
                       Scans used
                     </span>
-                    <span style={{ fontSize: "18px", color: "var(--accent)", fontFamily: "var(--font-ui)",  }}>
+                    <span style={{ fontSize: "18px", color: "var(--landing-primary)", fontFamily: "var(--font-landing-heading)",  }}>
                       {scansLimit >= 999999 ? `${scansUsed}/∞` : `${scansUsed}/${scansLimit}`}
                     </span>
                   </div>
@@ -268,7 +268,7 @@ export default function DashboardPage() {
                   <Link
                     href="/pricing"
                     className="text-xs font-medium"
-                    style={{ color: "var(--accent)", fontFamily: "var(--font-label)" }}
+                    style={{ color: "var(--landing-primary)", fontFamily: "var(--font-landing-body)" }}
                   >
                     Upgrade for unlimited →
                   </Link>
@@ -279,7 +279,7 @@ export default function DashboardPage() {
             {/* Stats row */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                 {[
-                  { label: "Total Scans", value: scans.length, icon: FileText, color: "var(--accent)" },
+                  { label: "Total Scans", value: scans.length, icon: FileText, color: "var(--landing-primary)" },
                   { label: "Avg. Score", value: avgScore, icon: TrendingUp, color: "var(--guard-scale)" },
                   { label: "Critical Issues", value: totalIssues, icon: XCircle, color: "var(--guard-security)" },
                   { label: "Completed Scans", value: completedScans, icon: CheckCircle, color: "var(--guard-monetize)" },
@@ -289,17 +289,17 @@ export default function DashboardPage() {
                   <div
                     key={stat.label}
                     className="p-5 rounded-xl"
-                    style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}
+                    style={{ background: "#FFFFFF", border: "1px solid var(--landing-border)" }}
                   >
                     <div className="flex items-center justify-between mb-3">
-                      <span style={{ fontSize: "12px", color: "var(--text-tertiary)", fontFamily: "var(--font-label)" }}>
+                      <span style={{ fontSize: "12px", color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)" }}>
                         {stat.label}
                       </span>
                       <Icon size={14} style={{ color: stat.color }} />
                     </div>
                     <div
                       style={{
-                        fontFamily: "var(--font-ui)",
+                        fontFamily: "var(--font-landing-heading)",
                         
                         fontSize: "32px",
                         color: stat.color,
@@ -318,14 +318,14 @@ export default function DashboardPage() {
               <div className="flex items-center justify-between mb-4">
                 <h2
                   className="text-base font-semibold"
-                  style={{ fontFamily: "var(--font-ui)", letterSpacing: "-0.02em" }}
+                  style={{ fontFamily: "var(--font-landing-heading)", letterSpacing: "-0.02em" }}
                 >
                   Recent Scans
                 </h2>
                 <Link
                   href="/dashboard/history"
                   className="text-xs"
-                  style={{ color: "var(--accent)", fontFamily: "var(--font-label)" }}
+                  style={{ color: "var(--landing-primary)", fontFamily: "var(--font-landing-body)" }}
                 >
                   View all
                 </Link>
@@ -341,30 +341,30 @@ export default function DashboardPage() {
                     <div
                       className="p-5 rounded-xl transition-all duration-200 group-hover:border-amber-500/30"
                       style={{
-                        background: "var(--surface-2)",
-                        border: "1px solid var(--border)",
+                        background: "#FFFFFF",
+                        border: "1px solid var(--landing-border)",
                       }}
                     >
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex items-start gap-3 min-w-0">
                           <div
                             className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5"
-                            style={{ background: "var(--obsidian-3)", border: "1px solid var(--border)" }}
+                            style={{ background: "var(--landing-surface)", border: "1px solid var(--landing-border)" }}
                           >
-                            <Github size={16} style={{ color: "var(--text-tertiary)" }} />
+                            <Github size={16} style={{ color: "var(--landing-text-secondary)" }} />
                           </div>
                           <div className="min-w-0">
                             <div className="flex items-center gap-2 mb-0.5">
                                <p
                                  className="font-medium text-sm truncate"
-                                 style={{ fontFamily: "var(--font-ui)", letterSpacing: "-0.01em" }}
+                                 style={{ fontFamily: "var(--font-landing-heading)", letterSpacing: "-0.01em" }}
                                >
                                  {scan.repo}
                                </p>
                                <StatusBadge status={scan.status} />
                                <FrameworkPill framework={scan.framework} />
                              </div>
-                            <p style={{ fontSize: "12px", color: "var(--text-tertiary)", fontFamily: "var(--font-label)" }}>
+                            <p style={{ fontSize: "12px", color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)" }}>
                               {scan.branch} · {formatRelativeTime(scan.created_at)}
                             </p>
                           </div>
@@ -374,24 +374,24 @@ export default function DashboardPage() {
                           {/* Issue counts */}
                           <div className="hidden sm:flex items-center gap-2">
                             {(scan.critical_count || 0) > 0 && (
-                              <span className="badge-critical text-xs px-1.5 py-0.5 rounded" style={{ fontFamily: "var(--font-label)" }}>
+                              <span className="badge-critical text-xs px-1.5 py-0.5 rounded" style={{ fontFamily: "var(--font-landing-body)" }}>
                                 {scan.critical_count} critical
                               </span>
                             )}
                             {(scan.high_count || 0) > 0 && (
-                              <span className="badge-high text-xs px-1.5 py-0.5 rounded" style={{ fontFamily: "var(--font-label)" }}>
+                              <span className="badge-high text-xs px-1.5 py-0.5 rounded" style={{ fontFamily: "var(--font-landing-body)" }}>
                                 {scan.high_count} high
                               </span>
                             )}
                           </div>
 
                           <ScorePill score={scan.overall_score || 0} />
-                          <ChevronRight size={14} style={{ color: "var(--text-tertiary)" }} className="group-hover:translate-x-0.5 transition-transform" />
+                          <ChevronRight size={14} style={{ color: "var(--landing-text-secondary)" }} className="group-hover:translate-x-0.5 transition-transform" />
                         </div>
                       </div>
 
                       {/* Guard score bars */}
-                      <div className="grid grid-cols-4 gap-3 mt-4 pt-4 border-t" style={{ borderColor: "var(--border)" }}>
+                      <div className="grid grid-cols-4 gap-3 mt-4 pt-4 border-t" style={{ borderColor: "var(--landing-border)" }}>
                         {guards.map((g) => {
                           // Map guard keys to database column names
                           const scoreMap: Record<string, number> = {
@@ -404,14 +404,14 @@ export default function DashboardPage() {
                           return (
                             <div key={g.key}>
                               <div className="flex items-center justify-between mb-1">
-                                <span style={{ fontSize: "10px", color: "var(--text-tertiary)", fontFamily: "var(--font-label)" }}>
+                                <span style={{ fontSize: "10px", color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)" }}>
                                   {g.label}
                                 </span>
-                                <span style={{ fontSize: "10px", color: g.color, fontFamily: "var(--font-ui)",  }}>
+                                <span style={{ fontSize: "10px", color: g.color, fontFamily: "var(--font-landing-heading)",  }}>
                                   {score}
                                 </span>
                               </div>
-                              <div className="h-1 rounded-full" style={{ background: "var(--obsidian-5)" }}>
+                              <div className="h-1 rounded-full" style={{ background: "var(--landing-border)" }}>
                                 <div
                                   className="h-full rounded-full"
                                   style={{ width: `${score}%`, background: g.color }}
@@ -431,30 +431,30 @@ export default function DashboardPage() {
             {scans.length === 0 && (
               <div
                 className="p-8 rounded-2xl text-center border-dashed"
-                style={{ border: "2px dashed var(--border)", background: "var(--obsidian-1)" }}
+                style={{ border: "2px dashed var(--landing-border)", background: "var(--landing-surface)" }}
               >
                 <div
                   className="w-12 h-12 rounded-xl flex items-center justify-center mx-auto mb-4"
-                  style={{ background: "var(--accent-glow)", border: "1px solid var(--border-amber)" }}
+                  style={{ background: "rgba(48, 121, 255, 0.1)", border: "1px solid rgba(48, 121, 255, 0.2)" }}
                 >
-                  <PlusCircle size={22} style={{ color: "var(--accent)" }} />
+                  <PlusCircle size={22} style={{ color: "var(--landing-primary)" }} />
                 </div>
                 <p
                   className="font-medium mb-1"
-                  style={{ fontFamily: "var(--font-ui)", letterSpacing: "-0.01em" }}
+                  style={{ fontFamily: "var(--font-landing-heading)", letterSpacing: "-0.01em" }}
                 >
                   Scan a new repository
                 </p>
                 <p
                   className="text-sm mb-4"
-                  style={{ color: "var(--text-secondary)", fontFamily: "var(--font-label)" }}
+                  style={{ color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)" }}
                 >
                   Connect GitHub and select a repository to get a full production-readiness report
                 </p>
                 <Link
                   href="/scan/new"
                   className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200"
-                  style={{ background: "var(--accent)", color: "var(--obsidian)", fontFamily: "var(--font-ui)" }}
+                  style={{ background: "var(--landing-primary)", color: "#FFFFFF", fontFamily: "var(--font-landing-heading)" }}
                 >
                   <Github size={15} />
                   Start a scan
