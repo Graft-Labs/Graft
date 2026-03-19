@@ -1,18 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
-import {
-  Github,
-  ChevronRight,
-  Clock,
-  CheckCircle,
-  XCircle,
-  AlertTriangle,
-  Search,
-  Filter,
-} from "lucide-react";
-import DashboardSidebar from "@/components/layout/DashboardSidebar";
+import Link from "next/link";
+import { ChevronRight, Github, Clock, Search, Filter, Shield, AlertTriangle, Zap, DollarSign, Globe, CheckCircle, XCircle } from "lucide-react";
 import { formatRelativeTime, getScoreColor } from "@/lib/utils";
 import { createClient } from "@/lib/supabase";
 
@@ -31,194 +21,211 @@ type Scan = {
   medium_count: number;
   low_count: number;
   created_at: string;
+  framework: string | null;
 };
 
-function StatusIcon({ status }: { status: string }) {
-  if (status === "complete") return <CheckCircle size={13} style={{ color: "var(--guard-monetize)" }} />;
-  if (status === "failed") return <XCircle size={13} style={{ color: "var(--guard-security)" }} />;
-  return <Clock size={13} style={{ color: "var(--landing-primary)" }} />;
+function StatusBadge({ status }: { status: string }) {
+  const map = {
+    complete: { label: "Complete", color: "#10B981", bg: "rgba(16, 185, 129, 0.1)" },
+    scanning: { label: "Scanning…", color: "#3079FF", bg: "rgba(48, 121, 255, 0.1)" },
+    failed: { label: "Failed", color: "#EF4444", bg: "rgba(239, 68, 68, 0.1)" },
+    pending: { label: "Pending", color: "#6B7280", bg: "#F3F4F6" },
+  };
+  const s = map[status as keyof typeof map] || map.pending;
+  return (
+    <span
+      className="text-xs px-2.5 py-1 rounded-full font-semibold shadow-sm inline-flex items-center gap-1.5"
+      style={{ background: s.bg, color: s.color, border: `1px solid ${s.color}30`, fontFamily: "var(--font-landing-body)" }}
+    >
+      {status === 'complete' && <CheckCircle size={12} />}
+      {status === 'failed' && <XCircle size={12} />}
+      {status === 'scanning' && <span className="w-1.5 h-1.5 rounded-full bg-[#3079FF] animate-pulse" />}
+      {s.label}
+    </span>
+  );
+}
+
+function ScorePill({ score }: { score: number }) {
+  const color = getScoreColor(score);
+  return (
+    <span
+      className="text-sm font-bold px-2.5 py-1 rounded-md inline-block min-w-[48px] text-center"
+      style={{
+        background: `${color}15`,
+        color: color,
+        fontFamily: "var(--font-landing-heading)",
+      }}
+    >
+      {score}
+    </span>
+  );
 }
 
 export default function ScanHistoryPage() {
-  const [search, setSearch] = useState("");
   const [scans, setScans] = useState<Scan[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
 
   useEffect(() => {
-    async function fetchScans() {
+    async function fetchHistory() {
       const supabase = createClient();
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      if (!user) {
-        window.location.href = "/auth/login";
-        return;
-      }
-
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("scans")
         .select("*")
-        .eq("user_id", user.id)
         .order("created_at", { ascending: false });
 
-      setScans(data || []);
+      if (!error && data) {
+        setScans(data);
+      }
       setLoading(false);
     }
-
-    fetchScans();
+    fetchHistory();
   }, []);
 
-  if (loading) {
-    return (
-      <div className="flex min-h-screen" style={{ background: "var(--landing-bg)" }}>
-        <DashboardSidebar />
-        <main className="flex-1 flex items-center justify-center">
-          <div className="w-8 h-8 rounded-full border-2 border-indigo-500 border-t-transparent animate-spin" />
-        </main>
-      </div>
-    );
-  }
-
-  const filtered = scans.filter((s) =>
-    s.repo.toLowerCase().includes(search.toLowerCase())
-  );
+  const filteredScans = scans.filter((scan) => {
+    const matchesSearch = scan.repo.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesStatus = statusFilter === "all" || scan.status === statusFilter;
+    return matchesSearch && matchesStatus;
+  });
 
   return (
-    <div className="flex min-h-screen" style={{ background: "var(--landing-bg)" }}>
-      <DashboardSidebar />
-      <main className="flex-1 flex flex-col min-w-0">
-        <div className="h-16 flex items-center justify-between px-6 border-b flex-shrink-0"
-          style={{ borderColor: "var(--landing-border)", background: "var(--landing-surface)" }}>
-          <h1 className="text-base font-semibold" style={{ fontFamily: "var(--font-landing-heading)", letterSpacing: "-0.02em" }}>
-            Scan History
-          </h1>
-          <Link href="/scan/new"
-            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all"
-            style={{ background: "var(--landing-primary)", color: "#FFFFFF", fontFamily: "var(--font-landing-heading)" }}>
-            New Scan
-          </Link>
-        </div>
-        <div className="flex-1 overflow-y-auto">
-          <div className="max-w-5xl mx-auto p-6">
-            {/* Search */}
-            <div className="flex items-center gap-3 px-4 py-3 rounded-xl mb-6"
-              style={{ background: "#FFFFFF", border: "1px solid var(--landing-border)" }}>
-              <Search size={15} style={{ color: "var(--landing-text-secondary)" }} />
-              <input type="text" value={search} onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search repositories…"
-                className="flex-1 bg-transparent outline-none text-sm"
-                style={{ color: "var(--landing-text)", fontFamily: "var(--font-landing-body)" }} />
-            </div>
+    <div className="flex-1 p-8 lg:p-10 max-w-7xl mx-auto w-full">
+      <header className="mb-10">
+        <h1 
+          className="text-3xl font-bold tracking-tight text-gray-900 mb-2"
+          style={{ fontFamily: "var(--font-landing-heading)" }}
+        >
+          Scan History
+        </h1>
+        <p 
+          className="text-gray-500 font-medium"
+          style={{ fontFamily: "var(--font-landing-body)" }}
+        >
+          View and filter all your previous codebase scans.
+        </p>
+      </header>
 
-            {/* Table */}
-            <div className="rounded-2xl overflow-hidden" style={{ border: "1px solid var(--landing-border)" }}>
-              <table className="w-full">
-                <thead>
-                  <tr style={{ background: "#F3F4F6", borderBottom: "1px solid var(--border)" }}>
-                    {["Repository", "Score", "Security", "Monetization", "Issues", "Date", ""].map((h) => (
-                      <th key={h} className="text-left px-4 py-3"
-                        style={{ fontSize: "11px", color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em" }}>
-                        {h}
-                      </th>
-                    ))}
+      {/* Filters */}
+      <div className="flex flex-col md:flex-row gap-4 mb-6">
+        <div className="relative flex-1">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+          <input
+            type="text"
+            placeholder="Search repositories..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#3079FF] focus:border-transparent transition-shadow shadow-sm font-medium"
+            style={{ fontFamily: "var(--font-landing-body)" }}
+          />
+        </div>
+        <div className="flex items-center gap-2">
+          <Filter className="text-gray-400" size={18} />
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-900 font-medium focus:outline-none focus:ring-2 focus:ring-[#3079FF] focus:border-transparent transition-shadow shadow-sm cursor-pointer"
+            style={{ fontFamily: "var(--font-landing-body)" }}
+          >
+            <option value="all">All Statuses</option>
+            <option value="complete">Complete</option>
+            <option value="scanning">Scanning</option>
+            <option value="failed">Failed</option>
+          </select>
+        </div>
+      </div>
+
+      {/* Table */}
+      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-gray-50/80 border-b border-gray-200">
+                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider" style={{ fontFamily: "var(--font-landing-body)" }}>Repository</th>
+                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider" style={{ fontFamily: "var(--font-landing-body)" }}>Status</th>
+                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider" style={{ fontFamily: "var(--font-landing-body)" }}>Score</th>
+                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider" style={{ fontFamily: "var(--font-landing-body)" }}>Issues</th>
+                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider" style={{ fontFamily: "var(--font-landing-body)" }}>Date</th>
+                <th className="px-6 py-4"></th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {loading ? (
+                [...Array(5)].map((_, i) => (
+                  <tr key={i} className="animate-pulse">
+                    <td className="px-6 py-4"><div className="h-5 bg-gray-100 rounded w-3/4"></div></td>
+                    <td className="px-6 py-4"><div className="h-6 bg-gray-100 rounded-full w-24"></div></td>
+                    <td className="px-6 py-4"><div className="h-8 bg-gray-100 rounded w-12"></div></td>
+                    <td className="px-6 py-4"><div className="h-5 bg-gray-100 rounded w-16"></div></td>
+                    <td className="px-6 py-4"><div className="h-5 bg-gray-100 rounded w-24"></div></td>
+                    <td className="px-6 py-4"></td>
                   </tr>
-                </thead>
-                <tbody>
-                  {filtered.map((scan, i) => {
-                    const scoreColor = getScoreColor(scan.overall_score);
-                    return (
-                      <tr key={scan.id}
-                        className="border-b transition-colors hover:bg-white/[0.02] cursor-pointer"
-                        style={{ borderColor: "var(--landing-border)", background: i % 2 === 0 ? "#F9FAFB" : "#FFFFFF" }}
-                        onClick={() => window.location.href = `/scan/${scan.id}`}>
-                        <td className="px-4 py-4">
-                          <div className="flex items-center gap-2">
-                            <StatusIcon status={scan.status} />
-                            <div>
-                              <p className="text-sm font-medium" style={{ fontFamily: "var(--font-landing-heading)", letterSpacing: "-0.01em" }}>
-                                {scan.repo}
-                              </p>
-                              <p style={{ fontSize: "11px", color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)" }}>
-                                {scan.branch}
-                              </p>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-4 py-4">
-                          <span style={{ fontFamily: "var(--font-landing-heading)",  fontSize: "20px", color: scoreColor }}>
-                            {scan.overall_score || "—"}
-                          </span>
-                        </td>
-                        <td className="px-4 py-4">
-                          <div className="flex items-center gap-2">
-                            <div className="w-16 h-1.5 rounded-full" style={{ background: "var(--landing-border)" }}>
-                              <div style={{ width: `${scan.security_score}%`, height: "100%", background: "var(--guard-security)", borderRadius: "9999px" }} />
-                            </div>
-                            <span style={{ fontSize: "11px", color: "var(--guard-security)", fontFamily: "var(--font-landing-body)" }}>{scan.security_score}</span>
-                          </div>
-                        </td>
-                        <td className="px-4 py-4">
-                          <div className="flex items-center gap-2">
-                            <div className="w-16 h-1.5 rounded-full" style={{ background: "var(--landing-border)" }}>
-                              <div style={{ width: `${scan.monetization_score}%`, height: "100%", background: "var(--guard-monetize)", borderRadius: "9999px" }} />
-                            </div>
-                            <span style={{ fontSize: "11px", color: "var(--guard-monetize)", fontFamily: "var(--font-landing-body)" }}>{scan.monetization_score}</span>
-                          </div>
-                        </td>
-                        <td className="px-4 py-4">
-                          <div className="flex items-center gap-1.5">
-                            {scan.critical_count > 0 && (
-                              <span className="badge-critical text-xs px-1.5 py-0.5 rounded" style={{ fontFamily: "var(--font-landing-body)" }}>
-                                {scan.critical_count}
-                              </span>
-                            )}
-                            {scan.high_count > 0 && (
-                              <span className="badge-high text-xs px-1.5 py-0.5 rounded" style={{ fontFamily: "var(--font-landing-body)" }}>
-                                {scan.high_count}
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-4 py-4">
-                          <span style={{ fontSize: "12px", color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)" }}>
-                            {formatRelativeTime(scan.created_at)}
-                          </span>
-                        </td>
-                        <td className="px-4 py-4">
-                          <ChevronRight size={14} style={{ color: "var(--landing-text-secondary)" }} />
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-              {filtered.length === 0 && (
-                <div className="text-center py-12" style={{ background: "#FFFFFF" }}>
-                  <p style={{ color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)" }}>No scans found</p>
-                </div>
+                ))
+              ) : filteredScans.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-6 py-12 text-center text-gray-500 font-medium" style={{ fontFamily: "var(--font-landing-body)" }}>
+                    No scans found matching your filters.
+                  </td>
+                </tr>
+              ) : (
+                filteredScans.map((scan) => (
+                  <tr key={scan.id} className="hover:bg-gray-50/50 transition-colors group cursor-pointer" onClick={() => window.location.href = `/scan/${scan.id}`}>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-gray-100 border border-gray-200 flex items-center justify-center shrink-0">
+                          <Github size={16} className="text-gray-700" />
+                        </div>
+                        <div>
+                          <p className="font-bold text-gray-900" style={{ fontFamily: "var(--font-landing-heading)" }}>{scan.repo}</p>
+                          <p className="text-xs text-gray-500 font-medium" style={{ fontFamily: "var(--font-landing-body)" }}>{scan.branch}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <StatusBadge status={scan.status} />
+                    </td>
+                    <td className="px-6 py-4">
+                      {scan.status === 'complete' ? <ScorePill score={scan.overall_score} /> : <span className="text-gray-400 font-medium">—</span>}
+                    </td>
+                    <td className="px-6 py-4">
+                      {scan.status === 'complete' ? (
+                        <div className="flex gap-1.5">
+                          {scan.critical_count > 0 && (
+                            <span className="bg-red-50 text-red-600 px-2 py-0.5 rounded text-xs font-bold border border-red-100 flex items-center gap-1">
+                              {scan.critical_count} <AlertTriangle size={10} />
+                            </span>
+                          )}
+                          {scan.high_count > 0 && (
+                            <span className="bg-orange-50 text-orange-600 px-2 py-0.5 rounded text-xs font-bold border border-orange-100">
+                              {scan.high_count}
+                            </span>
+                          )}
+                          {scan.critical_count === 0 && scan.high_count === 0 && (
+                            <span className="text-gray-400 font-medium text-sm">None</span>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-gray-400 font-medium">—</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-500 font-medium whitespace-nowrap" style={{ fontFamily: "var(--font-landing-body)" }}>
+                      {formatRelativeTime(scan.created_at)}
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <Link 
+                        href={`/scan/${scan.id}`}
+                        className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-white border border-gray-200 text-gray-400 hover:text-[#3079FF] hover:border-[#3079FF] hover:bg-blue-50 transition-all shadow-sm group-hover:scale-110"
+                      >
+                        <ChevronRight size={16} strokeWidth={2.5} />
+                      </Link>
+                    </td>
+                  </tr>
+                ))
               )}
-            </div>
-
-            <div
-              className="mt-4 p-3 rounded-lg"
-              style={{
-                background: "rgba(251,191,36,0.08)",
-                border: "1px solid rgba(251,191,36,0.25)",
-              }}
-            >
-              <p
-                style={{
-                  fontSize: "12px",
-                  color: "var(--landing-text-secondary)",
-                  fontFamily: "var(--font-landing-body)",
-                  lineHeight: "1.6",
-                }}
-              >
-                Scan findings are advisory and may include false positives or misses. Validate high-impact decisions before production rollout.
-              </p>
-            </div>
-          </div>
+            </tbody>
+          </table>
         </div>
-      </main>
+      </div>
     </div>
   );
 }

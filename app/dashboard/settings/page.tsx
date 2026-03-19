@@ -1,762 +1,298 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
-import {
-  User,
-  Github,
-  Bell,
-  Shield,
-  CreditCard,
-  LifeBuoy,
-  MessageSquarePlus,
-  Trash2,
-  CheckCircle,
-  ExternalLink,
-  Loader2,
-} from "lucide-react";
-import DashboardSidebar from "@/components/layout/DashboardSidebar";
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import { User, Bell, Shield, Key, CreditCard, Github, AlertTriangle, CheckCircle, Upload } from "lucide-react";
 import { createClient } from "@/lib/supabase";
 
-function getAuthRedirectUrl() {
-  if (typeof window !== "undefined") {
-    return `${window.location.origin}/auth/callback`;
-  }
-  return `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/auth/callback`;
-}
-
-type Tab = "profile" | "integrations" | "notifications" | "billing" | "security" | "support";
-
-const tabs: { id: Tab; label: string; icon: typeof User }[] = [
-  { id: "profile", label: "Profile", icon: User },
-  { id: "integrations", label: "Integrations", icon: Github },
-  { id: "notifications", label: "Notifications", icon: Bell },
-  { id: "billing", label: "Billing", icon: CreditCard },
-  { id: "security", label: "Security", icon: Shield },
-  { id: "support", label: "Support", icon: LifeBuoy },
-];
-
-interface UserData {
-  email: string;
-  name: string;
-  avatar_url?: string | null;
-  github_token?: string | null;
-  plan: string;
-  scans_used: number;
-  scans_limit: number;
-}
-
-type NotificationPrefs = {
-  scanComplete: boolean;
-  criticalIssues: boolean;
-  weeklyDigest: boolean;
-  productUpdates: boolean;
-};
-
-const defaultNotificationPrefs: NotificationPrefs = {
-  scanComplete: true,
-  criticalIssues: true,
-  weeklyDigest: false,
-  productUpdates: false,
-};
-
 export default function SettingsPage() {
-  const supportFormUrl = process.env.NEXT_PUBLIC_SUPPORT_FORM_URL?.trim();
-  const featureRequestFormUrl = process.env.NEXT_PUBLIC_FEATURE_REQUEST_FORM_URL?.trim();
-  const [activeTab, setActiveTab] = useState<Tab>("profile");
+  const [activeTab, setActiveTab] = useState("profile");
+  const [user, setUser] = useState<{ email?: string; user_metadata?: { full_name?: string } } | null>(null);
+  const [userData, setUserData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  
+  // Profile Form State
+  const [fullName, setFullName] = useState("");
+  const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [githubConnected, setGithubConnected] = useState<boolean | null>(null);
-  const [loadingGithub, setLoadingGithub] = useState(false);
-  const [userData, setUserData] = useState<UserData | null>(null);
-  const [loadingUser, setLoadingUser] = useState(true);
-  const [profileForm, setProfileForm] = useState({ name: "", email: "" });
-  const [notificationPrefs, setNotificationPrefs] = useState<NotificationPrefs>(defaultNotificationPrefs);
-  const [savingNotifications, setSavingNotifications] = useState(false);
-  const [notificationsSaved, setNotificationsSaved] = useState(false);
-  const [passwordForm, setPasswordForm] = useState({ newPassword: "", confirmPassword: "" });
-  const [savingPassword, setSavingPassword] = useState(false);
-  const [passwordMessage, setPasswordMessage] = useState<string | null>(null);
-  const [deletingAccount, setDeletingAccount] = useState(false);
-  const supabase = createClient();
-
-  const fetchUserData = useCallback(async () => {
-    setLoadingUser(true);
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        setLoadingUser(false);
-        return;
-      }
-
-      const { data: userRecord } = await supabase
-        .from("users")
-        .select("name, email, avatar_url, github_token, plan, scans_used, scans_limit")
-        .eq("id", user.id)
-        .single();
-
-      const userData: UserData = {
-        email: userRecord?.email || user.email || "",
-        name: userRecord?.name || user.user_metadata?.full_name || user.user_metadata?.name || "",
-        avatar_url: userRecord?.avatar_url || user.user_metadata?.avatar_url || null,
-        github_token: userRecord?.github_token || null,
-        plan: userRecord?.plan || "free",
-        scans_used: userRecord?.scans_used || 0,
-        scans_limit: userRecord?.scans_limit || 3,
-      };
-
-      const rawPrefs = user.user_metadata?.notification_prefs as Partial<NotificationPrefs> | undefined;
-      setNotificationPrefs({
-        scanComplete: rawPrefs?.scanComplete ?? defaultNotificationPrefs.scanComplete,
-        criticalIssues: rawPrefs?.criticalIssues ?? defaultNotificationPrefs.criticalIssues,
-        weeklyDigest: rawPrefs?.weeklyDigest ?? defaultNotificationPrefs.weeklyDigest,
-        productUpdates: rawPrefs?.productUpdates ?? defaultNotificationPrefs.productUpdates,
-      });
-
-      setUserData(userData);
-      setProfileForm({ name: userData.name, email: userData.email });
-    } catch (error) {
-      console.error("Error fetching user data:", error);
-    }
-    setLoadingUser(false);
-  }, [supabase]);
 
   useEffect(() => {
-    void fetchUserData();
-  }, [fetchUserData]);
-
-  const checkGithubStatus = useCallback(async () => {
-    setLoadingGithub(true);
-    try {
+    async function loadData() {
+      const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        setGithubConnected(false);
-        setLoadingGithub(false);
-        return;
+      setUser(user);
+      
+      if (user) {
+        const { data } = await supabase
+          .from("users")
+          .select("*")
+          .eq("id", user.id)
+          .single();
+          
+        setUserData(data);
+        if (data?.name) setFullName(data.name);
+        else if (user?.user_metadata?.full_name) setFullName(user.user_metadata.full_name);
       }
-
-      const { data: userRecord } = await supabase
-        .from("users")
-        .select("github_token")
-        .eq("id", user.id)
-        .single();
-
-      const hasGithubIdentity = (user.identities || []).some((id: { provider: string }) => id.provider === "github");
-      setGithubConnected(Boolean(userRecord?.github_token) && hasGithubIdentity);
-    } catch (error) {
-      console.error("Error checking GitHub status:", error);
-      setGithubConnected(false);
+      setLoading(false);
     }
-    setLoadingGithub(false);
-  }, [supabase]);
+    loadData();
+  }, []);
 
-  const handleGithubConnect = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    const current = userData?.avatar_url || user?.user_metadata?.avatar_url || null;
-
-    if (user?.id && current) {
-      await supabase
-        .from("users")
-        .update({ avatar_url: current })
-        .eq("id", user.id);
-    }
-
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "github",
-      options: {
-        redirectTo: getAuthRedirectUrl(),
-        scopes: "repo read:org user:email",
-      },
-    });
-
-    if (error) {
-      console.error("GitHub OAuth error:", error);
-    }
-  };
-
-  const handleSave = async () => {
+  const handleSaveProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    
     try {
+      const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      const { error } = await supabase.auth.updateUser({
-        data: { full_name: profileForm.name }
-      });
-
-      if (error) {
-        console.error("Error updating profile:", error);
-        return;
+      
+      if (user) {
+        // Update auth metadata
+        await supabase.auth.updateUser({
+          data: { full_name: fullName }
+        });
+        
+        // Update users table
+        await supabase
+          .from("users")
+          .update({ name: fullName })
+          .eq("id", user.id);
+          
+        setSaved(true);
+        setTimeout(() => setSaved(false), 3000);
       }
-
-      await supabase
-        .from("users")
-        .update({ name: profileForm.name })
-        .eq("id", user.id);
-
-      setUserData((prev) => (prev ? { ...prev, name: profileForm.name } : prev));
-
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
     } catch (error) {
-      console.error("Error saving profile:", error);
-    }
-  };
-
-  const handleGithubDisconnect = async () => {
-    setLoadingGithub(true);
-    try {
-      const res = await fetch("/api/github/disconnect", { method: "POST" });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        console.error("GitHub disconnect failed:", data?.message || "Unknown error");
-        return;
-      }
-
-      setGithubConnected(false);
-      setUserData((prev) => (prev ? { ...prev, github_token: null } : prev));
-    } catch (error) {
-      console.error("Error disconnecting GitHub:", error);
+      console.error("Error updating profile", error);
     } finally {
-      setLoadingGithub(false);
+      setSaving(false);
     }
   };
 
-  const handleSaveNotifications = async () => {
-    setSavingNotifications(true);
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      const { error } = await supabase.auth.updateUser({
-        data: {
-          ...(user.user_metadata || {}),
-          notification_prefs: notificationPrefs,
-        },
-      });
-
-      if (error) {
-        console.error("Error saving notification preferences:", error);
-        return;
-      }
-
-      setNotificationsSaved(true);
-      setTimeout(() => setNotificationsSaved(false), 2000);
-    } catch (error) {
-      console.error("Error saving notification preferences:", error);
-    } finally {
-      setSavingNotifications(false);
-    }
-  };
-
-  const handlePasswordUpdate = async () => {
-    setPasswordMessage(null);
-    if (passwordForm.newPassword.length < 8) {
-      setPasswordMessage("Password must be at least 8 characters.");
-      return;
-    }
-    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
-      setPasswordMessage("Passwords do not match.");
-      return;
-    }
-
-    setSavingPassword(true);
-    try {
-      const { error } = await supabase.auth.updateUser({
-        password: passwordForm.newPassword,
-      });
-
-      if (error) {
-        setPasswordMessage(error.message || "Failed to update password.");
-        return;
-      }
-
-      setPasswordForm({ newPassword: "", confirmPassword: "" });
-      setPasswordMessage("Password updated successfully.");
-    } catch (error) {
-      console.error("Error updating password:", error);
-      setPasswordMessage("Failed to update password.");
-    } finally {
-      setSavingPassword(false);
-    }
-  };
-
-  const handleDeleteAccount = async () => {
-    const confirmed = window.confirm("This will permanently delete your account and scan history. This action cannot be undone. Continue?");
-    if (!confirmed) return;
-
-    setDeletingAccount(true);
-    try {
-      const res = await fetch("/api/account/delete", { method: "DELETE" });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        window.alert(data.message || "Failed to delete account.");
-        return;
-      }
-
-      await supabase.auth.signOut();
-      window.location.href = "/";
-    } catch (error) {
-      console.error("Error deleting account:", error);
-      window.alert("Failed to delete account.");
-    } finally {
-      setDeletingAccount(false);
-    }
-  };
-
-  const getPlanDisplayName = (plan: string) => {
-    switch (plan) {
-      case "pro": return "Pro";
-      case "unlimited": return "Unlimited";
-      case "lifetime": return "Lifetime";
-      default: return "Free";
-    }
-  };
-
-  const getPlanFeatures = (plan: string) => {
-    if (userData) {
-      if (userData.scans_limit >= 999999) return "Unlimited scans";
-      return `${userData.scans_limit} scans / month`;
-    }
-
-    switch (plan) {
-      case "pro": return "30 scans / month";
-      case "unlimited": return "Unlimited scans";
-      case "lifetime": return "Unlimited scans (one-time)";
-      default: return "3 scans / month";
-    }
-  };
+  const tabs = [
+    { id: "profile", label: "Profile", icon: User },
+    { id: "billing", label: "Billing", icon: CreditCard },
+    { id: "notifications", label: "Notifications", icon: Bell },
+  ];
 
   return (
-    <div className="flex min-h-screen" style={{ background: "var(--landing-bg)" }}>
-      <DashboardSidebar />
-      <main className="flex-1 flex flex-col min-w-0">
-        <div className="h-16 flex items-center px-6 border-b flex-shrink-0"
-          style={{ borderColor: "var(--landing-border)", background: "var(--landing-surface)" }}>
-          <h1 className="text-base font-semibold" style={{ fontFamily: "var(--font-landing-heading)", letterSpacing: "-0.02em" }}>
-            Settings
-          </h1>
-        </div>
+    <div className="flex-1 p-8 lg:p-10 max-w-5xl mx-auto w-full">
+      <header className="mb-10">
+        <h1 
+          className="text-3xl font-bold tracking-tight text-gray-900 mb-2"
+          style={{ fontFamily: "var(--font-landing-heading)" }}
+        >
+          Settings
+        </h1>
+        <p 
+          className="text-gray-500 font-medium"
+          style={{ fontFamily: "var(--font-landing-body)" }}
+        >
+          Manage your account settings and preferences.
+        </p>
+      </header>
 
-        <div className="flex-1 overflow-y-auto">
-          <div className="max-w-4xl mx-auto p-6">
-            <div className="flex gap-8">
-              {/* Sidebar tabs */}
-              <div className="w-48 flex-shrink-0">
-                <nav className="flex flex-col gap-0.5">
-                  {tabs.map((tab) => {
-                    const Icon = tab.icon;
-                    return (
-                      <button
-                        key={tab.id}
-                        onClick={() => {
-                          setActiveTab(tab.id);
-                          if (tab.id === "integrations") {
-                            void checkGithubStatus();
-                          }
-                        }}
-                        className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm text-left transition-all"
-                        style={{
-                          background: activeTab === tab.id ? "rgba(48, 121, 255, 0.1)" : "transparent",
-                          color: activeTab === tab.id ? "var(--landing-primary)" : "var(--landing-text-secondary)",
-                          border: activeTab === tab.id ? "1px solid var(--landing-border)" : "1px solid transparent",
-                          fontFamily: "var(--font-landing-body)",
-                        }}>
-                        <Icon size={15} />
-                        {tab.label}
-                      </button>
-                    );
-                  })}
-                </nav>
-              </div>
+      <div className="flex flex-col md:flex-row gap-8">
+        {/* Sidebar Navigation */}
+        <aside className="w-full md:w-64 shrink-0">
+          <nav className="flex flex-col gap-1.5">
+            {tabs.map((tab) => {
+              const Icon = tab.icon;
+              const isActive = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`flex items-center gap-3 w-full px-4 py-3 rounded-xl text-sm font-semibold transition-all duration-200 text-left ${
+                    isActive 
+                      ? "bg-white shadow-sm ring-1 ring-gray-900/5 text-gray-900" 
+                      : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+                  }`}
+                  style={{ fontFamily: "var(--font-landing-body)" }}
+                >
+                  <Icon size={18} strokeWidth={isActive ? 2.5 : 2} className={isActive ? "text-[#3079FF]" : "text-gray-400"} />
+                  {tab.label}
+                </button>
+              );
+            })}
+          </nav>
+        </aside>
 
-              {/* Content */}
-              <div className="flex-1 min-w-0">
-                {activeTab === "profile" && (
-                  <div>
-                    <h2 className="text-lg font-semibold mb-6" style={{ fontFamily: "var(--font-landing-heading)", letterSpacing: "-0.02em" }}>
-                      Profile Settings
-                    </h2>
-                    {loadingUser ? (
-                      <div className="flex items-center justify-center p-12">
-                        <Loader2 size={24} className="animate-spin" style={{ color: "var(--landing-primary)" }} />
-                      </div>
-                    ) : (
-                      <>
-                        <div className="flex flex-col gap-5 p-6 rounded-2xl mb-5"
-                          style={{ background: "#FFFFFF", border: "1px solid var(--landing-border)" }}>
-                          {/* Avatar */}
-                          <div className="flex items-center gap-4">
-                            {userData?.avatar_url ? (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img
-                                src={userData.avatar_url}
-                                alt={profileForm.name || "Profile avatar"}
-                                className="w-16 h-16 rounded-2xl object-cover"
-                                style={{ border: "1px solid var(--landing-border)" }}
-                              />
-                            ) : (
-                              <div className="w-16 h-16 rounded-2xl flex items-center justify-center text-xl font-bold"
-                                style={{ background: "rgba(48, 121, 255, 0.1)", border: "1px solid rgba(48, 121, 255, 0.2)", color: "var(--landing-primary)", fontFamily: "var(--font-landing-heading)" }}>
-                                {(profileForm.name || profileForm.email || "U").charAt(0).toUpperCase()}
-                              </div>
-                            )}
-                            <div>
-                              <p className="text-sm font-medium" style={{ fontFamily: "var(--font-landing-heading)" }}>Profile Picture</p>
-                              <p style={{ fontSize: "12px", color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)" }}>
-                                {userData?.avatar_url ? "Synced from your auth provider" : "Auto-generated from your initials"}
-                              </p>
-                            </div>
-                          </div>
-
-                          {/* Fields */}
-                          <div>
-                            <label className="block text-xs font-medium mb-1.5"
-                              style={{ color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)" }}>
-                              Full Name
-                            </label>
-                            <input 
-                              type="text" 
-                              value={profileForm.name}
-                              onChange={(e) => setProfileForm(prev => ({ ...prev, name: e.target.value }))}
-                              placeholder="Your name" 
-                              className="w-full px-4 py-3 rounded-lg bg-transparent outline-none text-sm"
-                              style={{ background: "#F3F4F6", border: "1px solid var(--landing-border)", color: "var(--landing-text)", fontFamily: "var(--font-landing-body)" }} 
-                            />
-                          </div>
-
-                          <div>
-                            <label className="block text-xs font-medium mb-1.5"
-                              style={{ color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)" }}>
-                              Email
-                            </label>
-                            <input 
-                              type="email" 
-                              value={profileForm.email}
-                              disabled
-                              className="w-full px-4 py-3 rounded-lg bg-transparent outline-none text-sm opacity-60"
-                              style={{ background: "#F3F4F6", border: "1px solid var(--landing-border)", color: "var(--landing-text)", fontFamily: "var(--font-landing-body)" }} 
-                            />
-                            <p style={{ fontSize: "11px", color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)", marginTop: 4 }}>
-                              Email cannot be changed
-                            </p>
-                          </div>
-                        </div>
-
-                        <button onClick={handleSave}
-                          className="flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold transition-all"
-                          style={{ background: saved ? "var(--guard-monetize-glow)" : "var(--landing-primary)", color: saved ? "var(--guard-monetize)" : "#FFFFFF", border: saved ? "1px solid rgba(64,200,122,0.3)" : "none", fontFamily: "var(--font-landing-heading)" }}>
-                          {saved ? <><CheckCircle size={14} /> Saved!</> : "Save Changes"}
-                        </button>
-                      </>
-                    )}
-                  </div>
-                )}
-
-                {activeTab === "integrations" && (
-                  <div>
-                    <h2 className="text-lg font-semibold mb-6" style={{ fontFamily: "var(--font-landing-heading)", letterSpacing: "-0.02em" }}>
-                      Integrations
-                    </h2>
-                    <div className="flex flex-col gap-4">
-                      <div className="flex items-center justify-between p-5 rounded-2xl"
-                        style={{ background: "#FFFFFF", border: "1px solid var(--landing-border)" }}>
-                        <div className="flex items-center gap-4">
-                          <div className="w-10 h-10 rounded-xl flex items-center justify-center"
-                            style={{ background: "var(--landing-surface)", border: "1px solid var(--landing-border)" }}>
-                            <Github size={18} style={{ color: "var(--landing-text-secondary)" }} />
-                          </div>
-                          <div>
-                            <p className="text-sm font-medium" style={{ fontFamily: "var(--font-landing-heading)" }}>GitHub</p>
-                            <p style={{ fontSize: "12px", color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)" }}>
-                              Connect your GitHub account to scan private repositories
-                            </p>
-                          </div>
-                        </div>
-                        {loadingGithub ? (
-                          <div className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm"
-                            style={{ background: "#F3F4F6", color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)" }}>
-                            <Loader2 size={14} className="animate-spin" />
-                            Checking...
-                          </div>
-                        ) : githubConnected ? (
-                          <div className="flex items-center gap-2">
-                            <div
-                              className="px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2"
-                              style={{ background: "var(--guard-monetize-glow)", color: "var(--guard-monetize)", border: "1px solid rgba(64,200,122,0.3)", fontFamily: "var(--font-landing-body)" }}
-                            >
-                              <CheckCircle size={14} />
-                              Connected
-                            </div>
-                            <button
-                              onClick={handleGithubDisconnect}
-                              className="px-4 py-2 rounded-lg text-sm font-medium transition-all"
-                              style={{ background: "rgba(232,64,64,0.1)", color: "var(--sev-critical)", border: "1px solid rgba(232,64,64,0.3)", fontFamily: "var(--font-landing-body)" }}
-                            >
-                              Disconnect
-                            </button>
-                          </div>
-                        ) : (
-                          <button
-                            onClick={handleGithubConnect}
-                            className="px-4 py-2 rounded-lg text-sm font-medium transition-all"
-                            style={{ background: "#F3F4F6", color: "var(--landing-text)", border: "1px solid var(--landing-border)", fontFamily: "var(--font-landing-body)" }}
-                          >
-                            Connect
-                          </button>
-                        )}
-                      </div>
-                      <div className="p-4 rounded-xl" style={{ background: "var(--landing-surface)", border: "1px solid var(--landing-border)" }}>
-                        <p style={{ fontSize: "13px", color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)" }}>
-                          GitHub is mandatory for scans. Connect a GitHub account to create and run repository scans.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {activeTab === "billing" && (
-                  <div>
-                    <h2 className="text-lg font-semibold mb-6" style={{ fontFamily: "var(--font-landing-heading)", letterSpacing: "-0.02em" }}>
-                      Billing & Plan
-                    </h2>
-
-                    {loadingUser ? (
-                      <div className="flex items-center justify-center p-12">
-                        <Loader2 size={24} className="animate-spin" style={{ color: "var(--landing-primary)" }} />
-                      </div>
-                    ) : userData ? (
-                      <>
-                        {/* Current plan */}
-                        <div className="p-6 rounded-2xl mb-5"
-                          style={{ background: "rgba(48, 121, 255, 0.1)", border: "1px solid rgba(48, 121, 255, 0.2)" }}>
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <p style={{ fontSize: "12px", color: "var(--landing-primary)", fontFamily: "var(--font-landing-body)", marginBottom: 4 }}>Current Plan</p>
-                              <p className="text-2xl" style={{ fontFamily: "var(--font-landing-heading)", color: "var(--landing-primary)" }}>{getPlanDisplayName(userData.plan)}</p>
-                              <p style={{ fontSize: "13px", color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)" }}>{getPlanFeatures(userData.plan)}</p>
-                            </div>
-                            {userData.plan !== "unlimited" && userData.plan !== "lifetime" && (
-                              <Link href="/pricing"
-                                className="px-5 py-2.5 rounded-xl text-sm font-semibold transition-all"
-                                style={{ background: "var(--landing-primary)", color: "#FFFFFF", fontFamily: "var(--font-landing-heading)" }}>
-                                Upgrade to Pro
-                              </Link>
-                            )}
-                          </div>
-                        </div>
-
-                        <div className="p-5 rounded-2xl"
-                          style={{ background: "#FFFFFF", border: "1px solid var(--landing-border)" }}>
-                          <p className="text-sm font-medium mb-1" style={{ fontFamily: "var(--font-landing-heading)" }}>Usage this month</p>
-                          <div className="flex items-center gap-3 mt-3">
-                            <div className="flex-1 h-2 rounded-full" style={{ background: "var(--landing-border)" }}>
-                              <div style={{ 
-                                width: userData.scans_limit === 999999 
-                                  ? "100%" 
-                                  : `${Math.min((userData.scans_used / userData.scans_limit) * 100, 100)}%`, 
-                                height: "100%", 
-                                background: userData.scans_used >= userData.scans_limit ? "var(--sev-critical)" : "var(--landing-primary)", 
-                                borderRadius: "9999px" 
-                              }} />
-                            </div>
-                            <span style={{ fontSize: "12px", color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)" }}>
-                              {userData.scans_limit === 999999 
-                                ? "Unlimited" 
-                                : `${userData.scans_used}/${userData.scans_limit} scans`
-                              }
-                            </span>
-                          </div>
-                        </div>
-                      </>
-                    ) : (
-                      <div className="p-6 rounded-2xl"
-                        style={{ background: "#FFFFFF", border: "1px solid var(--landing-border)" }}>
-                        <p style={{ color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)" }}>Unable to load billing info</p>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {activeTab === "security" && (
-                  <div>
-                    <h2 className="text-lg font-semibold mb-6" style={{ fontFamily: "var(--font-landing-heading)", letterSpacing: "-0.02em" }}>
-                      Security
-                    </h2>
-
-                    <div className="flex flex-col gap-4">
-                      {/* Change password */}
-                      <div className="p-5 rounded-2xl" style={{ background: "#FFFFFF", border: "1px solid var(--landing-border)" }}>
-                        <p className="text-sm font-medium mb-4" style={{ fontFamily: "var(--font-landing-heading)" }}>Change Password</p>
-                        <div className="flex flex-col gap-3">
-                          <input
-                            type="password"
-                            placeholder="New password"
-                            value={passwordForm.newPassword}
-                            onChange={(e) => setPasswordForm(prev => ({ ...prev, newPassword: e.target.value }))}
-                            className="w-full px-4 py-3 rounded-lg bg-transparent outline-none text-sm"
-                            style={{ background: "#F3F4F6", border: "1px solid var(--landing-border)", color: "var(--landing-text)", fontFamily: "var(--font-landing-body)" }}
-                          />
-                          <input
-                            type="password"
-                            placeholder="Confirm new password"
-                            value={passwordForm.confirmPassword}
-                            onChange={(e) => setPasswordForm(prev => ({ ...prev, confirmPassword: e.target.value }))}
-                            className="w-full px-4 py-3 rounded-lg bg-transparent outline-none text-sm"
-                            style={{ background: "#F3F4F6", border: "1px solid var(--landing-border)", color: "var(--landing-text)", fontFamily: "var(--font-landing-body)" }} />
-                        </div>
-                        {passwordMessage && (
-                          <p style={{ fontSize: "12px", marginTop: 10, color: passwordMessage.includes("success") ? "var(--guard-monetize)" : "var(--sev-high)", fontFamily: "var(--font-landing-body)" }}>
-                            {passwordMessage}
-                          </p>
-                        )}
-                        <button
-                          onClick={handlePasswordUpdate}
-                          disabled={savingPassword}
-                          className="mt-4 px-5 py-2 rounded-lg text-sm font-medium transition-all disabled:opacity-60"
-                          style={{ background: "#F3F4F6", border: "1px solid var(--landing-border)", color: "var(--landing-text)", fontFamily: "var(--font-landing-body)" }}>
-                          {savingPassword ? "Updating..." : "Update Password"}
-                        </button>
-                      </div>
-
-                      {/* Danger zone */}
-                      <div className="p-5 rounded-2xl" style={{ background: "rgba(232,64,64,0.04)", border: "1px solid rgba(232,64,64,0.2)" }}>
-                        <p className="text-sm font-medium mb-1" style={{ fontFamily: "var(--font-landing-heading)", color: "var(--sev-critical)" }}>Danger Zone</p>
-                        <p style={{ fontSize: "12px", color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)", marginBottom: 16 }}>
-                          Permanently delete your account and all scan data.
-                        </p>
-                        <button
-                          onClick={handleDeleteAccount}
-                          disabled={deletingAccount}
-                          className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all disabled:opacity-60"
-                          style={{ background: "rgba(232,64,64,0.1)", border: "1px solid rgba(232,64,64,0.3)", color: "var(--sev-critical)", fontFamily: "var(--font-landing-body)" }}>
-                          <Trash2 size={13} />
-                          {deletingAccount ? "Deleting..." : "Delete Account"}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {activeTab === "notifications" && (
-                  <div>
-                    <h2 className="text-lg font-semibold mb-6" style={{ fontFamily: "var(--font-landing-heading)", letterSpacing: "-0.02em" }}>
-                      Notification Preferences
-                    </h2>
-                    <div className="flex flex-col gap-3">
-                      {[
-                        { key: "scanComplete", label: "Scan complete", desc: "Get notified when a scan finishes" },
-                        { key: "criticalIssues", label: "Critical issues found", desc: "Alert when critical severity issues are detected" },
-                        { key: "weeklyDigest", label: "Weekly digest", desc: "Weekly summary of your scan history" },
-                        { key: "productUpdates", label: "Product updates", desc: "New features and improvements" },
-                      ].map((notif) => (
-                        <div key={notif.label} className="flex items-center justify-between p-4 rounded-xl"
-                          style={{ background: "#FFFFFF", border: "1px solid var(--landing-border)" }}>
-                          <div>
-                            <p className="text-sm font-medium" style={{ fontFamily: "var(--font-landing-heading)" }}>{notif.label}</p>
-                            <p style={{ fontSize: "12px", color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)" }}>{notif.desc}</p>
-                          </div>
-                          <button
-                            onClick={() => setNotificationPrefs((prev) => ({
-                              ...prev,
-                              [notif.key]: !prev[notif.key as keyof NotificationPrefs],
-                            }))}
-                            className="w-10 h-6 rounded-full relative transition-colors duration-200 flex-shrink-0"
-                            style={{ background: notificationPrefs[notif.key as keyof NotificationPrefs] ? "var(--landing-primary)" : "var(--landing-border)" }}>
-                            <span className="absolute top-1 w-4 h-4 rounded-full bg-white transition-transform duration-200"
-                              style={{ transform: notificationPrefs[notif.key as keyof NotificationPrefs] ? "translateX(18px)" : "translateX(2px)", boxShadow: "0 1px 3px rgba(0,0,0,0.3)" }} />
-                          </button>
-                        </div>
-                      ))}
-                      <button
-                        onClick={handleSaveNotifications}
-                        disabled={savingNotifications}
-                        className="self-start mt-1 px-5 py-2 rounded-lg text-sm font-medium transition-all disabled:opacity-60"
-                        style={{ background: notificationsSaved ? "var(--guard-monetize-glow)" : "var(--landing-primary)", color: notificationsSaved ? "var(--guard-monetize)" : "#FFFFFF", border: notificationsSaved ? "1px solid rgba(64,200,122,0.3)" : "none", fontFamily: "var(--font-landing-heading)" }}
-                      >
-                        {savingNotifications ? "Saving..." : notificationsSaved ? "Saved!" : "Save Notification Preferences"}
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {activeTab === "support" && (
-                  <div>
-                    <h2 className="text-lg font-semibold mb-6" style={{ fontFamily: "var(--font-landing-heading)", letterSpacing: "-0.02em" }}>
-                      Support & Requests
-                    </h2>
-                    <div className="flex flex-col gap-4">
-                      <div className="p-5 rounded-2xl" style={{ background: "#FFFFFF", border: "1px solid var(--landing-border)" }}>
-                        <div className="flex items-start justify-between gap-4">
-                          <div>
-                            <p className="text-sm font-medium mb-1" style={{ fontFamily: "var(--font-landing-heading)" }}>Get help</p>
-                            <p style={{ fontSize: "12px", color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)" }}>
-                              Need support with scans, billing, or account issues?
-                            </p>
-                          </div>
-                          {supportFormUrl ? (
-                            <a
-                              href={supportFormUrl}
-                              target="_blank"
-                              rel="noreferrer noopener"
-                              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium"
-                              style={{ background: "#F3F4F6", border: "1px solid var(--landing-border)", color: "var(--landing-text)", fontFamily: "var(--font-landing-body)" }}
-                            >
-                              Open Support Form
-                              <ExternalLink size={13} />
-                            </a>
-                          ) : (
-                            <span
-                              className="px-4 py-2 rounded-lg text-xs"
-                              style={{ background: "var(--landing-surface)", border: "1px solid var(--landing-border)", color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)" }}
-                            >
-                              Set NEXT_PUBLIC_SUPPORT_FORM_URL
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="p-5 rounded-2xl" style={{ background: "#FFFFFF", border: "1px solid var(--landing-border)" }}>
-                        <div className="flex items-start justify-between gap-4">
-                          <div>
-                            <p className="text-sm font-medium mb-1" style={{ fontFamily: "var(--font-landing-heading)" }}>Request a feature</p>
-                            <p style={{ fontSize: "12px", color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)" }}>
-                              Share ideas and vote on upcoming improvements.
-                            </p>
-                          </div>
-                          {featureRequestFormUrl ? (
-                            <a
-                              href={featureRequestFormUrl}
-                              target="_blank"
-                              rel="noreferrer noopener"
-                              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium"
-                              style={{ background: "var(--landing-primary)", color: "#FFFFFF", fontFamily: "var(--font-landing-heading)" }}
-                            >
-                              <MessageSquarePlus size={14} />
-                              Send Request
-                            </a>
-                          ) : (
-                            <span
-                              className="px-4 py-2 rounded-lg text-xs"
-                              style={{ background: "var(--landing-surface)", border: "1px solid var(--landing-border)", color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)" }}
-                            >
-                              Set NEXT_PUBLIC_FEATURE_REQUEST_FORM_URL
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="p-4 rounded-xl" style={{ background: "rgba(251,191,36,0.08)", border: "1px solid rgba(251,191,36,0.25)" }}>
-                        <p style={{ fontSize: "12px", color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)", lineHeight: "1.6" }}>
-                          ShipGuard AI may occasionally miss issues or produce false positives. Always review critical security and compliance findings before production decisions.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                )}
+        {/* Content Area */}
+        <main className="flex-1 min-w-0">
+          {loading ? (
+            <div className="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm">
+              <div className="animate-pulse space-y-6">
+                <div className="h-6 bg-gray-100 rounded w-1/4"></div>
+                <div className="h-10 bg-gray-100 rounded w-full"></div>
+                <div className="h-10 bg-gray-100 rounded w-full"></div>
               </div>
             </div>
-          </div>
-        </div>
-      </main>
+          ) : (
+            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+              
+              {/* --- PROFILE TAB --- */}
+              {activeTab === "profile" && (
+                <div className="p-8">
+                  <h2 className="text-xl font-bold text-gray-900 mb-6" style={{ fontFamily: "var(--font-landing-heading)" }}>
+                    Profile Settings
+                  </h2>
+                  
+                  {/* Avatar Section */}
+                  <div className="flex items-center gap-6 mb-8 pb-8 border-b border-gray-100">
+                    <div className="w-20 h-20 rounded-full bg-gray-100 border border-gray-200 flex items-center justify-center text-gray-400 shrink-0">
+                      {userData?.avatar_url ? (
+                        <img src={userData.avatar_url} alt="Avatar" className="w-full h-full rounded-full object-cover" />
+                      ) : (
+                        <User size={32} />
+                      )}
+                    </div>
+                    <div>
+                      <button className="px-4 py-2 bg-white border border-gray-200 rounded-full text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors shadow-sm mb-2" style={{ fontFamily: "var(--font-landing-body)" }}>
+                        Change Avatar
+                      </button>
+                      <p className="text-xs text-gray-500 font-medium" style={{ fontFamily: "var(--font-landing-body)" }}>
+                        JPG, GIF or PNG. Max size of 2MB.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Form */}
+                  <form onSubmit={handleSaveProfile} className="space-y-6 max-w-md">
+                    <div>
+                      <label className="block text-sm font-bold text-gray-900 mb-2" style={{ fontFamily: "var(--font-landing-body)" }}>
+                        Full Name
+                      </label>
+                      <input
+                        type="text"
+                        value={fullName}
+                        onChange={(e) => setFullName(e.target.value)}
+                        className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#3079FF] focus:border-transparent transition-shadow shadow-sm font-medium"
+                        style={{ fontFamily: "var(--font-landing-body)" }}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-bold text-gray-900 mb-2" style={{ fontFamily: "var(--font-landing-body)" }}>
+                        Email Address
+                      </label>
+                      <input
+                        type="email"
+                        value={user?.email || ""}
+                        disabled
+                        className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-500 cursor-not-allowed font-medium"
+                        style={{ fontFamily: "var(--font-landing-body)" }}
+                      />
+                      <p className="mt-2 text-xs text-gray-500 font-medium" style={{ fontFamily: "var(--font-landing-body)" }}>
+                        Email cannot be changed directly. Contact support if you need to migrate your account.
+                      </p>
+                    </div>
+                    <div className="pt-4">
+                      <button
+                        type="submit"
+                        disabled={saving}
+                        className={`flex items-center justify-center gap-2 px-6 py-3 rounded-full text-sm font-semibold transition-all duration-200 shadow-sm ${
+                          saved ? "bg-green-100 text-green-700" : "bg-black text-white hover:bg-gray-800 hover:-translate-y-0.5 hover:shadow-md"
+                        }`}
+                        style={{ fontFamily: "var(--font-landing-body)" }}
+                      >
+                        {saving ? "Saving..." : saved ? <><CheckCircle size={16} /> Saved</> : "Save Changes"}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              )}
+
+              {/* --- BILLING TAB --- */}
+              {activeTab === "billing" && (
+                <div className="p-8">
+                  <h2 className="text-xl font-bold text-gray-900 mb-6" style={{ fontFamily: "var(--font-landing-heading)" }}>
+                    Billing & Plan
+                  </h2>
+                  
+                  <div className="bg-gray-50 border border-gray-200 rounded-2xl p-6 mb-8 shadow-sm">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+                      <div>
+                        <div className="flex items-center gap-3 mb-1">
+                          <h3 className="text-lg font-bold text-gray-900" style={{ fontFamily: "var(--font-landing-heading)" }}>
+                            {userData?.plan === 'pro' ? 'Pro Plan' : userData?.plan === 'unlimited' ? 'Unlimited Plan' : 'Free Plan'}
+                          </h3>
+                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase bg-blue-100 text-blue-700 border border-blue-200">
+                            Active
+                          </span>
+                        </div>
+                        <p className="text-sm text-gray-500 font-medium" style={{ fontFamily: "var(--font-landing-body)" }}>
+                          You are currently on the {userData?.plan || 'free'} plan.
+                        </p>
+                      </div>
+                      <Link
+                        href="/#pricing"
+                        className="inline-flex px-5 py-2.5 bg-black text-white rounded-full text-sm font-semibold hover:bg-gray-800 transition-colors shadow-sm"
+                        style={{ fontFamily: "var(--font-landing-body)" }}
+                      >
+                        Upgrade Plan
+                      </Link>
+                    </div>
+
+                    <div className="space-y-3">
+                      <div className="flex justify-between text-sm font-bold text-gray-900 mb-2" style={{ fontFamily: "var(--font-landing-body)" }}>
+                        <span>Scans Used</span>
+                        <span>{userData?.scans_used || 0} / {userData?.scans_limit >= 999999 ? 'Unlimited' : (userData?.scans_limit || 3)}</span>
+                      </div>
+                      <div className="h-2 rounded-full bg-gray-200 overflow-hidden">
+                        <div 
+                          className="h-full bg-[#3079FF] rounded-full transition-all duration-1000"
+                          style={{ 
+                            width: userData?.scans_limit >= 999999 ? '100%' : `${Math.min(100, ((userData?.scans_used || 0) / (userData?.scans_limit || 1)) * 100)}%` 
+                          }}
+                        />
+                      </div>
+                      {userData?.scans_limit < 999999 && (userData?.scans_used || 0) >= (userData?.scans_limit || 3) && (
+                        <p className="text-xs text-red-600 font-bold flex items-center gap-1 mt-2">
+                          <AlertTriangle size={12} />
+                          You have reached your scan limit. Please upgrade to continue.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* --- NOTIFICATIONS TAB --- */}
+              {activeTab === "notifications" && (
+                <div className="p-8">
+                  <h2 className="text-xl font-bold text-gray-900 mb-6" style={{ fontFamily: "var(--font-landing-heading)" }}>
+                    Email Notifications
+                  </h2>
+                  
+                  <div className="space-y-6">
+                    {[
+                      { title: "Scan Completed", desc: "Receive an email when a codebase scan finishes.", defaultChecked: true },
+                      { title: "Weekly Report", desc: "Receive a weekly summary of your repository health.", defaultChecked: false },
+                      { title: "Security Alerts", desc: "Immediate notifications for critical security vulnerabilities.", defaultChecked: true },
+                    ].map((item, i) => (
+                      <div key={i} className="flex items-start gap-4 p-4 rounded-xl border border-gray-100 bg-gray-50/50">
+                        <div className="flex-1">
+                          <h3 className="text-sm font-bold text-gray-900 mb-1" style={{ fontFamily: "var(--font-landing-body)" }}>{item.title}</h3>
+                          <p className="text-xs text-gray-500 font-medium" style={{ fontFamily: "var(--font-landing-body)" }}>{item.desc}</p>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer">
+                          <input type="checkbox" defaultChecked={item.defaultChecked} className="sr-only peer" />
+                          <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-100 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#3079FF]"></div>
+                        </label>
+                      </div>
+                    ))}
+                    
+                    <div className="pt-4">
+                      <button className="px-6 py-3 bg-black text-white rounded-full text-sm font-semibold hover:bg-gray-800 hover:-translate-y-0.5 transition-all shadow-sm" style={{ fontFamily: "var(--font-landing-body)" }}>
+                        Save Preferences
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </main>
+      </div>
     </div>
   );
 }

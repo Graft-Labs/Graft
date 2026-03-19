@@ -8,7 +8,7 @@ import Image from "next/image";
 
 const navLinks = [
   { href: "/", label: "Home" },
-  { href: "#pricing", label: "Pricing" },
+  { href: "/#pricing", label: "Pricing" },
 ];
 
 export default function LandingNavbar() {
@@ -33,8 +33,8 @@ export default function LandingNavbar() {
     >
       <div className="px-6 h-16 flex items-center justify-between">
         {/* Logo and Name */}
-        <Link href="/" className="flex items-center gap-3 group">
-          <Image src="/ShipGuard.svg" alt="ShipGuard AI" width={32} height={32} className="h-8 w-auto" />
+        <Link href="/" className="flex items-center gap-2.5 group">
+          <Image src="/ShipGuard.svg" alt="ShipGuard AI" width={32} height={32} className="h-8 w-auto transition-transform group-hover:scale-105" />
           <span className="font-bold text-lg tracking-tight text-gray-900" style={{ fontFamily: "var(--font-landing-heading)" }}>
             ShipGuard AI
           </span>
@@ -47,9 +47,9 @@ export default function LandingNavbar() {
               key={link.href}
               href={link.href}
               className={cn(
-                "text-sm transition-colors duration-150 font-medium",
-                pathname === link.href && link.href !== "#pricing"
-                  ? "text-[#000000]"
+                "text-sm transition-colors duration-150 font-semibold",
+                pathname === link.href && link.href !== "/#pricing"
+                  ? "text-gray-900"
                   : "text-gray-500 hover:text-gray-900"
               )}
               style={{ fontFamily: "var(--font-landing-body)" }}
@@ -64,6 +64,7 @@ export default function LandingNavbar() {
           <Link
             href="/auth/login"
             className="landing-btn-secondary px-6 py-2.5 text-sm"
+            style={{ fontFamily: "var(--font-landing-body)" }}
           >
             Sign in
           </Link>
@@ -96,8 +97,8 @@ export default function LandingNavbar() {
               href={link.href}
               onClick={() => setMobileOpen(false)}
               className={cn(
-                "text-sm font-medium",
-                pathname === link.href ? "text-[#000000]" : "text-gray-600"
+                "text-sm font-semibold",
+                pathname === link.href ? "text-gray-900" : "text-gray-600"
               )}
               style={{ fontFamily: "var(--font-landing-body)" }}
             >
@@ -109,6 +110,7 @@ export default function LandingNavbar() {
               href="/auth/login"
               onClick={() => setMobileOpen(false)}
               className="landing-btn-secondary w-full py-3 text-sm"
+              style={{ fontFamily: "var(--font-landing-body)" }}
             >
               Sign in
             </Link>

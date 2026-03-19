@@ -183,8 +183,8 @@ function ConfidenceBadge({ confidence }: { confidence: Issue["confidence"] }) {
   if (!confidence) return null;
   const styles = {
     confirmed: { bg: "rgba(64,200,122,0.1)",  color: "var(--guard-monetize)", border: "rgba(64,200,122,0.3)",  label: "confirmed" },
-    likely:    { bg: "rgba(251,191,36,0.1)",  color: "var(--landing-primary)",          border: "rgba(251,191,36,0.3)", label: "likely" },
-    possible:  { bg: "rgba(107,103,98,0.15)", color: "var(--landing-text-secondary)",   border: "rgba(107,103,98,0.3)", label: "possible" },
+    likely:    { bg: "rgba(251,191,36,0.1)",  color: "#3079FF",          border: "rgba(251,191,36,0.3)", label: "likely" },
+    possible:  { bg: "rgba(107,103,98,0.15)", color: "#4B5563",   border: "rgba(107,103,98,0.3)", label: "possible" },
   };
   const s = styles[confidence];
   return (
@@ -291,7 +291,7 @@ function IssueCard({ issue, repo, branch, commitHash }: {
           </div>
           {issue.file && (
             <div className="flex items-center gap-1.5">
-              <FileCode size={11} style={{ color: "var(--landing-text-secondary)" }} />
+              <FileCode size={11} style={{ color: "#4B5563" }} />
               {githubFileUrl ? (
                 <a
                   href={githubFileUrl}
@@ -299,13 +299,13 @@ function IssueCard({ issue, repo, branch, commitHash }: {
                   rel="noopener noreferrer"
                   onClick={(e) => e.stopPropagation()}
                   className="flex items-center gap-1 hover:underline"
-                  style={{ fontSize: "11px", color: "var(--landing-primary)", fontFamily: "var(--font-mono)", letterSpacing: 0 }}
+                  style={{ fontSize: "11px", color: "#3079FF", fontFamily: "var(--font-mono)", letterSpacing: 0 }}
                 >
                   {issue.file}{issue.line ? `:${issue.line}` : ""}
                   <ExternalLink size={9} />
                 </a>
               ) : (
-                <span style={{ fontSize: "11px", color: "var(--landing-text-secondary)", fontFamily: "var(--font-mono)", letterSpacing: 0 }}>
+                <span style={{ fontSize: "11px", color: "#4B5563", fontFamily: "var(--font-mono)", letterSpacing: 0 }}>
                   {issue.file}{issue.line ? `:${issue.line}` : ""}
                 </span>
               )}
@@ -315,7 +315,7 @@ function IssueCard({ issue, repo, branch, commitHash }: {
         <ChevronDown
           size={14}
           style={{
-            color: "var(--landing-text-secondary)",
+            color: "#4B5563",
             transform: expanded ? "rotate(180deg)" : "rotate(0)",
             transition: "transform 0.2s",
             flexShrink: 0,
@@ -331,7 +331,7 @@ function IssueCard({ issue, repo, branch, commitHash }: {
           {/* Description */}
           <p
             className="text-sm leading-relaxed mb-5"
-            style={{ color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)" }}
+            style={{ color: "#4B5563", fontFamily: "var(--font-landing-body)" }}
           >
             {issue.description}
           </p>
@@ -342,7 +342,7 @@ function IssueCard({ issue, repo, branch, commitHash }: {
               <button
                 onClick={() => setSnippetExpanded(!snippetExpanded)}
                 className="flex items-center gap-2 text-xs mb-2 transition-colors"
-                style={{ color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)" }}
+                style={{ color: "#4B5563", fontFamily: "var(--font-landing-body)" }}
               >
                 <Code size={11} />
                 Matched code
@@ -367,7 +367,7 @@ function IssueCard({ issue, repo, branch, commitHash }: {
             <div className="flex items-center justify-between mb-2">
               <p
                 className="text-xs font-semibold uppercase tracking-widest"
-                style={{ color: "var(--landing-primary)", fontFamily: "var(--font-landing-body)" }}
+                style={{ color: "#3079FF", fontFamily: "var(--font-landing-body)" }}
               >
                 Fix Suggestion
               </p>
@@ -376,7 +376,7 @@ function IssueCard({ issue, repo, branch, commitHash }: {
                 className="flex items-center gap-1.5 text-xs py-1 px-2.5 rounded transition-all duration-150"
                 style={{
                   background: copied ? "var(--guard-monetize-glow)" : "#F3F4F6",
-                  color: copied ? "var(--guard-monetize)" : "var(--landing-text-secondary)",
+                  color: copied ? "var(--guard-monetize)" : "#4B5563",
                   border: `1px solid ${copied ? "rgba(64,200,122,0.3)" : "var(--border)"}`,
                   fontFamily: "var(--font-landing-body)",
                 }}
@@ -387,7 +387,7 @@ function IssueCard({ issue, repo, branch, commitHash }: {
             </div>
             <pre
               className="code-block overflow-x-auto"
-              style={{ fontSize: "12px", color: "var(--landing-text-secondary)" }}
+              style={{ fontSize: "12px", color: "#4B5563" }}
             >
               <code>{issue.fix}</code>
             </pre>
@@ -441,8 +441,8 @@ export default function ScanReportPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen" style={{ background: "var(--landing-bg)" }}>
-        <DashboardSidebar />
+      <div className="flex min-h-screen" style={{ background: "#FFFFFF" }}>
+        
         <main className="flex-1 flex items-center justify-center">
           <div className="w-8 h-8 rounded-full border-2 border-[var(--primary)] border-t-transparent animate-spin" />
         </main>
@@ -452,14 +452,14 @@ export default function ScanReportPage() {
 
   if (!scan) {
     return (
-      <div className="flex min-h-screen" style={{ background: "var(--landing-bg)" }}>
-        <DashboardSidebar />
+      <div className="flex min-h-screen" style={{ background: "#FFFFFF" }}>
+        
         <main className="flex-1 flex items-center justify-center">
           <div className="text-center">
-            <p style={{ color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-heading)" }}>
+            <p style={{ color: "#4B5563", fontFamily: "var(--font-landing-heading)" }}>
               Scan not found
             </p>
-            <Link href="/dashboard" style={{ color: "var(--landing-primary)", fontFamily: "var(--font-landing-body)" }}>
+            <Link href="/dashboard" style={{ color: "#3079FF", fontFamily: "var(--font-landing-body)" }}>
               Back to Dashboard
             </Link>
           </div>
@@ -493,28 +493,28 @@ export default function ScanReportPage() {
   };
 
   return (
-    <div className="flex min-h-screen" style={{ background: "var(--landing-bg)" }}>
-      <DashboardSidebar />
+    <div className="flex min-h-screen" style={{ background: "#FFFFFF" }}>
+      
 
       <main className="flex-1 flex flex-col min-w-0">
         {/* Top bar */}
         <div
           className="h-16 flex items-center justify-between px-6 border-b flex-shrink-0"
-          style={{ borderColor: "var(--landing-border)", background: "var(--landing-surface)" }}
+          style={{ borderColor: "#E5E7EB", background: "#FFFFFF" }}
         >
           <div className="flex items-center gap-4">
             <Link
               href="/dashboard"
               className="flex items-center gap-1.5 text-sm transition-colors"
-              style={{ color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)" }}
+              style={{ color: "#4B5563", fontFamily: "var(--font-landing-body)" }}
             >
               <ChevronLeft size={15} />
               Dashboard
             </Link>
             <span style={{ color: "var(--border)", fontSize: "14px" }}>/</span>
             <div className="flex items-center gap-2">
-              <Github size={14} style={{ color: "var(--landing-text-secondary)" }} />
-              <span style={{ fontSize: "14px", color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)" }}>
+              <Github size={14} style={{ color: "#4B5563" }} />
+              <span style={{ fontSize: "14px", color: "#4B5563", fontFamily: "var(--font-landing-body)" }}>
                 {report.repo}
               </span>
             </div>
@@ -528,16 +528,16 @@ export default function ScanReportPage() {
             {/* Report Header */}
             <div
               className="p-6 rounded-2xl mb-6"
-              style={{ background: "#FFFFFF", border: "1px solid var(--landing-border)" }}
+              style={{ background: "#FFFFFF", border: "1px solid #E5E7EB" }}
             >
               <div className="flex items-start justify-between gap-6 flex-wrap">
                 <div>
                   <div className="flex items-center gap-3 mb-3">
                     <div
                       className="w-10 h-10 rounded-xl flex items-center justify-center"
-                      style={{ background: "var(--landing-surface)", border: "1px solid var(--landing-border)" }}
+                      style={{ background: "#FFFFFF", border: "1px solid #E5E7EB" }}
                     >
-                      <Github size={18} style={{ color: "var(--landing-text-secondary)" }} />
+                      <Github size={18} style={{ color: "#4B5563" }} />
                     </div>
                     <div>
                       <h1
@@ -547,13 +547,13 @@ export default function ScanReportPage() {
                         {report.repo}
                       </h1>
                       <div className="flex items-center gap-3 mt-0.5 flex-wrap">
-                        <span style={{ fontSize: "12px", color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)" }}>
+                        <span style={{ fontSize: "12px", color: "#4B5563", fontFamily: "var(--font-landing-body)" }}>
                           {report.branch}
                         </span>
                         {report.commitHash && (
                           <span
                             className="font-mono"
-                            style={{ fontSize: "11px", color: "var(--landing-text-secondary)", fontFamily: "var(--font-mono)" }}
+                            style={{ fontSize: "11px", color: "#4B5563", fontFamily: "var(--font-mono)" }}
                           >
                             #{report.commitHash}
                           </span>
@@ -597,7 +597,7 @@ export default function ScanReportPage() {
                 {/* Overall score */}
                 <div className="flex items-center gap-4">
                   <div>
-                    <p style={{ fontSize: "11px", color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)", marginBottom: 2 }}>
+                    <p style={{ fontSize: "11px", color: "#4B5563", fontFamily: "var(--font-landing-body)", marginBottom: 2 }}>
                       Overall Score
                     </p>
                     <p style={{ fontSize: "11px", color: report.overallScore < 50 ? "var(--sev-medium)" : "var(--guard-monetize)", fontFamily: "var(--font-landing-body)" }}>
@@ -612,7 +612,7 @@ export default function ScanReportPage() {
                       style={{
                         fontFamily: "var(--font-landing-heading)",
                         fontSize: "28px",
-                        color: "var(--landing-primary)",
+                        color: "#3079FF",
                         lineHeight: 1,
                       }}
                     >
@@ -634,10 +634,10 @@ export default function ScanReportPage() {
                   <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
                     <div className="flex items-center gap-2">
                       <Wand2 size={15} style={{ color: "var(--primary)" }} />
-                      <span style={{ fontSize: "14px", fontWeight: 600, fontFamily: "var(--font-landing-heading)", color: "var(--landing-text)" }}>
+                      <span style={{ fontSize: "14px", fontWeight: 600, fontFamily: "var(--font-landing-heading)", color: "#111827" }}>
                         Fix-all prompt
                       </span>
-                      <span style={{ fontSize: "12px", color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)" }}>
+                      <span style={{ fontSize: "12px", color: "#4B5563", fontFamily: "var(--font-landing-body)" }}>
                         Paste into Claude, Cursor, or any AI tool to fix everything at once
                       </span>
                     </div>
@@ -652,7 +652,7 @@ export default function ScanReportPage() {
                       style={{
                         background: fixPromptCopied ? "var(--primary)" : "var(--primary-glow)",
                         color: fixPromptCopied ? "var(--secondary)" : "var(--primary)",
-                        border: `1px solid ${fixPromptCopied ? "var(--primary)" : "var(--landing-border)"}`,
+                        border: `1px solid ${fixPromptCopied ? "var(--primary)" : "#E5E7EB"}`,
                         fontFamily: "var(--font-landing-heading)",
                         fontWeight: 500,
                       }}
@@ -665,10 +665,10 @@ export default function ScanReportPage() {
                     className="code-block overflow-auto"
                     style={{
                       fontSize: "11px",
-                      color: "var(--landing-text-secondary)",
+                      color: "#4B5563",
                       maxHeight: "240px",
-                      background: "var(--landing-surface)",
-                      border: "1px solid var(--landing-border)",
+                      background: "#FFFFFF",
+                      border: "1px solid #E5E7EB",
                     }}
                   >
                     <code>{prompt || "No issues to fix."}</code>
@@ -687,7 +687,7 @@ export default function ScanReportPage() {
               <p
                 style={{
                   fontSize: "12px",
-                  color: "var(--landing-text-secondary)",
+                  color: "#4B5563",
                   fontFamily: "var(--font-landing-body)",
                   lineHeight: "1.6",
                 }}
@@ -723,14 +723,14 @@ export default function ScanReportPage() {
                       <Icon size={15} style={{ color: cfg.color }} />
                       <ScoreRing score={val.score} color={cfg.color} size={52} />
                     </div>
-                    <p style={{ fontSize: "12px", fontWeight: 600, color: "var(--landing-text)", fontFamily: "var(--font-landing-body)" }}>
+                    <p style={{ fontSize: "12px", fontWeight: 600, color: "#111827", fontFamily: "var(--font-landing-body)" }}>
                       {cfg.label.split(" ")[0]}
                     </p>
                     <p style={{ fontSize: "11px", color: cfg.color, fontFamily: "var(--font-landing-body)" }}>
                       {val.label}
                     </p>
                     {breakdown.length > 0 && (
-                      <p style={{ fontSize: "10px", color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)", marginTop: 4 }}>
+                      <p style={{ fontSize: "10px", color: "#4B5563", fontFamily: "var(--font-landing-body)", marginTop: 4 }}>
                         {breakdown.join(" · ")}
                       </p>
                     )}
@@ -753,13 +753,13 @@ export default function ScanReportPage() {
                   className="flex-shrink-0 flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
                   style={{
                     background: activeGuard === "all" ? "#F3F4F6" : "transparent",
-                    color: activeGuard === "all" ? "var(--landing-text)" : "#9CA3AF",
+                    color: activeGuard === "all" ? "#111827" : "#9CA3AF",
                     border: `1px solid ${activeGuard === "all" ? "var(--border-hover)" : "transparent"}`,
                     fontFamily: "var(--font-landing-body)",
                   }}
                 >
                   All Issues
-                  <span className="px-1.5 py-0.5 rounded text-xs" style={{ background: "var(--landing-border)", color: "var(--landing-text-secondary)" }}>
+                  <span className="px-1.5 py-0.5 rounded text-xs" style={{ background: "#E5E7EB", color: "#4B5563" }}>
                     {issues.length}
                   </span>
                 </button>
@@ -780,7 +780,7 @@ export default function ScanReportPage() {
                     >
                       <Icon size={12} />
                       {cfg.label.split(" ")[0]}
-                      <span className="px-1.5 py-0.5 rounded text-xs" style={{ background: "var(--landing-border)", color: "var(--landing-text-secondary)" }}>
+                      <span className="px-1.5 py-0.5 rounded text-xs" style={{ background: "#E5E7EB", color: "#4B5563" }}>
                         {count}
                       </span>
                     </button>
@@ -803,11 +803,11 @@ export default function ScanReportPage() {
               {filteredIssues.length === 0 && (
                 <div
                   className="text-center py-12 rounded-xl"
-                  style={{ background: "#FFFFFF", border: "1px solid var(--landing-border)" }}
+                  style={{ background: "#FFFFFF", border: "1px solid #E5E7EB" }}
                 >
                   <CheckCircle size={24} className="mx-auto mb-3" style={{ color: "var(--guard-monetize)" }} />
                   <p style={{ fontFamily: "var(--font-landing-heading)", fontWeight: 600 }}>No issues found</p>
-                  <p style={{ fontSize: "13px", color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)" }}>
+                  <p style={{ fontSize: "13px", color: "#4B5563", fontFamily: "var(--font-landing-body)" }}>
                     This guard is clean
                   </p>
                 </div>

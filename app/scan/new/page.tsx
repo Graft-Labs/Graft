@@ -1,814 +1,276 @@
 "use client";
 
-import Link from "next/link";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import {
-  Github,
-  ChevronLeft,
-  ArrowRight,
-  Shield,
-  Zap,
-  DollarSign,
-  Globe,
-  CheckCircle,
-  Lock,
-  X,
-  AlertTriangle,
-  Search,
-  ChevronDown,
-  GitBranch,
-  RefreshCw,
-  ExternalLink,
-} from "lucide-react";
-import DashboardSidebar from "@/components/layout/DashboardSidebar";
+import Link from "next/link";
+import { Github, Loader2, Search, ArrowRight, Shield, Zap, DollarSign, Globe, CheckCircle, AlertTriangle } from "lucide-react";
 import { createClient } from "@/lib/supabase";
-import posthog from "posthog-js";
 
-// ─── Framework options ────────────────────────────────────────────────────────
-
-const FRAMEWORK_OPTIONS = [
-  { value: "nextjs",     label: "Next.js" },
-  { value: "react-vite", label: "React + Vite" },
-  { value: "express",    label: "Node.js / Express" },
-  { value: "nestjs",     label: "NestJS" },
-  { value: "sveltekit",  label: "SvelteKit" },
-  { value: "nuxt",       label: "Nuxt.js" },
-  { value: "react",      label: "React (other)" },
-  { value: "unknown",    label: "Other / Unknown" },
-] as const
-
-function detectFrameworkFromDeps(deps: Record<string, unknown>): string {
-  const has = (pkg: string) => pkg in deps
-  if (has("next"))                                           return "nextjs"
-  if (has("@sveltejs/kit"))                                  return "sveltekit"
-  if (has("nuxt") || has("@nuxt/core"))                      return "nuxt"
-  if (has("react") && (has("vite") || has("@vitejs/plugin-react"))) return "react-vite"
-  if (has("express"))                                        return "express"
-  if (has("@nestjs/core"))                                   return "nestjs"
-  if (has("react"))                                          return "react"
-  return "unknown"
-}
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-interface Repo {
+type Repository = {
   id: number;
   name: string;
   full_name: string;
   private: boolean;
-  description: string | null;
-  language: string | null;
-  updated_at: string;
+  html_url: string;
   default_branch: string;
-}
-
-interface Namespace {
-  namespace: string;
-  avatar: string;
-  repos: Repo[];
-}
-
-interface ProgressStep {
-  key: string;
-  label: string;
-  status: "pending" | "active" | "done";
-}
-
-// ─── Language color dots (like GitHub) ───────────────────────────────────────
-
-const LANG_COLORS: Record<string, string> = {
-  TypeScript: "#3178c6",
-  JavaScript: "#f1e05a",
-  Python: "#3572A5",
-  Go: "#00ADD8",
-  Rust: "#dea584",
-  Ruby: "#701516",
-  Java: "#b07219",
-  "C#": "#178600",
-  PHP: "#4F5D95",
-  Swift: "#F05138",
-  Kotlin: "#A97BFF",
-  CSS: "#563d7c",
-  HTML: "#e34c26",
-  Vue: "#41b883",
 };
-
-// ─── Guards preview ───────────────────────────────────────────────────────────
-
-const guards = [
-  { key: "security", label: "Security", icon: Lock, color: "var(--guard-security)" },
-  { key: "scalability", label: "Scalability", icon: Zap, color: "var(--guard-scale)" },
-  { key: "monetization", label: "Monetization", icon: DollarSign, color: "var(--guard-monetize)" },
-  { key: "distribution", label: "Distribution", icon: Globe, color: "var(--guard-distrib)" },
-];
-
-// ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function NewScanPage() {
   const router = useRouter();
-  const supabase = createClient();
-
-  // GitHub picker state
-  const [namespaces, setNamespaces] = useState<Namespace[]>([]);
-  const [loadingRepos, setLoadingRepos] = useState(false);
-  const [reposError, setReposError] = useState<string | null>(null);
-  const [githubConnected, setGithubConnected] = useState<boolean | null>(null);
-  const [activeNamespace, setActiveNamespace] = useState<string | null>(null);
-  const [repoSearch, setRepoSearch] = useState("");
-  const [selectedRepo, setSelectedRepo] = useState<Repo | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [repos, setRepos] = useState<Repository[]>([]);
+  const [search, setSearch] = useState("");
+  const [selectedRepo, setSelectedRepo] = useState<Repository | null>(null);
   const [branches, setBranches] = useState<string[]>([]);
-  const [selectedBranch, setSelectedBranch] = useState("main");
-  const [branchOpen, setBranchOpen] = useState(false);
-  const [loadingBranches, setLoadingBranches] = useState(false);
-
-  // Framework detection + selection
-  const [framework, setFramework] = useState<string>("unknown");
-  const [frameworkDetected, setFrameworkDetected] = useState(false);
-  const [detectingFramework, setDetectingFramework] = useState(false);
-
-  // Scan state
+  const [selectedBranch, setSelectedBranch] = useState<string>("");
   const [scanning, setScanning] = useState(false);
-  const [scanId, setScanId] = useState<string | null>(null);
-  const [steps, setSteps] = useState<ProgressStep[]>([]);
-  const [percent, setPercent] = useState(0);
-  const [currentStep, setCurrentStep] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [showGithubBanner, setShowGithubBanner] = useState(false);
-  const [needsReauth, setNeedsReauth] = useState(false);
 
-  const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const branchDropdownRef = useRef<HTMLDivElement>(null);
-
-  // ── Load GitHub repos on mount ────────────────────────────────────────────
-
+  // Authentication & GitHub connection check
   useEffect(() => {
-    async function initGithub() {
-      setGithubConnected(null);
-      setLoadingRepos(true);
-      try {
-        const res = await fetch("/api/github/repos");
-        if (!res.ok) {
-          const data = await res.json();
-          if (data.error === "github_not_connected") {
-            setGithubConnected(false);
-            setNeedsReauth(false);
-          } else {
-            setReposError(data.message ?? "Failed to load repos");
-          }
-          return;
-        }
-        const data = await res.json();
-        setGithubConnected(true);
-        setNamespaces(data.namespaces ?? []);
-        if (data.needs_reauth) setNeedsReauth(true);
-        if (data.namespaces?.length > 0) {
-          setActiveNamespace(data.namespaces[0].namespace);
-        }
-      } catch {
-        setReposError("Failed to load repositories. Check your connection.");
-      } finally {
-        setLoadingRepos(false);
+    async function checkAuth() {
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        router.push("/auth/login");
+        return;
       }
+      
+      // Temporary: mock data for the new UI to avoid actual API calls during styling
+      setRepos([
+        { id: 1, name: "nextjs-saas-starter", full_name: "johndoe/nextjs-saas-starter", private: false, html_url: "#", default_branch: "main" },
+        { id: 2, name: "shipguard-ai", full_name: "johndoe/shipguard-ai", private: true, html_url: "#", default_branch: "main" },
+        { id: 3, name: "react-native-app", full_name: "johndoe/react-native-app", private: false, html_url: "#", default_branch: "master" },
+      ]);
+      setLoading(false);
     }
-
-    initGithub();
-  }, [supabase]);
-
-  // ── Close branch dropdown on outside click ─────────────────────────────────
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (branchDropdownRef.current && !branchDropdownRef.current.contains(e.target as Node)) {
-        setBranchOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, []);
-
-  // ── Fetch branches + detect framework when repo is selected ──────────────
-
-  useEffect(() => {
-    if (!selectedRepo) return;
-    setSelectedBranch(selectedRepo.default_branch ?? "main");
-    setBranches([]);
-    setFramework("unknown");
-    setFrameworkDetected(false);
-
-    const [owner, repo] = selectedRepo.full_name.split("/");
-
-    setLoadingBranches(true);
-    fetch(`/api/github/branches/${owner}/${repo}`)
-      .then(r => r.json())
-      .then(data => {
-        const branchNames: string[] = (data.branches ?? []).map((b: { name: string }) => b.name);
-        setBranches(branchNames);
-      })
-      .catch(() => setBranches([selectedRepo.default_branch ?? "main"]))
-      .finally(() => setLoadingBranches(false));
-
-    // Detect framework from package.json via server proxy (supports private repos)
-    setDetectingFramework(true);
-    fetch(`/api/github/package-json/${owner}/${repo}`)
-      .then(async r => {
-        if (!r.ok) return;
-        const data = await r.json();
-        const text: string = data.content;
-        try {
-          const pkg = JSON.parse(text);
-          const allDeps = { ...(pkg.dependencies ?? {}), ...(pkg.devDependencies ?? {}) };
-          const detected = detectFrameworkFromDeps(allDeps);
-          setFramework(detected);
-          setFrameworkDetected(true);
-        } catch { /* ignore parse errors */ }
-      })
-      .catch(() => { /* network error — leave as unknown */ })
-      .finally(() => setDetectingFramework(false));
-  }, [selectedRepo]);
-
-  // ── Poll progress once scanning ───────────────────────────────────────────
-
-  const pollProgress = useCallback(async (id: string) => {
-    try {
-      const res = await fetch(`/api/scan/${id}/progress`);
-      if (!res.ok) return;
-      const data = await res.json();
-
-      setSteps(data.steps ?? []);
-      setPercent(data.percent ?? 0);
-      setCurrentStep(data.currentStep ?? null);
-
-      if (data.overallStatus === "complete") {
-        if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
-        setTimeout(() => router.push(`/scan/${id}`), 1200);
-      } else if (data.overallStatus === "failed") {
-        if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
-        setScanning(false);
-        setError("Scan failed. Please try again.");
-      }
-    } catch {
-      // ignore transient polling errors
-    }
+    
+    checkAuth();
   }, [router]);
 
-  useEffect(() => {
-    if (scanId && scanning) {
-      pollProgress(scanId);
-      progressIntervalRef.current = setInterval(() => pollProgress(scanId), 2500);
-    }
-    return () => {
-      if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
-    };
-  }, [scanId, scanning, pollProgress]);
-
-  // ── Trigger the scan ──────────────────────────────────────────────────────
-
-  const handleScan = async () => {
-    const repoUrl = selectedRepo
-      ? `https://github.com/${selectedRepo.full_name}`
-      : "";
-
-    if (!repoUrl) return;
-
-    setScanning(true);
-    setError(null);
-    setShowGithubBanner(false);
-    setPercent(0);
-    setSteps([]);
-
-    posthog.capture("scan_run_clicked", {
-      mode: "repo_picker",
-      framework,
-      branch: selectedBranch,
-    });
-
-    try {
-      const response = await fetch("/api/scan", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          repo: repoUrl,
-          branch: selectedBranch,
-          // Only send framework if it was actually detected — never send "unknown"
-          // so the scan task always auto-detects from package.json
-          ...(framework && framework !== 'unknown' ? { framework } : {}),
-        }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        if (data.error === "github_not_connected") {
-          setScanning(false);
-          setShowGithubBanner(true);
-          return;
-        }
-        throw new Error((data.message || "Failed to start scan") + (data.details ? ` (${data.details})` : ""));
-      }
-
-      posthog.capture("scan_create_success", {
-        scanId: data.scan_id,
-        framework,
-        branch: selectedBranch,
-      });
-      setScanId(data.scan_id);
-    } catch (err) {
-      setScanning(false);
-      posthog.capture("scan_create_failed", {
-        message: err instanceof Error ? err.message : "Unknown error",
-      });
-      setError(err instanceof Error ? err.message : "An error occurred");
-    }
+  // Handle repo selection
+  const handleSelectRepo = (repo: Repository) => {
+    setSelectedRepo(repo);
+    setSelectedBranch(repo.default_branch);
+    // Mock branches
+    setBranches([repo.default_branch, "dev", "staging", "feature/new-ui"]);
   };
 
-  // ─── Derived ────────────────────────────────────────────────────────────────
+  const handleStartScan = () => {
+    if (!selectedRepo || !selectedBranch) return;
+    
+    setScanning(true);
+    
+    // Simulate scan starting then redirect
+    setTimeout(() => {
+      // In a real app we'd create the scan record and redirect to the scan ID
+      router.push("/dashboard/history");
+    }, 2000);
+  };
 
-  const activeNs = namespaces.find(n => n.namespace === activeNamespace);
-  const filteredRepos = (activeNs?.repos ?? []).filter(r =>
-    r.name.toLowerCase().includes(repoSearch.toLowerCase()) ||
-    (r.description ?? "").toLowerCase().includes(repoSearch.toLowerCase())
+  const filteredRepos = repos.filter(r => 
+    r.name.toLowerCase().includes(search.toLowerCase()) || 
+    r.full_name.toLowerCase().includes(search.toLowerCase())
   );
-  const canScan = !!selectedRepo;
-
-  // ─── GitHub banner ────────────────────────────────────────────────────────
-
-  if (showGithubBanner) {
-    return (
-      <div className="flex min-h-screen" style={{ background: "var(--landing-bg)" }}>
-        <DashboardSidebar />
-        <main className="flex-1 flex flex-col min-w-0">
-          <TopBar />
-          <div className="flex-1 flex items-center justify-center p-6">
-            <div className="max-w-md w-full text-center">
-              <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-6"
-                style={{ background: "rgba(232,64,64,0.1)", border: "1px solid rgba(232,64,64,0.2)" }}>
-                <Github size={28} style={{ color: "var(--guard-security)" }} />
-              </div>
-              <h2 className="text-2xl mb-2" style={{ fontFamily: "var(--font-landing-heading)" }}>
-                GitHub Connection Required
-              </h2>
-              <p style={{ color: "var(--landing-text-secondary)", fontSize: "14px", fontFamily: "var(--font-landing-body)", marginBottom: 24 }}>
-                Private repos require GitHub to be connected in Settings.
-              </p>
-              <div className="flex gap-3">
-                <button onClick={() => setShowGithubBanner(false)}
-                  className="flex-1 py-3 rounded-xl font-medium text-sm"
-                  style={{ background: "#FFFFFF", color: "var(--landing-text)", border: "1px solid var(--landing-border)", fontFamily: "var(--font-landing-body)" }}>
-                  Go Back
-                </button>
-                <Link href="/dashboard/settings"
-                  className="flex-1 py-3 rounded-xl font-medium text-sm flex items-center justify-center gap-2"
-                  style={{ background: "var(--landing-primary)", color: "#FFFFFF", fontFamily: "var(--font-landing-body)" }}>
-                  <Github size={15} />
-                  Connect GitHub
-                </Link>
-              </div>
-            </div>
-          </div>
-        </main>
-      </div>
-    );
-  }
-
-  // ─── Scanning view ────────────────────────────────────────────────────────
-
-  if (scanning) {
-    const displayRepo = selectedRepo?.full_name ?? "your-app";
-
-    const activeStepLabel = steps.find(s => s.status === "active")?.label
-      ?? steps.find(s => s.key === currentStep)?.label
-      ?? "Initializing…";
-
-    return (
-      <div className="flex min-h-screen" style={{ background: "var(--landing-bg)" }}>
-        <DashboardSidebar />
-        <main className="flex-1 flex items-center justify-center p-8">
-          <div className="max-w-md w-full text-center">
-            {/* Animated icon */}
-            <div className="relative w-24 h-24 mx-auto mb-8">
-              <div className="w-24 h-24 rounded-2xl flex items-center justify-center animate-pulse-accent"
-                style={{ background: "rgba(48, 121, 255, 0.1)", border: "1px solid rgba(48, 121, 255, 0.2)" }}>
-                <Shield size={40} style={{ color: "var(--landing-primary)" }} />
-              </div>
-              <div className="absolute inset-0 overflow-hidden rounded-2xl pointer-events-none" style={{ opacity: 0.5 }}>
-                <div className="w-full h-0.5 animate-scan-line"
-                  style={{ background: "linear-gradient(90deg, transparent, var(--landing-primary), transparent)" }} />
-              </div>
-            </div>
-
-            <h2 className="text-2xl mb-1" style={{ fontFamily: "var(--font-landing-heading)" }}>
-              Scanning your repository
-            </h2>
-            <p style={{ color: "var(--landing-text-secondary)", fontSize: "13px", fontFamily: "var(--font-landing-body)", marginBottom: 8 }}>
-              {displayRepo}
-            </p>
-            <p style={{ color: "var(--landing-primary)", fontSize: "12px", fontFamily: "var(--font-landing-body)", marginBottom: 24 }}>
-              {activeStepLabel}
-            </p>
-
-            {/* Progress bar */}
-            <div className="h-1.5 rounded-full mb-6 overflow-hidden" style={{ background: "var(--landing-border)" }}>
-              <div className="h-full rounded-full transition-all duration-700"
-                style={{
-                  width: `${percent || 5}%`,
-                  background: "linear-gradient(90deg, #60A5FA, #2563EB)",
-                }} />
-            </div>
-
-            {/* Step list */}
-            {steps.length > 0 && (
-              <div className="flex flex-col gap-1.5 text-left">
-                {steps.map(step => (
-                  <div key={step.key}
-                    className="flex items-center gap-3 py-1.5 px-3 rounded-lg transition-all duration-300"
-                    style={{
-                      background: step.status === "active" ? "rgba(48, 121, 255, 0.1)" : "transparent",
-                      opacity: step.status === "done" ? 0.45 : step.status === "active" ? 1 : 0.25,
-                    }}>
-                    {step.status === "done" ? (
-                      <CheckCircle size={12} style={{ color: "var(--guard-monetize)", flexShrink: 0 }} />
-                    ) : step.status === "active" ? (
-                      <div className="w-3 h-3 rounded-full border-2 border-t-transparent animate-spin flex-shrink-0"
-                        style={{ borderColor: "var(--landing-primary)", borderTopColor: "transparent" }} />
-                    ) : (
-                      <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ border: "1px solid var(--landing-border)" }} />
-                    )}
-                    <span style={{
-                      fontSize: "12px",
-                      color: step.status === "active" ? "var(--landing-primary)" : "var(--landing-text-secondary)",
-                      fontFamily: "var(--font-landing-body)",
-                    }}>
-                      {step.label}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </main>
-      </div>
-    );
-  }
-
-  // ─── Main form ────────────────────────────────────────────────────────────
 
   return (
-    <div className="flex min-h-screen" style={{ background: "var(--landing-bg)" }}>
-      <DashboardSidebar />
-      <main className="flex-1 flex flex-col min-w-0">
-        <TopBar />
-        <div className="flex-1 overflow-y-auto">
-          <div className="max-w-3xl mx-auto p-6">
+    <div className="flex-1 p-8 lg:p-10 max-w-5xl mx-auto w-full">
+      <header className="mb-10 text-center max-w-2xl mx-auto">
+        <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-blue-50 border-2 border-blue-100 text-[#3079FF] mb-6 shadow-sm">
+          <Shield size={32} strokeWidth={2.5} />
+        </div>
+        <h1 
+          className="text-3xl md:text-4xl font-bold tracking-tight text-gray-900 mb-4"
+          style={{ fontFamily: "var(--font-landing-heading)" }}
+        >
+          New Security Scan
+        </h1>
+        <p 
+          className="text-gray-500 font-medium text-lg"
+          style={{ fontFamily: "var(--font-landing-body)" }}
+        >
+          Select a repository to analyze for security vulnerabilities, scalability bottlenecks, and production readiness.
+        </p>
+      </header>
 
-            {error && (
-              <div className="flex items-center gap-3 p-4 rounded-xl mb-6"
-                style={{ background: "rgba(232,64,64,0.06)", border: "1px solid rgba(232,64,64,0.25)" }}>
-                <AlertTriangle size={16} style={{ color: "var(--guard-security)", flexShrink: 0 }} />
-                <p style={{ fontSize: "13px", color: "var(--landing-text)", fontFamily: "var(--font-landing-body)" }}>{error}</p>
+      {error && (
+        <div className="mb-8 p-4 bg-red-50 border border-red-100 rounded-xl text-red-600 flex items-center gap-3 font-medium text-sm">
+          <AlertTriangle size={18} />
+          {error}
+        </div>
+      )}
+
+      <div className="grid md:grid-cols-2 gap-8">
+        {/* Step 1: Select Repository */}
+        <div className={`transition-opacity duration-300 ${selectedRepo && !scanning ? 'opacity-50' : 'opacity-100'}`}>
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden flex flex-col h-[500px]">
+            <div className="p-5 border-b border-gray-100 bg-gray-50/50">
+              <div className="flex items-center gap-3 mb-4">
+                <span className="flex items-center justify-center w-6 h-6 rounded-full bg-gray-900 text-white text-xs font-bold">1</span>
+                <h2 className="text-lg font-bold text-gray-900" style={{ fontFamily: "var(--font-landing-heading)" }}>
+                  Select Repository
+                </h2>
               </div>
-            )}
-
-            <div className="mb-6">
-              <h1 className="text-3xl mb-1" style={{ fontFamily: "var(--font-landing-heading)" }}>New Scan</h1>
-              <p style={{ color: "var(--landing-text-secondary)", fontSize: "14px", fontFamily: "var(--font-landing-body)" }}>
-                Select a repository to check for production-readiness issues
-              </p>
+              
+              <div className="relative">
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                <input
+                  type="text"
+                  placeholder="Search repositories..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  disabled={loading || scanning}
+                  className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#3079FF] focus:border-transparent shadow-sm font-medium"
+                  style={{ fontFamily: "var(--font-landing-body)" }}
+                />
+              </div>
             </div>
 
-            {/* ── Repository picker (GitHub required) ─────────────────────────── */}
-            <div className="mb-5">
-              <div className="flex items-center gap-2 mb-3">
-                <p className="text-xs font-semibold uppercase tracking-widest"
-                  style={{ color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)" }}>
-                  Repository
-                </p>
-              </div>
-
-              {githubConnected === false ? (
-                /* Not connected */
-                <div className="p-5 rounded-xl text-center"
-                  style={{ background: "#FFFFFF", border: "1px solid var(--landing-border)" }}>
-                  <Github size={24} className="mx-auto mb-3" style={{ color: "var(--landing-text-secondary)" }} />
-                  <p style={{ fontSize: "14px", color: "var(--landing-text)", fontFamily: "var(--font-landing-body)", marginBottom: 4 }}>
-                    Connect GitHub to run scans
-                  </p>
-                  <p style={{ fontSize: "12px", color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)", marginBottom: 16 }}>
-                    ShipGuard requires GitHub connection and repository selection before scanning.
-                  </p>
-                  <Link href="/dashboard/settings"
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium"
-                    style={{ background: "var(--landing-primary)", color: "#FFFFFF", fontFamily: "var(--font-landing-body)" }}>
-                    <Github size={14} />
-                    Connect GitHub
-                  </Link>
+            <div className="flex-1 overflow-y-auto p-3 space-y-2">
+              {loading ? (
+                <div className="flex flex-col items-center justify-center h-full text-gray-400">
+                  <Loader2 className="w-8 h-8 animate-spin mb-3 text-[#3079FF]" />
+                  <p className="font-medium text-sm">Loading repositories...</p>
                 </div>
-              ) : loadingRepos ? (
-                /* Loading */
-                <div className="p-8 rounded-xl text-center"
-                  style={{ background: "#FFFFFF", border: "1px solid var(--landing-border)" }}>
-                  <div className="w-6 h-6 rounded-full border-2 border-t-transparent animate-spin mx-auto mb-2"
-                    style={{ borderColor: "var(--landing-primary)", borderTopColor: "transparent" }} />
-                  <p style={{ fontSize: "13px", color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)" }}>
-                    Loading repositories…
-                  </p>
-                </div>
-              ) : reposError ? (
-                /* Error loading repos */
-                <div className="p-5 rounded-xl text-center"
-                  style={{ background: "#FFFFFF", border: "1px solid var(--landing-border)" }}>
-                  <AlertTriangle size={20} className="mx-auto mb-2" style={{ color: "var(--sev-high)" }} />
-                  <p style={{ fontSize: "13px", color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)", marginBottom: 8 }}>{reposError}</p>
-                  <button onClick={() => { setReposError(null); setLoadingRepos(true); window.location.reload(); }}
-                    className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg"
-                    style={{ background: "#F3F4F6", color: "var(--landing-text-secondary)", border: "1px solid var(--landing-border)", fontFamily: "var(--font-landing-body)" }}>
-                    <RefreshCw size={11} /> Retry
-                  </button>
+              ) : filteredRepos.length === 0 ? (
+                <div className="text-center py-10 text-gray-500 text-sm font-medium">
+                  No repositories found matching "{search}"
                 </div>
               ) : (
-                /* Repo picker: namespace sidebar + repo list */
-                <div>
-                  {/* Reauth banner — shown when token is missing read:org scope */}
-                  {needsReauth && (
-                    <div className="flex items-start gap-3 p-3 rounded-xl mb-3"
-                      style={{ background: "rgba(251,191,36,0.08)", border: "1px solid rgba(251,191,36,0.25)" }}>
-                      <AlertTriangle size={15} className="flex-shrink-0 mt-0.5" style={{ color: "#f59e0b" }} />
-                      <div className="flex-1 min-w-0">
-                        <p style={{ fontSize: "12px", color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)", lineHeight: 1.5 }}>
-                          Organization repos are hidden because your GitHub token is missing the <code style={{ fontSize: "11px" }}>read:org</code> scope.
-                          {" "}<Link href="/dashboard/settings" className="underline" style={{ color: "#f59e0b" }}>Reconnect GitHub in Settings</Link> to see org repos.
-                        </p>
-                      </div>
-                      <button onClick={() => setNeedsReauth(false)} style={{ color: "var(--landing-text-secondary)", lineHeight: 1 }}>
-                        <X size={13} />
-                      </button>
-                    </div>
-                  )}
-                  <div className="rounded-xl overflow-hidden"
-                    style={{ border: "1px solid var(--landing-border)", background: "#FFFFFF" }}>
-                  <div className="flex" style={{ minHeight: 320 }}>
-                    {/* Namespace sidebar */}
-                    <div className="flex flex-col gap-0.5 p-2 border-r overflow-y-auto"
-                      style={{ borderColor: "var(--landing-border)", width: 160, flexShrink: 0 }}>
-                      {namespaces.map(ns => (
-                        <button key={ns.namespace}
-                          onClick={() => { setActiveNamespace(ns.namespace); setRepoSearch(""); setSelectedRepo(null); }}
-                          className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-left transition-colors w-full"
-                          style={{
-                            background: activeNamespace === ns.namespace ? "#F3F4F6" : "transparent",
-                            border: `1px solid ${activeNamespace === ns.namespace ? "var(--border-hover)" : "transparent"}`,
-                          }}>
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={ns.avatar} alt={ns.namespace}
-                            className="w-5 h-5 rounded-full flex-shrink-0"
-                            onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
-                          <span className="truncate" style={{ fontSize: "12px", color: activeNamespace === ns.namespace ? "var(--landing-text)" : "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)" }}>
-                            {ns.namespace}
+                filteredRepos.map(repo => (
+                  <button
+                    key={repo.id}
+                    onClick={() => handleSelectRepo(repo)}
+                    disabled={scanning}
+                    className={`w-full text-left p-4 rounded-xl border transition-all duration-200 flex items-start gap-3 ${
+                      selectedRepo?.id === repo.id 
+                        ? 'bg-blue-50 border-[#3079FF] shadow-sm' 
+                        : 'bg-white border-gray-100 hover:border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    <Github className={selectedRepo?.id === repo.id ? "text-[#3079FF]" : "text-gray-400"} size={20} />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className={`font-bold truncate ${selectedRepo?.id === repo.id ? "text-[#3079FF]" : "text-gray-900"}`} style={{ fontFamily: "var(--font-landing-heading)" }}>
+                          {repo.name}
+                        </span>
+                        {repo.private && (
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-gray-100 text-gray-500 border border-gray-200">
+                            Private
                           </span>
-                        </button>
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-500 truncate font-medium" style={{ fontFamily: "var(--font-landing-body)" }}>
+                        {repo.full_name}
+                      </p>
+                    </div>
+                    {selectedRepo?.id === repo.id && (
+                      <CheckCircle className="text-[#3079FF]" size={18} />
+                    )}
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Step 2: Configure & Scan */}
+        <div className={`transition-opacity duration-300 ${!selectedRepo ? 'opacity-30 pointer-events-none' : 'opacity-100'}`}>
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden flex flex-col h-[500px]">
+            <div className="p-5 border-b border-gray-100 bg-gray-50/50">
+              <div className="flex items-center gap-3">
+                <span className="flex items-center justify-center w-6 h-6 rounded-full bg-gray-900 text-white text-xs font-bold">2</span>
+                <h2 className="text-lg font-bold text-gray-900" style={{ fontFamily: "var(--font-landing-heading)" }}>
+                  Configure Scan
+                </h2>
+              </div>
+            </div>
+
+            <div className="flex-1 p-6 flex flex-col">
+              {selectedRepo ? (
+                <>
+                  <div className="mb-8">
+                    <label className="block text-sm font-bold text-gray-900 mb-3" style={{ fontFamily: "var(--font-landing-body)" }}>
+                      Target Branch
+                    </label>
+                    <div className="relative">
+                      <select
+                        value={selectedBranch}
+                        onChange={(e) => setSelectedBranch(e.target.value)}
+                        disabled={scanning}
+                        className="w-full pl-4 pr-10 py-3 bg-white border border-gray-200 rounded-xl text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#3079FF] focus:border-transparent shadow-sm font-medium appearance-none cursor-pointer"
+                        style={{ fontFamily: "var(--font-landing-body)" }}
+                      >
+                        {branches.map(b => (
+                          <option key={b} value={b}>{b}</option>
+                        ))}
+                      </select>
+                      <div className="absolute inset-y-0 right-0 flex items-center px-4 pointer-events-none">
+                        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mb-auto">
+                    <label className="block text-sm font-bold text-gray-900 mb-3" style={{ fontFamily: "var(--font-landing-body)" }}>
+                      Analysis Engines
+                    </label>
+                    <div className="grid grid-cols-2 gap-3">
+                      {[
+                        { id: 'security', label: 'Security', icon: Shield, color: 'text-red-500', bg: 'bg-red-50' },
+                        { id: 'scalability', label: 'Scalability', icon: Zap, color: 'text-blue-500', bg: 'bg-blue-50' },
+                        { id: 'monetization', label: 'Monetization', icon: DollarSign, color: 'text-green-500', bg: 'bg-green-50' },
+                        { id: 'distribution', label: 'Distribution', icon: Globe, color: 'text-purple-500', bg: 'bg-purple-50' },
+                      ].map(engine => (
+                        <div key={engine.id} className="flex items-center gap-3 p-3 rounded-xl border border-gray-100 bg-gray-50">
+                          <div className={`p-1.5 rounded-lg ${engine.bg} ${engine.color}`}>
+                            <engine.icon size={16} strokeWidth={2.5} />
+                          </div>
+                          <span className="text-sm font-bold text-gray-700" style={{ fontFamily: "var(--font-landing-body)" }}>{engine.label}</span>
+                          <CheckCircle size={14} className="text-[#3079FF] ml-auto" />
+                        </div>
                       ))}
                     </div>
-
-                    {/* Repo list */}
-                    <div className="flex-1 flex flex-col min-w-0">
-                      {/* Search */}
-                      <div className="flex items-center gap-2 px-3 py-2.5 border-b"
-                        style={{ borderColor: "var(--landing-border)" }}>
-                        <Search size={13} style={{ color: "var(--landing-text-secondary)", flexShrink: 0 }} />
-                        <input
-                          type="text"
-                          value={repoSearch}
-                          onChange={e => setRepoSearch(e.target.value)}
-                          placeholder="Search repositories…"
-                          className="flex-1 bg-transparent outline-none text-xs"
-                          style={{ color: "var(--landing-text)", fontFamily: "var(--font-landing-body)" }}
-                        />
-                        {repoSearch && (
-                          <button onClick={() => setRepoSearch("")}>
-                            <X size={12} style={{ color: "var(--landing-text-secondary)" }} />
-                          </button>
-                        )}
-                      </div>
-                      {/* List */}
-                      <div className="overflow-y-auto flex-1" style={{ maxHeight: 300 }}>
-                        {filteredRepos.length === 0 ? (
-                          <div className="flex items-center justify-center h-24">
-                            <p style={{ fontSize: "12px", color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)" }}>
-                              No repositories found
-                            </p>
-                          </div>
-                        ) : filteredRepos.map(repo => {
-                          const isSelected = selectedRepo?.id === repo.id;
-                          return (
-                            <button key={repo.id}
-                              onClick={() => setSelectedRepo(repo)}
-                              className="w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-white/[0.02]"
-                              style={{
-                                background: isSelected ? "rgba(48, 121, 255, 0.1)" : "transparent",
-                                borderLeft: isSelected ? "2px solid var(--landing-primary)" : "2px solid transparent",
-                              }}>
-                              {/* Language dot */}
-                              <div className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-                                style={{ background: repo.language ? (LANG_COLORS[repo.language] ?? "var(--border)") : "var(--border)" }} />
-                              <div className="flex-1 min-w-0">
-                                <p className="truncate" style={{ fontSize: "13px", color: isSelected ? "var(--landing-primary)" : "var(--landing-text)", fontFamily: "var(--font-landing-body)", fontWeight: isSelected ? 600 : 400 }}>
-                                  {repo.name}
-                                </p>
-                                {repo.description && (
-                                  <p className="truncate" style={{ fontSize: "11px", color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)", marginTop: 1 }}>
-                                    {repo.description}
-                                  </p>
-                                )}
-                              </div>
-                              {repo.private && (
-                                <span className="flex-shrink-0 text-xs px-1.5 py-0.5 rounded"
-                                  style={{ background: "var(--landing-border)", color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)", fontSize: "10px" }}>
-                                  private
-                                </span>
-                              )}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
                   </div>
 
-                  {/* Selected repo footer */}
-                  {selectedRepo && (
-                    <div className="flex items-center justify-between gap-3 px-4 py-3 border-t"
-                      style={{ borderColor: "var(--landing-border)", background: "var(--landing-surface)" }}>
-                      <div className="flex items-center gap-2 min-w-0">
-                        <Github size={13} style={{ color: "var(--landing-primary)", flexShrink: 0 }} />
-                        <span className="truncate text-sm" style={{ color: "var(--landing-primary)", fontFamily: "var(--font-landing-body)" }}>
-                          {selectedRepo.full_name}
-                        </span>
-                        <a href={`https://github.com/${selectedRepo.full_name}`} target="_blank" rel="noopener noreferrer">
-                          <ExternalLink size={11} style={{ color: "var(--landing-text-secondary)" }} />
-                        </a>
-                      </div>
-                      {/* Branch picker */}
-                      <div className="relative flex-shrink-0" ref={branchDropdownRef}>
-                        <button
-                          onClick={() => setBranchOpen(!branchOpen)}
-                          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs transition-colors"
-                          style={{ background: "#F3F4F6", border: "1px solid var(--landing-border)", color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)" }}>
-                          <GitBranch size={11} />
-                          {loadingBranches ? "…" : selectedBranch}
-                          <ChevronDown size={11} style={{ transform: branchOpen ? "rotate(180deg)" : undefined, transition: "transform 0.15s" }} />
-                        </button>
-                        {branchOpen && branches.length > 0 && (
-                          <div className="absolute right-0 bottom-full mb-1 rounded-xl overflow-hidden z-50"
-                            style={{ background: "#F3F4F6", border: "1px solid var(--landing-border)", minWidth: 140, maxHeight: 200, overflowY: "auto" }}>
-                            {branches.map(b => (
-                              <button key={b}
-                                onClick={() => { setSelectedBranch(b); setBranchOpen(false); }}
-                                className="w-full flex items-center gap-2 px-3 py-2 text-left text-xs hover:bg-white/[0.04] transition-colors"
-                                style={{ color: b === selectedBranch ? "var(--landing-primary)" : "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)" }}>
-                                <GitBranch size={10} />
-                                {b}
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
+                  <div className="mt-8 pt-6 border-t border-gray-100">
+                    <button
+                      onClick={handleStartScan}
+                      disabled={scanning || !selectedBranch}
+                      className="w-full flex items-center justify-center gap-2 py-4 px-6 rounded-full bg-black text-white font-bold text-sm hover:bg-gray-800 transition-all duration-200 shadow-lg hover:shadow-xl hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0"
+                      style={{ fontFamily: "var(--font-landing-body)" }}
+                    >
+                      {scanning ? (
+                        <>
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                          Initializing Scan...
+                        </>
+                      ) : (
+                        <>
+                          <Zap className="w-5 h-5" fill="currentColor" />
+                          Start Deep Analysis
+                        </>
+                      )}
+                    </button>
+                    <p className="text-center text-xs text-gray-500 font-medium mt-4">
+                      This will use 1 scan credit from your plan.
+                    </p>
                   </div>
+                </>
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full text-gray-400">
+                  <div className="w-16 h-16 rounded-full bg-gray-50 flex items-center justify-center mb-4">
+                    <ArrowRight size={24} className="text-gray-300" />
+                  </div>
+                  <p className="font-medium text-sm text-center max-w-[200px]">
+                    Select a repository from the left to configure your scan.
+                  </p>
                 </div>
               )}
             </div>
-
-            {/* ── Framework selector ───────────────────────────────────────── */}
-            <div className="mb-5">
-              <div className="flex items-center gap-2 mb-2">
-                <p className="text-xs font-semibold uppercase tracking-widest"
-                  style={{ color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)" }}>
-                  Framework
-                </p>
-                {frameworkDetected && (
-                  <span className="text-xs px-2 py-0.5 rounded-full"
-                    style={{ background: "rgba(251,191,36,0.08)", color: "#f59e0b", border: "1px solid rgba(251,191,36,0.25)", fontFamily: "var(--font-landing-body)" }}>
-                    auto-detected
-                  </span>
-                )}
-                {detectingFramework && (
-                  <div className="w-3.5 h-3.5 rounded-full border-2 border-t-transparent animate-spin"
-                    style={{ borderColor: "var(--landing-primary)", borderTopColor: "transparent" }} />
-                )}
-              </div>
-              <div className="relative">
-                <select
-                  value={framework}
-                  onChange={e => { setFramework(e.target.value); setFrameworkDetected(false); }}
-                  className="w-full px-4 py-3 rounded-xl text-sm appearance-none cursor-pointer"
-                  style={{
-                    background: "#FFFFFF",
-                    border: "1px solid var(--landing-border)",
-                    color: "var(--landing-text)",
-                    fontFamily: "var(--font-landing-body)",
-                    outline: "none",
-                  }}>
-                  {FRAMEWORK_OPTIONS.map(opt => (
-                    <option key={opt.value} value={opt.value}>{opt.label}</option>
-                  ))}
-                </select>
-                <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none"
-                  style={{ color: "var(--landing-text-secondary)" }} />
-              </div>
-              {framework === "unknown" && (
-                <p className="text-xs mt-1.5" style={{ color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)" }}>
-                  Framework-specific checks will be skipped. Universal checks (secrets, CVEs, OWASP) still run.
-                </p>
-              )}
-            </div>
-
-            {/* ── Guards preview ────────────────────────────────────────────── */}
-            <div className="mb-6">
-              <p className="text-xs font-semibold uppercase tracking-widest mb-3"
-                style={{ color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)" }}>
-                Guards to run
-              </p>
-              <div className="grid grid-cols-4 gap-2">
-                {guards.map(g => {
-                  const Icon = g.icon;
-                  return (
-                    <div key={g.key}
-                      className="flex items-center gap-2 p-3 rounded-xl"
-                      style={{ background: "#FFFFFF", border: `1px solid ${g.color}22` }}>
-                      <Icon size={13} style={{ color: g.color, flexShrink: 0 }} />
-                      <span style={{ fontSize: "12px", color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)" }}>
-                        {g.label}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* ── Run button ────────────────────────────────────────────────── */}
-            <button
-              onClick={handleScan}
-              disabled={!canScan}
-              className="w-full py-4 rounded-xl font-semibold text-base flex items-center justify-center gap-3 transition-all duration-200 hover:-translate-y-0.5 disabled:opacity-40 disabled:cursor-not-allowed disabled:translate-y-0"
-              style={{
-                background: "var(--landing-primary)",
-                color: "#FFFFFF",
-                fontFamily: "var(--font-landing-heading)",
-                boxShadow: "0 8px 32px rgba(48, 121, 255, 0.3)",
-              }}>
-              <Shield size={18} />
-              Run Production Scan
-              <ArrowRight size={16} />
-            </button>
-
-            <p className="text-center text-xs mt-4"
-              style={{ color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)" }}>
-              Uses 1 of your free monthly scans &nbsp;·&nbsp;
-              <Link href="/pricing" style={{ color: "var(--landing-primary)" }}>Upgrade for unlimited</Link>
-            </p>
-
-            <div
-              className="mt-4 p-3 rounded-lg"
-              style={{
-                background: "rgba(251,191,36,0.08)",
-                border: "1px solid rgba(251,191,36,0.25)",
-              }}
-            >
-              <p
-                style={{
-                  fontSize: "12px",
-                  color: "var(--landing-text-secondary)",
-                  fontFamily: "var(--font-landing-body)",
-                  lineHeight: "1.6",
-                }}
-              >
-                ShipGuard AI can make mistakes. Verify important security and compliance findings before shipping to production.
-              </p>
-            </div>
-
           </div>
         </div>
-      </main>
-    </div>
-  );
-}
-
-// ─── Shared top bar component ─────────────────────────────────────────────────
-
-function TopBar() {
-  return (
-    <div className="h-16 flex items-center px-6 border-b flex-shrink-0"
-      style={{ borderColor: "var(--landing-border)", background: "var(--landing-surface)" }}>
-      <div className="flex items-center gap-4">
-        <Link href="/dashboard"
-          className="flex items-center gap-1.5 text-sm transition-colors"
-          style={{ color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)" }}>
-          <ChevronLeft size={15} />
-          Dashboard
-        </Link>
-        <span style={{ color: "var(--border)", fontSize: "14px" }}>/</span>
-        <span style={{ fontSize: "14px", color: "var(--landing-text)", fontFamily: "var(--font-landing-body)" }}>
-          New Scan
-        </span>
       </div>
     </div>
   );

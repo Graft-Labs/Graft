@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import {
   LayoutDashboard,
   Shield,
@@ -70,40 +71,33 @@ export default function DashboardSidebar() {
 
   return (
     <aside
-      className="hidden lg:flex flex-col w-60 h-screen sticky top-0 border-r"
+      className="hidden lg:flex flex-col w-64 h-screen sticky top-0 border-r shadow-sm z-10"
       style={{
-        background: "var(--landing-surface)",
+        background: "#F9FAFB",
         borderColor: "var(--landing-border)",
       }}
     >
       {/* Logo */}
       <div
         className="h-16 flex items-center px-6 border-b"
-        style={{ borderColor: "var(--landing-border)" }}
+        style={{ borderColor: "var(--landing-border)", background: "#FFFFFF" }}
       >
-        <Link href="/" className="flex items-center gap-3">
-          <div
-            className="w-7 h-7 rounded flex items-center justify-center text-xs font-bold"
-            style={{
-              background: "var(--landing-primary)",
-              color: "#FFFFFF",
-              fontFamily: "var(--font-landing-heading)",
-              fontSize: "14px",
-            }}
-          >
-            SG
-          </div>
+        <Link href="/" className="flex items-center gap-2 group">
+          <Image src="/ShipGuard.svg" alt="ShipGuard AI" width={28} height={28} className="h-7 w-auto transition-transform group-hover:scale-105" />
           <span
-            className="font-semibold text-sm"
-            style={{ fontFamily: "var(--font-landing-heading)", letterSpacing: "-0.02em" }}
+            className="font-bold text-base text-gray-900 tracking-tight"
+            style={{ fontFamily: "var(--font-landing-heading)" }}
           >
-            ShipGuard <span style={{ color: "var(--landing-primary)" }}>AI</span>
+            ShipGuard AI
           </span>
         </Link>
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 p-3 flex flex-col gap-0.5 overflow-y-auto">
+      <nav className="flex-1 p-4 flex flex-col gap-1.5 overflow-y-auto">
+        <div className="mb-2 px-3 text-xs font-semibold text-gray-400 uppercase tracking-wider" style={{ fontFamily: "var(--font-landing-body)" }}>
+          Menu
+        </div>
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive = pathname === item.href;
@@ -112,32 +106,28 @@ export default function DashboardSidebar() {
               key={item.href}
               href={item.href}
               className={cn(
-                "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150",
+                "flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all duration-200",
                 isActive
-                  ? "font-medium"
-                  : "opacity-60 hover:opacity-80"
+                  ? "font-semibold bg-white shadow-sm ring-1 ring-gray-900/5 text-gray-900"
+                  : "font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100"
               )}
               style={{
-                background: isActive ? "rgba(48, 121, 255, 0.1)" : "transparent",
-                color: isActive ? "var(--landing-primary)" : "var(--landing-text)",
-                border: isActive ? "1px solid rgba(48, 121, 255, 0.2)" : "1px solid transparent",
                 fontFamily: "var(--font-landing-body)",
               }}
             >
-              <Icon size={16} strokeWidth={isActive ? 2 : 1.5} />
+              <Icon size={18} strokeWidth={isActive ? 2.5 : 2} className={isActive ? "text-[#3079FF]" : "text-gray-400"} />
               {item.label}
               {item.label === "New Scan" && (
                 <span
-                  className="ml-auto text-xs px-1.5 py-0.5 rounded"
+                  className="ml-auto text-[10px] px-2 py-0.5 rounded-full"
                   style={{
                     background: "var(--landing-primary)",
                     color: "#FFFFFF",
                     fontFamily: "var(--font-landing-body)",
-                    fontSize: "10px",
                     fontWeight: 700,
                   }}
                 >
-                  +
+                  NEW
                 </span>
               )}
             </Link>
@@ -147,32 +137,32 @@ export default function DashboardSidebar() {
 
       {/* User / Bottom */}
       <div
-        className="p-3 border-t"
+        className="p-4 border-t bg-white"
         style={{ borderColor: "var(--landing-border)" }}
       >
         {/* Plan badge */}
         <div
-          className="flex items-center justify-between px-3 py-2 rounded-lg mb-2"
-          style={{ background: "#FFFFFF", border: "1px solid var(--landing-border)" }}
+          className="flex items-center justify-between p-3 rounded-xl mb-3 shadow-sm"
+          style={{ background: "#F9FAFB", border: "1px solid var(--landing-border)" }}
         >
           <div>
             <p
-              className="text-xs font-medium"
-              style={{ color: "var(--landing-text)", fontFamily: "var(--font-landing-body)" }}
+              className="text-sm font-semibold text-gray-900"
+              style={{ fontFamily: "var(--font-landing-body)" }}
             >
               {planDisplay}
             </p>
             <p
-              className="text-xs"
-              style={{ color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)" }}
+              className="text-xs text-gray-500 font-medium mt-0.5"
+              style={{ fontFamily: "var(--font-landing-body)" }}
             >
               {scansDisplay}
             </p>
           </div>
           {scansLimit < 999999 && (
           <Link
-            href="/pricing"
-            className="text-xs font-semibold px-2 py-1 rounded"
+            href="/#pricing"
+            className="text-xs font-semibold px-3 py-1.5 rounded-full shadow-sm hover:-translate-y-0.5 transition-transform"
             style={{
               background: "var(--landing-primary)",
               color: "#FFFFFF",
@@ -185,43 +175,43 @@ export default function DashboardSidebar() {
         </div>
 
         {/* User */}
-        <div className="flex items-center gap-3 px-3 py-2">
+        <div className="flex items-center gap-3 px-2 py-1.5">
           {loadingUser ? (
-            <div className="w-7 h-7 rounded-full flex-shrink-0" style={{ background: "var(--landing-border)" }} />
+            <div className="w-9 h-9 rounded-full flex-shrink-0 animate-pulse bg-gray-200" />
           ) : avatarUrl ? (
             <img
               src={avatarUrl}
               alt={userName || "User avatar"}
-              className="w-7 h-7 rounded-full flex-shrink-0"
+              className="w-9 h-9 rounded-full flex-shrink-0 shadow-sm border border-gray-200"
             />
           ) : (
             <div
-              className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold flex-shrink-0"
-              style={{ background: "var(--landing-border)", color: "var(--landing-primary)", fontFamily: "var(--font-landing-heading)" }}
+              className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 shadow-sm border border-gray-200"
+              style={{ background: "#F3F4F6", color: "var(--landing-primary)", fontFamily: "var(--font-landing-heading)" }}
             >
               {(userName || "U").charAt(0).toUpperCase()}
             </div>
           )}
           <div className="flex-1 min-w-0">
             <p
-              className="text-xs font-medium truncate"
-              style={{ color: "var(--landing-text)", fontFamily: "var(--font-landing-body)" }}
+              className="text-sm font-semibold truncate text-gray-900"
+              style={{ fontFamily: "var(--font-landing-body)" }}
             >
               {loadingUser ? "Loading..." : userName || "Account"}
             </p>
             <p
-              className="text-xs truncate"
-              style={{ color: "var(--landing-text-secondary)", fontFamily: "var(--font-landing-body)" }}
+              className="text-xs truncate text-gray-500 font-medium"
+              style={{ fontFamily: "var(--font-landing-body)" }}
             >
               {loadingUser ? "" : userEmail}
             </p>
           </div>
           <button
-            className="opacity-40 hover:opacity-70 transition-opacity"
+            className="p-2 rounded-full hover:bg-gray-100 text-gray-400 hover:text-gray-900 transition-colors"
             title="Sign out"
             onClick={handleLogout}
           >
-            <LogOut size={14} style={{ color: "var(--landing-text)" }} />
+            <LogOut size={16} strokeWidth={2.5} />
           </button>
         </div>
       </div>
