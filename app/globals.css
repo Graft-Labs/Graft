@@ -1,8 +1,9 @@
 @import url('https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 @import "tailwindcss";
 
 :root {
-  /* Core palette - warm golden theme */
+  /* Core palette - warm golden theme (dark mode) */
   --primary: #ffdc61;
   --primary-dark: #e6c84f;
   --primary-glow: rgba(255, 220, 97, 0.15);
@@ -17,6 +18,15 @@
   --accent-muted: #5d5224;
   --accent-glow: rgba(128, 110, 49, 0.15);
   --accent-gradient: linear-gradient(135deg, #ffdc61, #806e31, #403718);
+
+  /* Light Theme (Landing Page) */
+  --landing-primary: #3079FF;
+  --landing-accent: #0000EE;
+  --landing-bg: #FFFFFF;
+  --landing-surface: #F9FAFB;
+  --landing-text: #111827;
+  --landing-text-secondary: #4B5563;
+  --landing-border: #E5E7EB;
 
   /* Dark backgrounds */
   --obsidian: #0a0a0c;
@@ -70,6 +80,8 @@
   --font-ui: 'Geist', system-ui, sans-serif;
   --font-label: 'DM Sans', system-ui, sans-serif;
   --font-mono: 'Geist Mono', 'Cascadia Code', monospace;
+  --font-landing-body: 'Inter', system-ui, sans-serif;
+  --font-landing-heading: system-ui, -apple-system, sans-serif; /* Fallback for CircularXX */
 }
 
 @theme inline {
@@ -128,6 +140,49 @@ body {
 }
 .font-label {
   font-family: var(--font-label);
+}
+
+/* Landing Page Specific Utilities */
+.landing-btn-primary {
+  background: #FFFFFF;
+  color: #0000EE;
+  border-radius: 8px;
+  box-shadow: rgba(0, 0, 0, 0.04) 0px 1px 1px 0.5px, rgba(0, 0, 0, 0.04) 0px 3px 3px 1.5px, rgba(0, 0, 0, 0.04) 0px 6px 6px -3px, rgba(0, 0, 0, 0.04) 0px 24px 24px -12px, rgba(3, 7, 18, 0.04) 0px 1px 4px -1px;
+  transition: all 0.2s ease;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.landing-btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: rgba(0, 0, 0, 0.06) 0px 2px 2px 1px, rgba(0, 0, 0, 0.06) 0px 4px 4px 2px, rgba(0, 0, 0, 0.06) 0px 8px 8px -4px, rgba(0, 0, 0, 0.06) 0px 32px 32px -16px, rgba(3, 7, 18, 0.06) 0px 2px 6px -1px;
+}
+
+.landing-btn-secondary {
+  background: #E7E6E5;
+  color: #0000EE;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.landing-btn-secondary:hover {
+  background: #DFDEDD;
+}
+
+.landing-heading {
+  font-family: var(--font-landing-heading);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: var(--landing-text);
+}
+
+.landing-body {
+  font-family: var(--font-landing-body);
+  color: var(--landing-text-secondary);
 }
 
 /* ─── Modern Grid & Gradients ─── */

@@ -14,8 +14,8 @@ import {
   Clock,
   Star,
 } from "lucide-react";
-import Navbar from "@/components/layout/Navbar";
-import Footer from "@/components/layout/Footer";
+import Navbar from "@/components/layout/LandingNavbar";
+import Footer from "@/components/layout/LandingFooter";
 import { createClient } from "@/lib/supabase";
 
 type Billing = "monthly" | "annual";
