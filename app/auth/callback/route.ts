@@ -12,9 +12,11 @@ export async function GET(request: Request) {
 
     if (!error) {
       // Persist the provider_token immediately — it disappears after session refresh
+      // Only store it for GitHub; other OAuth providers should not overwrite github_token.
       const providerToken = data.session?.provider_token
       const userId = data.session?.user?.id
-      if (providerToken && userId) {
+      const provider = data.session?.user?.app_metadata?.provider
+      if (provider === 'github' && providerToken && userId) {
         await supabase
           .from('users')
           .update({ github_token: providerToken })

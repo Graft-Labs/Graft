@@ -1,11 +1,10 @@
 import { createHash } from 'node:crypto'
 
-export type ScanPhase = 'osint' | 'dast' | 'policy-replay'
+export type ScanPhase = 'osint' | 'dast'
 
 export interface PhaseToggleMap {
   osint: boolean
   dast: boolean
-  policyReplay: boolean
 }
 
 const ENV_TRUE = new Set(['1', 'true', 'yes', 'on'])
@@ -20,7 +19,6 @@ export function getPhaseToggles(): PhaseToggleMap {
   return {
     osint: readBool('SHIPGUARD_PHASE_OSINT', false),
     dast: readBool('SHIPGUARD_PHASE_DAST', true),
-    policyReplay: readBool('SHIPGUARD_PHASE_POLICY_REPLAY', true),
   }
 }
 

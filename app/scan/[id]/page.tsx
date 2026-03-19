@@ -62,23 +62,6 @@ type Issue = {
 
 type Guard = "security" | "scalability" | "monetization" | "distribution";
 
-type PolicyReplayDecision = {
-  id: string;
-  policy: string;
-  result: "pass" | "warn" | "fail";
-  reason: string;
-};
-
-type PolicyReplayReport = {
-  scanId: string;
-  summary: {
-    pass: number;
-    warn: number;
-    fail: number;
-  };
-  decisions: PolicyReplayDecision[];
-};
-
 const guardConfig: Record<Guard, { label: string; icon: typeof Shield; color: string; glow: string }> = {
   security:     { label: "Security Guard",     icon: Lock,       color: "var(--guard-security)", glow: "var(--guard-security-glow)" },
   scalability:  { label: "Scalability Guard",  icon: Zap,        color: "var(--guard-scale)",    glow: "var(--guard-scale-glow)" },
@@ -423,7 +406,6 @@ export default function ScanReportPage() {
   const [issues, setIssues] = useState<Issue[]>([]);
   const [loading, setLoading] = useState(true);
   const [fixPromptCopied, setFixPromptCopied] = useState(false);
-  const [policyReplay, setPolicyReplay] = useState<PolicyReplayReport | null>(null);
 
   useEffect(() => {
     async function fetchScanData() {
@@ -450,15 +432,6 @@ export default function ScanReportPage() {
 
       setScan(scanData);
       setIssues(issuesData || []);
-
-      const policyReplayRes = await fetch(`/api/scan/${scanId}/policy-replay`, {
-        method: "GET",
-        credentials: "include",
-      });
-      if (policyReplayRes.ok) {
-        const payload = await policyReplayRes.json();
-        setPolicyReplay(payload.report ?? null);
-      }
 
       setLoading(false);
     }
@@ -770,82 +743,6 @@ export default function ScanReportPage() {
                 );
               })}
             </div>
-
-            {/* Policy Replay */}
-            {policyReplay && (
-              <div
-                className="p-5 rounded-2xl mb-6"
-                style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}
-              >
-                <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-                  <div className="flex items-center gap-2">
-                    <Shield size={15} style={{ color: "var(--accent)" }} />
-                    <span style={{ fontSize: "14px", fontWeight: 600, fontFamily: "var(--font-ui)", color: "var(--text-primary)" }}>
-                      Policy Replay
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs px-2 py-0.5 rounded" style={{ background: "rgba(64,200,122,0.1)", color: "var(--guard-monetize)", border: "1px solid rgba(64,200,122,0.3)", fontFamily: "var(--font-label)" }}>
-                      {policyReplay.summary.pass} pass
-                    </span>
-                    <span className="text-xs px-2 py-0.5 rounded" style={{ background: "rgba(251,191,36,0.1)", color: "var(--sev-medium)", border: "1px solid rgba(251,191,36,0.3)", fontFamily: "var(--font-label)" }}>
-                      {policyReplay.summary.warn} warn
-                    </span>
-                    <span className="text-xs px-2 py-0.5 rounded" style={{ background: "rgba(232,64,64,0.1)", color: "var(--sev-critical)", border: "1px solid rgba(232,64,64,0.3)", fontFamily: "var(--font-label)" }}>
-                      {policyReplay.summary.fail} fail
-                    </span>
-                  </div>
-                </div>
-
-                <div className="flex flex-col gap-2">
-                  {policyReplay.decisions.map((decision) => (
-                    <div
-                      key={decision.id}
-                      className="p-3 rounded-lg"
-                      style={{
-                        background: "var(--obsidian-3)",
-                        border: "1px solid var(--border)",
-                      }}
-                    >
-                      <div className="flex items-center justify-between gap-2 mb-1 flex-wrap">
-                        <span style={{ fontSize: "12px", color: "var(--text-primary)", fontFamily: "var(--font-ui)", fontWeight: 600 }}>
-                          {decision.policy}
-                        </span>
-                        <span
-                          className="text-xs px-1.5 py-0.5 rounded"
-                          style={{
-                            background:
-                              decision.result === "pass"
-                                ? "rgba(64,200,122,0.1)"
-                                : decision.result === "warn"
-                                ? "rgba(251,191,36,0.1)"
-                                : "rgba(232,64,64,0.1)",
-                            color:
-                              decision.result === "pass"
-                                ? "var(--guard-monetize)"
-                                : decision.result === "warn"
-                                ? "var(--sev-medium)"
-                                : "var(--sev-critical)",
-                            border:
-                              decision.result === "pass"
-                                ? "1px solid rgba(64,200,122,0.3)"
-                                : decision.result === "warn"
-                                ? "1px solid rgba(251,191,36,0.3)"
-                                : "1px solid rgba(232,64,64,0.3)",
-                            fontFamily: "var(--font-label)",
-                          }}
-                        >
-                          {decision.result}
-                        </span>
-                      </div>
-                      <p style={{ fontSize: "12px", color: "var(--text-secondary)", fontFamily: "var(--font-label)" }}>
-                        {decision.reason}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
 
             {/* Issues List */}
             <div>

@@ -66,7 +66,21 @@ export async function GET(_req: NextRequest) {
     if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
 
     const { data: { session } } = await supabase.auth.getSession()
-    const token = session?.provider_token
+    let token: string | null = session?.provider_token ?? null
+
+    if (token) {
+      await supabase
+        .from('users')
+        .update({ github_token: token })
+        .eq('id', user.id)
+    } else {
+      const { data: userRow } = await supabase
+        .from('users')
+        .select('github_token')
+        .eq('id', user.id)
+        .single()
+      token = userRow?.github_token ?? null
+    }
 
     if (!token) {
       return NextResponse.json({ error: 'github_not_connected', message: 'Connect your GitHub account in Settings to use the repo picker.' }, { status: 400 })
@@ -129,6 +143,10 @@ export async function GET(_req: NextRequest) {
     return NextResponse.json({ namespaces: result, needs_reauth: needsReauth })
   } catch (error) {
     const msg = error instanceof Error ? error.message : 'Unknown error'
+    const unauth = msg.includes('GitHub API error 401') || msg.includes('GitHub API error 403')
+    if (unauth) {
+      return NextResponse.json({ error: 'github_not_connected', message: 'GitHub token expired or missing required scope. Reconnect GitHub in Settings.' }, { status: 400 })
+    }
     return NextResponse.json({ error: 'internal_error', message: msg }, { status: 500 })
   }
 }

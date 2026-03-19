@@ -65,10 +65,20 @@ You can also keep local values in `.env.local` for local development.
 ```bash
 SHIPGUARD_PHASE_OSINT=false
 SHIPGUARD_PHASE_DAST=true
-SHIPGUARD_PHASE_POLICY_REPLAY=true
 ```
 
 Disable any phase by setting the value to `false`.
+
+### 5) Configure support forms (replaces `mailto:` links)
+
+Set these env vars for the Settings -> Support tab actions:
+
+```bash
+NEXT_PUBLIC_SUPPORT_FORM_URL=https://tally.so/r/your-support-form
+NEXT_PUBLIC_FEATURE_REQUEST_FORM_URL=https://tally.so/r/your-feature-form
+```
+
+If either value is empty, the UI shows a hint with the missing variable name.
 
 ## Update Supabase email templates
 

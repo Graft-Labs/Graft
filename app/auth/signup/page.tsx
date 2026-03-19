@@ -316,6 +316,7 @@ export default function SignupPage() {
                 provider: "github",
                 options: {
                   redirectTo: getAuthRedirectUrl(),
+                  scopes: "repo read:org user:email",
                 },
               });
             }}

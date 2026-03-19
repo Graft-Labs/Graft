@@ -148,12 +148,7 @@ export default function NewScanPage() {
 
   useEffect(() => {
     async function initGithub() {
-      const { data: { session } } = await supabase.auth.getSession();
-      const connected = !!session?.provider_token;
-      setGithubConnected(connected);
-
-      if (!connected) return;
-
+      setGithubConnected(null);
       setLoadingRepos(true);
       try {
         const res = await fetch("/api/github/repos");
@@ -161,12 +156,14 @@ export default function NewScanPage() {
           const data = await res.json();
           if (data.error === "github_not_connected") {
             setGithubConnected(false);
+            setNeedsReauth(false);
           } else {
             setReposError(data.message ?? "Failed to load repos");
           }
           return;
         }
         const data = await res.json();
+        setGithubConnected(true);
         setNamespaces(data.namespaces ?? []);
         if (data.needs_reauth) setNeedsReauth(true);
         if (data.namespaces?.length > 0) {

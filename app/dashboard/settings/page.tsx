@@ -39,6 +39,7 @@ const tabs: { id: Tab; label: string; icon: typeof User }[] = [
 interface UserData {
   email: string;
   name: string;
+  avatar_url?: string | null;
   plan: string;
   scans_used: number;
   scans_limit: number;
@@ -59,6 +60,8 @@ const defaultNotificationPrefs: NotificationPrefs = {
 };
 
 export default function SettingsPage() {
+  const supportFormUrl = process.env.NEXT_PUBLIC_SUPPORT_FORM_URL?.trim();
+  const featureRequestFormUrl = process.env.NEXT_PUBLIC_FEATURE_REQUEST_FORM_URL?.trim();
   const [activeTab, setActiveTab] = useState<Tab>("profile");
   const [saved, setSaved] = useState(false);
   const [githubConnected, setGithubConnected] = useState<boolean | null>(null);
@@ -93,6 +96,7 @@ export default function SettingsPage() {
       const userData: UserData = {
         email: user.email || "",
         name: user.user_metadata?.full_name || user.user_metadata?.name || "",
+        avatar_url: user.user_metadata?.avatar_url || null,
         plan: userRecord?.plan || "free",
         scans_used: userRecord?.scans_used || 0,
         scans_limit: userRecord?.scans_limit || 3,
@@ -340,14 +344,24 @@ export default function SettingsPage() {
                           style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}>
                           {/* Avatar */}
                           <div className="flex items-center gap-4">
-                            <div className="w-16 h-16 rounded-2xl flex items-center justify-center text-xl font-bold"
-                              style={{ background: "var(--accent-glow)", border: "1px solid var(--border-amber)", color: "var(--accent)", fontFamily: "var(--font-ui)" }}>
-                              {(profileForm.name || profileForm.email || "U").charAt(0).toUpperCase()}
-                            </div>
+                            {userData?.avatar_url ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={userData.avatar_url}
+                                alt={profileForm.name || "Profile avatar"}
+                                className="w-16 h-16 rounded-2xl object-cover"
+                                style={{ border: "1px solid var(--border)" }}
+                              />
+                            ) : (
+                              <div className="w-16 h-16 rounded-2xl flex items-center justify-center text-xl font-bold"
+                                style={{ background: "var(--accent-glow)", border: "1px solid var(--border-amber)", color: "var(--accent)", fontFamily: "var(--font-ui)" }}>
+                                {(profileForm.name || profileForm.email || "U").charAt(0).toUpperCase()}
+                              </div>
+                            )}
                             <div>
                               <p className="text-sm font-medium" style={{ fontFamily: "var(--font-ui)" }}>Profile Picture</p>
                               <p style={{ fontSize: "12px", color: "var(--text-tertiary)", fontFamily: "var(--font-label)" }}>
-                                Auto-generated from your initials
+                                {userData?.avatar_url ? "Synced from your auth provider" : "Auto-generated from your initials"}
                               </p>
                             </div>
                           </div>
@@ -637,13 +651,25 @@ export default function SettingsPage() {
                               Need support with scans, billing, or account issues?
                             </p>
                           </div>
-                          <a
-                            href="mailto:support@shipguard.ai?subject=ShipGuard%20Support%20Request"
-                            className="px-4 py-2 rounded-lg text-sm font-medium"
-                            style={{ background: "var(--surface-3)", border: "1px solid var(--border)", color: "var(--text-primary)", fontFamily: "var(--font-label)" }}
-                          >
-                            Email Support
-                          </a>
+                          {supportFormUrl ? (
+                            <a
+                              href={supportFormUrl}
+                              target="_blank"
+                              rel="noreferrer noopener"
+                              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium"
+                              style={{ background: "var(--surface-3)", border: "1px solid var(--border)", color: "var(--text-primary)", fontFamily: "var(--font-label)" }}
+                            >
+                              Open Support Form
+                              <ExternalLink size={13} />
+                            </a>
+                          ) : (
+                            <span
+                              className="px-4 py-2 rounded-lg text-xs"
+                              style={{ background: "var(--obsidian-1)", border: "1px solid var(--border)", color: "var(--text-tertiary)", fontFamily: "var(--font-label)" }}
+                            >
+                              Set NEXT_PUBLIC_SUPPORT_FORM_URL
+                            </span>
+                          )}
                         </div>
                       </div>
 
@@ -655,14 +681,25 @@ export default function SettingsPage() {
                               Share ideas and vote on upcoming improvements.
                             </p>
                           </div>
-                          <a
-                            href="mailto:support@shipguard.ai?subject=ShipGuard%20Feature%20Request"
-                            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium"
-                            style={{ background: "var(--accent)", color: "var(--obsidian)", fontFamily: "var(--font-ui)" }}
-                          >
-                            <MessageSquarePlus size={14} />
-                            Send Request
-                          </a>
+                          {featureRequestFormUrl ? (
+                            <a
+                              href={featureRequestFormUrl}
+                              target="_blank"
+                              rel="noreferrer noopener"
+                              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium"
+                              style={{ background: "var(--accent)", color: "var(--obsidian)", fontFamily: "var(--font-ui)" }}
+                            >
+                              <MessageSquarePlus size={14} />
+                              Send Request
+                            </a>
+                          ) : (
+                            <span
+                              className="px-4 py-2 rounded-lg text-xs"
+                              style={{ background: "var(--obsidian-1)", border: "1px solid var(--border)", color: "var(--text-tertiary)", fontFamily: "var(--font-label)" }}
+                            >
+                              Set NEXT_PUBLIC_FEATURE_REQUEST_FORM_URL
+                            </span>
+                          )}
                         </div>
                       </div>
 
