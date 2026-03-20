@@ -22,10 +22,25 @@ import {
   FileCode,
   Code,
   Wand2,
+  ChevronUp,
 } from "lucide-react";
 import DashboardSidebar from "@/components/layout/DashboardSidebar";
 import { createClient } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
+import Image from "next/image";
+
+const progressUiStyles = `
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+`;
 
 type Scan = {
   id: string;
@@ -62,11 +77,24 @@ type Issue = {
 
 type Guard = "security" | "scalability" | "monetization" | "distribution";
 
+type ProgressStep = {
+  key: string;
+  label: string;
+  status: "done" | "active" | "pending";
+};
+
+type ScanProgress = {
+  overallStatus: string;
+  percent: number;
+  currentStep: string | null;
+  steps: ProgressStep[];
+};
+
 const guardConfig: Record<Guard, { label: string; icon: typeof Shield; color: string; glow: string }> = {
-  security:     { label: "Security Guard",     icon: Lock,       color: "var(--guard-security)", glow: "var(--guard-security-glow)" },
-  scalability:  { label: "Scalability Guard",  icon: Zap,        color: "var(--guard-scale)",    glow: "var(--guard-scale-glow)" },
-  monetization: { label: "Monetization Guard", icon: DollarSign, color: "var(--guard-monetize)", glow: "var(--guard-monetize-glow)" },
-  distribution: { label: "Distribution Guard", icon: Globe,      color: "var(--guard-distrib)",  glow: "var(--guard-distrib-glow)" },
+  security:     { label: "Security Guard",     icon: Lock,       color: "#DC2626", glow: "#FEF2F2" },
+  scalability:  { label: "Scalability Guard",  icon: Zap,        color: "#2563EB", glow: "#EFF6FF" },
+  monetization: { label: "Monetization Guard", icon: DollarSign, color: "#059669", glow: "#ECFDF5" },
+  distribution: { label: "Distribution Guard", icon: Globe,      color: "#7C3AED", glow: "#F5F3FF" },
 };
 
 // Human-readable framework labels
@@ -135,9 +163,9 @@ function FrameworkBadge({ framework }: { framework: string | null }) {
     <span
       className="text-xs px-2 py-0.5 rounded-full font-medium"
       style={{
-        background: "var(--primary-glow)",
-        color: "var(--primary)",
-        border: "1px solid rgba(48, 121, 255, 0.2)",
+        background: "#EFF6FF",
+        color: "#2563EB",
+        border: "1px solid #BFDBFE",
         fontFamily: "var(--font-landing-body)",
       }}
     >
@@ -168,7 +196,7 @@ function SaasBadge() {
       style={{
         background: "rgba(48, 121, 255, 0.1)",
         color: "#2563EB",
-        border: "1px solid var(--border-accent)",
+        border: "1px solid #BFDBFE",
         fontFamily: "var(--font-landing-body)",
         fontSize: "10px",
         letterSpacing: "0.02em",
@@ -182,7 +210,7 @@ function SaasBadge() {
 function ConfidenceBadge({ confidence }: { confidence: Issue["confidence"] }) {
   if (!confidence) return null;
   const styles = {
-    confirmed: { bg: "rgba(64,200,122,0.1)",  color: "var(--guard-monetize)", border: "rgba(64,200,122,0.3)",  label: "confirmed" },
+    confirmed: { bg: "rgba(16,185,129,0.1)",  color: "#059669", border: "rgba(16,185,129,0.3)",  label: "confirmed" },
     likely:    { bg: "rgba(251,191,36,0.1)",  color: "#3079FF",          border: "rgba(251,191,36,0.3)", label: "likely" },
     possible:  { bg: "rgba(107,103,98,0.15)", color: "#4B5563",   border: "rgba(107,103,98,0.3)", label: "possible" },
   };
@@ -203,7 +231,7 @@ function ScoreRing({ score, color, size = 90 }: { score: number; color: string; 
   const offset = circumference - (score / 100) * circumference;
   return (
     <svg width={size} height={size} viewBox="0 0 80 80">
-      <circle cx="40" cy="40" r={radius} fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="7" />
+      <circle cx="40" cy="40" r={radius} fill="none" stroke="#E5E7EB" strokeWidth="7" />
       <circle
         cx="40" cy="40" r={radius} fill="none"
         stroke={color} strokeWidth="7" strokeLinecap="round"
@@ -220,10 +248,10 @@ function ScoreRing({ score, color, size = 90 }: { score: number; color: string; 
 }
 
 function SeverityIcon({ severity }: { severity: string }) {
-  if (severity === "critical") return <XCircle size={14} style={{ color: "var(--sev-critical)" }} />;
-  if (severity === "high")     return <AlertTriangle size={14} style={{ color: "var(--sev-high)" }} />;
-  if (severity === "medium")   return <AlertTriangle size={14} style={{ color: "var(--sev-medium)" }} />;
-  return <Info size={14} style={{ color: "var(--sev-low)" }} />;
+  if (severity === "critical") return <XCircle size={14} style={{ color: "#DC2626" }} />;
+  if (severity === "high")     return <AlertTriangle size={14} style={{ color: "#EA580C" }} />;
+  if (severity === "medium")   return <AlertTriangle size={14} style={{ color: "#D97706" }} />;
+  return <Info size={14} style={{ color: "#6B7280" }} />;
 }
 
 function IssueCard({ issue, repo, branch, commitHash }: {
@@ -251,7 +279,7 @@ function IssueCard({ issue, repo, branch, commitHash }: {
     <div
       className="rounded-xl overflow-hidden"
       style={{
-        border: `1px solid ${issue.severity === "critical" ? "rgba(232,64,64,0.25)" : "var(--border)"}`,
+        border: `1px solid ${issue.severity === "critical" ? "rgba(232,64,64,0.25)" : "#E5E7EB"}`,
         background: issue.severity === "critical" ? "rgba(232,64,64,0.04)" : "#F9FAFB",
       }}
     >
@@ -269,7 +297,7 @@ function IssueCard({ issue, repo, branch, commitHash }: {
             });
           }
         }}
-        className="w-full flex items-start gap-3 p-4 text-left transition-colors hover:bg-white/[0.02]"
+        className="w-full flex items-start gap-3 p-4 text-left transition-colors hover:bg-gray-50"
       >
         <SeverityIcon severity={issue.severity} />
         <div className="flex-1 min-w-0">
@@ -326,7 +354,7 @@ function IssueCard({ issue, repo, branch, commitHash }: {
       {/* Expanded */}
       {expanded && (
         <div className="px-4 pb-4 pt-0">
-          <div className="h-px mb-4" style={{ background: "var(--border)" }} />
+          <div className="h-px mb-4" style={{ background: "#E5E7EB" }} />
 
           {/* Description */}
           <p
@@ -354,7 +382,7 @@ function IssueCard({ issue, repo, branch, commitHash }: {
               {snippetExpanded && (
                 <pre
                   className="code-block overflow-x-auto"
-                  style={{ fontSize: "11px", color: "var(--sev-medium)", background: "rgba(251,191,36,0.04)", borderLeft: "2px solid rgba(251,191,36,0.3)" }}
+                  style={{ fontSize: "11px", color: "#B45309", background: "rgba(251,191,36,0.08)", borderLeft: "2px solid rgba(251,191,36,0.3)" }}
                 >
                   <code>{issue.code_snippet}</code>
                 </pre>
@@ -375,9 +403,9 @@ function IssueCard({ issue, repo, branch, commitHash }: {
                 onClick={handleCopy}
                 className="flex items-center gap-1.5 text-xs py-1 px-2.5 rounded transition-all duration-150"
                 style={{
-                  background: copied ? "var(--guard-monetize-glow)" : "#F3F4F6",
-                  color: copied ? "var(--guard-monetize)" : "#4B5563",
-                  border: `1px solid ${copied ? "rgba(64,200,122,0.3)" : "var(--border)"}`,
+                  background: copied ? "#ECFDF5" : "#F3F4F6",
+                  color: copied ? "#059669" : "#4B5563",
+                  border: `1px solid ${copied ? "rgba(16,185,129,0.3)" : "#E5E7EB"}`,
                   fontFamily: "var(--font-landing-body)",
                 }}
               >
@@ -406,6 +434,8 @@ export default function ScanReportPage() {
   const [issues, setIssues] = useState<Issue[]>([]);
   const [loading, setLoading] = useState(true);
   const [fixPromptCopied, setFixPromptCopied] = useState(false);
+  const [progress, setProgress] = useState<ScanProgress | null>(null);
+  const [dismissedStepCount, setDismissedStepCount] = useState(0);
 
   useEffect(() => {
     async function fetchScanData() {
@@ -437,14 +467,50 @@ export default function ScanReportPage() {
     }
 
     fetchScanData();
+
+    const interval = setInterval(fetchScanData, 4000);
+    return () => clearInterval(interval);
   }, [scanId]);
+
+  useEffect(() => {
+    if (!scan || (scan.status !== "pending" && scan.status !== "scanning")) return;
+
+    let cancelled = false;
+
+    const fetchProgress = async () => {
+      try {
+        const res = await fetch(`/api/scan/${scanId}/progress`, { cache: "no-store" });
+        if (!res.ok) return;
+        const data: ScanProgress = await res.json();
+        if (!cancelled) setProgress(data);
+      } catch {
+        // Keep polling silently; UI has fallback text.
+      }
+    };
+
+    fetchProgress();
+    const interval = setInterval(fetchProgress, 2500);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [scan, scanId]);
+
+  useEffect(() => {
+    if (!progress?.steps?.length) return;
+
+    const doneCount = progress.steps.filter((s) => s.status === "done").length;
+    if (doneCount > dismissedStepCount) {
+      setDismissedStepCount(doneCount);
+    }
+  }, [progress, dismissedStepCount]);
 
   if (loading) {
     return (
-      <div className="flex min-h-screen" style={{ background: "#FFFFFF" }}>
-        
-        <main className="flex-1 flex items-center justify-center">
-          <div className="w-8 h-8 rounded-full border-2 border-[var(--primary)] border-t-transparent animate-spin" />
+      <div className="flex min-h-screen w-full bg-[#FAFAFA] p-4 lg:p-6 gap-6">
+        <DashboardSidebar />
+        <main className="flex-1 flex items-center justify-center bg-white rounded-2xl border border-gray-200 shadow-sm">
+          <div className="w-8 h-8 rounded-full border-2 border-[#3079FF]/30 border-t-[#3079FF] animate-spin" />
         </main>
       </div>
     );
@@ -452,9 +518,9 @@ export default function ScanReportPage() {
 
   if (!scan) {
     return (
-      <div className="flex min-h-screen" style={{ background: "#FFFFFF" }}>
-        
-        <main className="flex-1 flex items-center justify-center">
+      <div className="flex min-h-screen w-full bg-[#FAFAFA] p-4 lg:p-6 gap-6">
+        <DashboardSidebar />
+        <main className="flex-1 flex items-center justify-center bg-white rounded-2xl border border-gray-200 shadow-sm">
           <div className="text-center">
             <p style={{ color: "#4B5563", fontFamily: "var(--font-landing-heading)" }}>
               Scan not found
@@ -492,11 +558,111 @@ export default function ScanReportPage() {
     },
   };
 
-  return (
-    <div className="flex min-h-screen" style={{ background: "#FFFFFF" }}>
-      
+  if (scan.status === "pending" || scan.status === "scanning") {
+    const fallbackSteps: ProgressStep[] = [
+      { key: "queued", label: "Queued", status: scan.status === "pending" ? "active" : "done" },
+      { key: "cloning", label: "Cloning repository", status: scan.status === "scanning" ? "active" : "pending" },
+      { key: "analysis", label: "Running analysis", status: "pending" },
+      { key: "scoring", label: "Calculating scores", status: "pending" },
+      { key: "complete", label: "Complete", status: "pending" },
+    ];
+    const steps = progress?.steps?.length ? progress.steps : fallbackSteps;
+    const percent = typeof progress?.percent === "number" ? progress.percent : (scan.status === "pending" ? 8 : 35);
+    const visibleSteps = steps.slice(Math.max(0, dismissedStepCount - 1), Math.max(0, dismissedStepCount - 1) + 5);
 
-      <main className="flex-1 flex flex-col min-w-0">
+    return (
+      <div className="flex min-h-screen w-full bg-[#FAFAFA] p-4 lg:p-6 gap-6">
+        <DashboardSidebar />
+        <main className="flex-1 flex flex-col min-w-0 bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden h-[calc(100vh-3rem)]">
+          <style>{progressUiStyles}</style>
+          <div className="h-16 flex items-center px-6 border-b" style={{ borderColor: "#E5E7EB", background: "#FFFFFF" }}>
+            <Link
+              href="/dashboard"
+              className="flex items-center gap-1.5 text-sm transition-colors"
+              style={{ color: "#4B5563", fontFamily: "var(--font-landing-body)" }}
+            >
+              <ChevronLeft size={15} />
+              Dashboard
+            </Link>
+          </div>
+
+          <div className="flex-1 flex items-center justify-center p-8">
+            <div className="w-full max-w-xl rounded-3xl border border-gray-200 bg-white shadow-sm p-10 text-center relative overflow-hidden">
+              <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(48,121,255,0.08),transparent_60%)] pointer-events-none" />
+
+              <div className="relative inline-flex items-center justify-center w-24 h-24 rounded-3xl bg-white border border-blue-100 mb-6 shadow-sm">
+                <div className="absolute w-28 h-28 rounded-full border-2 border-blue-200/70 animate-ping" />
+                <div className="absolute w-20 h-20 rounded-full border border-blue-200/60 animate-pulse" />
+                <Image src="/ShipGuard.svg" alt="ShipGuard" width={42} height={42} className="relative z-10 h-10 w-auto" />
+              </div>
+
+              <h2 className="text-2xl font-bold text-gray-900 mb-2" style={{ fontFamily: "var(--font-landing-heading)" }}>
+                {scan.status === "scanning" ? "Scanning in progress" : "Queued for scanning"}
+              </h2>
+              <p className="text-gray-500 font-medium mb-8" style={{ fontFamily: "var(--font-landing-body)" }}>
+                We are analyzing your repository across security, scalability, monetization, and distribution.
+              </p>
+
+              <div className="mb-7">
+                <div className="flex items-center justify-between text-xs font-semibold text-gray-500 mb-2" style={{ fontFamily: "var(--font-landing-body)" }}>
+                  <span>Scan Progress</span>
+                  <span>{Math.min(100, Math.max(0, percent))}%</span>
+                </div>
+                <div className="h-2 rounded-full bg-gray-100 border border-gray-200 overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-[#3079FF] to-[#5B9BFF] transition-all duration-700"
+                    style={{ width: `${Math.min(100, Math.max(0, percent))}%` }}
+                  />
+                </div>
+              </div>
+
+              <div className="relative mb-6">
+                <div className="grid grid-cols-1 gap-2 text-left max-h-[248px] overflow-hidden">
+                  {visibleSteps.map((step) => (
+                    <div
+                      key={step.key}
+                      className="flex items-center gap-3 px-3 py-2 rounded-lg bg-gray-50 border border-gray-100 transition-all duration-500 animate-[slideIn_.45s_ease]"
+                    >
+                    {step.status === "done" ? (
+                      <CheckCircle size={16} className="text-emerald-600" />
+                    ) : step.status === "active" ? (
+                      <div className="w-4 h-4 rounded-full border-2 border-[#3079FF]/35 border-t-[#3079FF] animate-spin" />
+                    ) : (
+                      <div className="w-4 h-4 rounded-full border border-gray-300 bg-white" />
+                    )}
+                    <span className={`text-sm ${step.status === "pending" ? "text-gray-500" : "text-gray-800"}`} style={{ fontFamily: "var(--font-landing-body)" }}>
+                      {step.label}
+                    </span>
+                    </div>
+                  ))}
+                </div>
+                <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-white via-white/85 to-transparent" />
+              </div>
+
+              <div className="inline-flex items-center gap-1.5 text-xs text-gray-400 mb-2" style={{ fontFamily: "var(--font-landing-body)" }}>
+                <ChevronUp size={12} />
+                Completed steps slide away automatically
+              </div>
+
+              <div className="inline-flex items-center gap-2 text-sm text-gray-600 font-medium" style={{ fontFamily: "var(--font-landing-body)" }}>
+                <div className="w-4 h-4 rounded-full border-2 border-[#3079FF]/30 border-t-[#3079FF] animate-spin" />
+                Auto-refreshing results every 2.5s
+              </div>
+
+              <p className="mt-3 text-xs text-gray-400" style={{ fontFamily: "var(--font-landing-body)" }}>
+                If this stays queued for more than 10 minutes, your Trigger worker is likely not dequeuing jobs.
+              </p>
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex min-h-screen w-full bg-[#FAFAFA] p-4 lg:p-6 gap-6">
+      <DashboardSidebar />
+      <main className="flex-1 flex flex-col min-w-0 bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden h-[calc(100vh-3rem)]">
         {/* Top bar */}
         <div
           className="h-16 flex items-center justify-between px-6 border-b flex-shrink-0"
@@ -511,7 +677,7 @@ export default function ScanReportPage() {
               <ChevronLeft size={15} />
               Dashboard
             </Link>
-            <span style={{ color: "var(--border)", fontSize: "14px" }}>/</span>
+            <span style={{ color: "#D1D5DB", fontSize: "14px" }}>/</span>
             <div className="flex items-center gap-2">
               <Github size={14} style={{ color: "#4B5563" }} />
               <span style={{ fontSize: "14px", color: "#4B5563", fontFamily: "var(--font-landing-body)" }}>
@@ -527,7 +693,7 @@ export default function ScanReportPage() {
 
             {/* Report Header */}
             <div
-              className="p-6 rounded-2xl mb-6"
+              className="p-6 rounded-3xl mb-6 shadow-sm"
               style={{ background: "#FFFFFF", border: "1px solid #E5E7EB" }}
             >
               <div className="flex items-start justify-between gap-6 flex-wrap">
@@ -562,8 +728,8 @@ export default function ScanReportPage() {
                         <span
                           className="text-xs px-2 py-0.5 rounded-full font-medium"
                           style={{
-                            background: "var(--guard-monetize-glow)",
-                            color: "var(--guard-monetize)",
+                            background: "#ECFDF5",
+                            color: "#059669",
                             border: "1px solid rgba(64,200,122,0.3)",
                             fontFamily: "var(--font-landing-body)",
                           }}
@@ -600,12 +766,12 @@ export default function ScanReportPage() {
                     <p style={{ fontSize: "11px", color: "#4B5563", fontFamily: "var(--font-landing-body)", marginBottom: 2 }}>
                       Overall Score
                     </p>
-                    <p style={{ fontSize: "11px", color: report.overallScore < 50 ? "var(--sev-medium)" : "var(--guard-monetize)", fontFamily: "var(--font-landing-body)" }}>
+                    <p style={{ fontSize: "11px", color: report.overallScore < 50 ? "#D97706" : "#059669", fontFamily: "var(--font-landing-body)" }}>
                       {report.overallScore < 50 ? "Needs Work" : "Good"}
                     </p>
                   </div>
                   <div
-                    className="w-16 h-16 rounded-2xl flex items-center justify-center"
+                    className="w-16 h-16 rounded-2xl flex items-center justify-center shadow-sm"
                     style={{ background: "rgba(48, 121, 255, 0.1)", border: "1px solid rgba(48, 121, 255, 0.2)" }}
                   >
                     <span
@@ -623,62 +789,8 @@ export default function ScanReportPage() {
               </div>
             </div>
 
-            {/* Fix-all Prompt Panel */}
-            {(() => {
-              const prompt = generateFixPrompt(issues, scan.repo, scan.framework, scan.created_at);
-              return (
-                <div
-                  className="p-5 rounded-2xl mb-6 animate-fade-scale"
-                  style={{ background: "#FFFFFF", border: "1px solid rgba(48, 121, 255, 0.2)" }}
-                >
-                  <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-                    <div className="flex items-center gap-2">
-                      <Wand2 size={15} style={{ color: "var(--primary)" }} />
-                      <span style={{ fontSize: "14px", fontWeight: 600, fontFamily: "var(--font-landing-heading)", color: "#111827" }}>
-                        Fix-all prompt
-                      </span>
-                      <span style={{ fontSize: "12px", color: "#4B5563", fontFamily: "var(--font-landing-body)" }}>
-                        Paste into Claude, Cursor, or any AI tool to fix everything at once
-                      </span>
-                    </div>
-                    <button
-                      onClick={() => {
-                        navigator.clipboard.writeText(prompt);
-                        setFixPromptCopied(true);
-                        posthog.capture("scan_fix_prompt_copied", { issuesCount: issues.length, scanId: scan.id });
-                        setTimeout(() => setFixPromptCopied(false), 2000);
-                      }}
-                      className="flex items-center gap-1.5 text-xs py-1.5 px-4 rounded-lg transition-all duration-300 hover:scale-105"
-                      style={{
-                        background: fixPromptCopied ? "var(--primary)" : "var(--primary-glow)",
-                        color: fixPromptCopied ? "var(--secondary)" : "var(--primary)",
-                        border: `1px solid ${fixPromptCopied ? "var(--primary)" : "#E5E7EB"}`,
-                        fontFamily: "var(--font-landing-heading)",
-                        fontWeight: 500,
-                      }}
-                    >
-                      {fixPromptCopied ? <CheckCircle size={12} /> : <Copy size={12} />}
-                      {fixPromptCopied ? "Copied!" : `Copy prompt (${issues.length} issues)`}
-                    </button>
-                  </div>
-                  <pre
-                    className="code-block overflow-auto"
-                    style={{
-                      fontSize: "11px",
-                      color: "#4B5563",
-                      maxHeight: "240px",
-                      background: "#FFFFFF",
-                      border: "1px solid #E5E7EB",
-                    }}
-                  >
-                    <code>{prompt || "No issues to fix."}</code>
-                  </pre>
-                </div>
-              );
-            })()}
-
             <div
-              className="p-3 rounded-lg mb-6"
+              className="p-4 rounded-xl mb-6"
               style={{
                 background: "rgba(251,191,36,0.08)",
                 border: "1px solid rgba(251,191,36,0.25)",
@@ -713,10 +825,10 @@ export default function ScanReportPage() {
                   <button
                     key={key}
                     onClick={() => setActiveGuard(activeGuard === key ? "all" : key)}
-                    className="p-4 rounded-xl text-left transition-all duration-200"
+                    className="p-4 rounded-2xl text-left transition-all duration-200 hover:shadow-sm"
                     style={{
                       background: activeGuard === key ? cfg.glow : "#F9FAFB",
-                      border: `1px solid ${activeGuard === key ? cfg.color + "44" : "var(--border)"}`,
+                      border: `1px solid ${activeGuard === key ? cfg.color + "44" : "#E5E7EB"}`,
                     }}
                   >
                     <div className="flex items-center justify-between mb-3">
@@ -735,7 +847,7 @@ export default function ScanReportPage() {
                       </p>
                     )}
                     {breakdown.length === 0 && guardIssues.length === 0 && (
-                      <p style={{ fontSize: "10px", color: "var(--guard-monetize)", fontFamily: "var(--font-landing-body)", marginTop: 4 }}>
+                      <p style={{ fontSize: "10px", color: "#059669", fontFamily: "var(--font-landing-body)", marginTop: 4 }}>
                         No issues
                       </p>
                     )}
@@ -743,6 +855,60 @@ export default function ScanReportPage() {
                 );
               })}
             </div>
+
+            {/* Fix-all Prompt Panel */}
+            {(() => {
+              const prompt = generateFixPrompt(issues, scan.repo, scan.framework, scan.created_at);
+              return (
+                <div
+                  className="p-5 rounded-3xl mb-6 animate-fade-scale shadow-sm"
+                  style={{ background: "#FFFFFF", border: "1px solid rgba(48, 121, 255, 0.2)" }}
+                >
+                  <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+                    <div className="flex items-center gap-2">
+                      <Wand2 size={15} style={{ color: "#3079FF" }} />
+                      <span style={{ fontSize: "14px", fontWeight: 600, fontFamily: "var(--font-landing-heading)", color: "#111827" }}>
+                        Fix-all prompt
+                      </span>
+                      <span style={{ fontSize: "12px", color: "#4B5563", fontFamily: "var(--font-landing-body)" }}>
+                        Paste into Claude, Cursor, or any AI tool to fix everything at once
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(prompt);
+                        setFixPromptCopied(true);
+                        posthog.capture("scan_fix_prompt_copied", { issuesCount: issues.length, scanId: scan.id });
+                        setTimeout(() => setFixPromptCopied(false), 2000);
+                      }}
+                      className="flex items-center gap-1.5 text-xs py-1.5 px-4 rounded-lg transition-all duration-300 hover:scale-105"
+                      style={{
+                        background: fixPromptCopied ? "#3079FF" : "#EFF6FF",
+                        color: fixPromptCopied ? "#FFFFFF" : "#2563EB",
+                        border: `1px solid ${fixPromptCopied ? "#3079FF" : "#BFDBFE"}`,
+                        fontFamily: "var(--font-landing-heading)",
+                        fontWeight: 500,
+                      }}
+                    >
+                      {fixPromptCopied ? <CheckCircle size={12} /> : <Copy size={12} />}
+                      {fixPromptCopied ? "Copied!" : `Copy prompt (${issues.length} issues)`}
+                    </button>
+                  </div>
+                  <pre
+                    className="code-block overflow-auto"
+                    style={{
+                      fontSize: "11px",
+                      color: "#4B5563",
+                      maxHeight: "240px",
+                      background: "#FFFFFF",
+                      border: "1px solid #E5E7EB",
+                    }}
+                  >
+                    <code>{prompt || "No issues to fix."}</code>
+                  </pre>
+                </div>
+              );
+            })()}
 
             {/* Issues List */}
             <div>
@@ -754,7 +920,7 @@ export default function ScanReportPage() {
                   style={{
                     background: activeGuard === "all" ? "#F3F4F6" : "transparent",
                     color: activeGuard === "all" ? "#111827" : "#9CA3AF",
-                    border: `1px solid ${activeGuard === "all" ? "var(--border-hover)" : "transparent"}`,
+                    border: `1px solid ${activeGuard === "all" ? "#D1D5DB" : "transparent"}`,
                     fontFamily: "var(--font-landing-body)",
                   }}
                 >
@@ -788,7 +954,7 @@ export default function ScanReportPage() {
                 })}
               </div>
 
-              <div className="flex flex-col gap-3">
+                <div className="flex flex-col gap-3">
                 {filteredIssues.map((issue) => (
                   <IssueCard
                     key={issue.id}
@@ -805,7 +971,7 @@ export default function ScanReportPage() {
                   className="text-center py-12 rounded-xl"
                   style={{ background: "#FFFFFF", border: "1px solid #E5E7EB" }}
                 >
-                  <CheckCircle size={24} className="mx-auto mb-3" style={{ color: "var(--guard-monetize)" }} />
+                  <CheckCircle size={24} className="mx-auto mb-3" style={{ color: "#059669" }} />
                   <p style={{ fontFamily: "var(--font-landing-heading)", fontWeight: 600 }}>No issues found</p>
                   <p style={{ fontSize: "13px", color: "#4B5563", fontFamily: "var(--font-landing-body)" }}>
                     This guard is clean

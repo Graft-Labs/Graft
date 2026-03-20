@@ -15,6 +15,7 @@ import {
   XCircle,
   ChevronRight,
   FileText,
+  Loader2,
 } from "lucide-react";
 import { formatRelativeTime, getScoreColor } from "@/lib/utils";
 import { createClient } from "@/lib/supabase";
@@ -190,33 +191,37 @@ export default function Dashboard() {
       </header>
 
       {/* Quick Stats */}
-      {!loading && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
-          {[
-            { label: "Total Scans", value: scans.length, icon: FileText, color: "#3079FF", bg: "rgba(48, 121, 255, 0.1)" },
-            { label: "Avg. Score", value: avgScore, icon: TrendingUp, color: "#3B82F6", bg: "rgba(59, 130, 246, 0.1)" },
-            { label: "Critical Issues", value: totalIssues, icon: XCircle, color: "#EF4444", bg: "rgba(239, 68, 68, 0.1)" },
-            { label: "Completed Scans", value: completedScans.length, icon: CheckCircle, color: "#10B981", bg: "rgba(16, 185, 129, 0.1)" },
-          ].map((stat, i) => (
-            <div 
-              key={i} 
-              className="p-5 rounded-2xl bg-white border border-gray-200 shadow-sm flex items-start justify-between"
-            >
-              <div>
-                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1 block" style={{ fontFamily: "var(--font-landing-body)" }}>
-                  {stat.label}
-                </span>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
+        {[
+          { label: "Total Scans", value: scans.length, icon: FileText, color: "#3079FF", bg: "rgba(48, 121, 255, 0.1)" },
+          { label: "Avg. Score", value: avgScore, icon: TrendingUp, color: "#3B82F6", bg: "rgba(59, 130, 246, 0.1)" },
+          { label: "Critical Issues", value: totalIssues, icon: XCircle, color: "#EF4444", bg: "rgba(239, 68, 68, 0.1)" },
+          { label: "Completed Scans", value: completedScans.length, icon: CheckCircle, color: "#10B981", bg: "rgba(16, 185, 129, 0.1)" },
+        ].map((stat, i) => (
+          <div
+            key={i}
+            className="p-5 rounded-2xl bg-white border border-gray-200 shadow-sm flex items-start justify-between"
+          >
+            <div>
+              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1 block" style={{ fontFamily: "var(--font-landing-body)" }}>
+                {stat.label}
+              </span>
+              {loading ? (
+                <div className="w-8 h-8 flex items-center">
+                  <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+                </div>
+              ) : (
                 <span className="text-3xl font-bold text-gray-900 tracking-tight" style={{ fontFamily: "var(--font-landing-heading)" }}>
                   {stat.value}
                 </span>
-              </div>
-              <div className="p-2.5 rounded-xl" style={{ background: stat.bg, color: stat.color }}>
-                <stat.icon size={22} strokeWidth={2.5} />
-              </div>
+              )}
             </div>
-          ))}
-        </div>
-      )}
+            <div className="p-2.5 rounded-xl" style={{ background: stat.bg, color: stat.color }}>
+              <stat.icon size={22} strokeWidth={2.5} />
+            </div>
+          </div>
+        ))}
+      </div>
 
       {/* Recent Scans */}
       <section>
@@ -240,10 +245,11 @@ export default function Dashboard() {
         </div>
 
         {loading ? (
-          <div className="space-y-4">
-            {[...Array(3)].map((_, i) => (
-              <div key={i} className="h-28 rounded-2xl bg-white border border-gray-100 shadow-sm animate-pulse" />
-            ))}
+          <div className="rounded-2xl border border-gray-200 bg-white p-12 flex items-center justify-center">
+            <div className="inline-flex items-center gap-2 text-sm text-gray-500 font-medium" style={{ fontFamily: "var(--font-landing-body)" }}>
+              <div className="w-4 h-4 rounded-full border-2 border-[#3079FF]/30 border-t-[#3079FF] animate-spin" />
+              Loading recent scans...
+            </div>
           </div>
         ) : scans.length === 0 ? (
           <div className="text-center py-20 rounded-3xl border-2 border-dashed border-gray-200 bg-gray-50">

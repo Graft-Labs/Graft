@@ -3,8 +3,9 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Github, Loader2, Search, ArrowRight, Shield, Zap, DollarSign, Globe, CheckCircle, AlertTriangle } from "lucide-react";
+import { Github, Loader2, Search, ArrowRight, Zap, DollarSign, Globe, CheckCircle, AlertTriangle, ArrowLeft } from "lucide-react";
 import { createClient } from "@/lib/supabase";
+import Image from "next/image";
 
 type Repository = {
   id: number;
@@ -13,6 +14,17 @@ type Repository = {
   private: boolean;
   html_url: string;
   default_branch: string;
+};
+
+type RepoResponse = {
+  namespaces?: Array<{
+    namespace: string;
+    avatar: string;
+    repos: Repository[];
+  }>;
+  needs_reauth?: boolean;
+  error?: string;
+  message?: string;
 };
 
 export default function NewScanPage() {
@@ -26,47 +38,98 @@ export default function NewScanPage() {
   const [scanning, setScanning] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Authentication & GitHub connection check
+  // Fetch GitHub repositories
   useEffect(() => {
-    async function checkAuth() {
-      const supabase = createClient();
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (!session) {
-        router.push("/auth/login");
-        return;
+    async function fetchRepos() {
+      try {
+        const supabase = createClient();
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (!session) {
+          router.push("/auth/login");
+          return;
+        }
+
+        const response = await fetch("/api/github/repos");
+        const data: RepoResponse = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.message || "Failed to fetch repositories");
+        }
+
+        const flattenedRepos = (data.namespaces || [])
+          .flatMap((group) => group.repos)
+          .sort((a, b) => a.full_name.localeCompare(b.full_name));
+
+        setRepos(flattenedRepos);
+
+        if (data.needs_reauth) {
+          setError("GitHub needs additional permissions (read:org). Reconnect GitHub in Settings to see organization repositories.");
+        }
+      } catch (err: any) {
+        console.error("Error fetching repos:", err);
+        setError(err.message || "Failed to load repositories");
+      } finally {
+        setLoading(false);
       }
-      
-      // Temporary: mock data for the new UI to avoid actual API calls during styling
-      setRepos([
-        { id: 1, name: "nextjs-saas-starter", full_name: "johndoe/nextjs-saas-starter", private: false, html_url: "#", default_branch: "main" },
-        { id: 2, name: "shipguard-ai", full_name: "johndoe/shipguard-ai", private: true, html_url: "#", default_branch: "main" },
-        { id: 3, name: "react-native-app", full_name: "johndoe/react-native-app", private: false, html_url: "#", default_branch: "master" },
-      ]);
-      setLoading(false);
     }
     
-    checkAuth();
+    fetchRepos();
   }, [router]);
 
   // Handle repo selection
-  const handleSelectRepo = (repo: Repository) => {
+  const handleSelectRepo = async (repo: Repository) => {
     setSelectedRepo(repo);
     setSelectedBranch(repo.default_branch);
-    // Mock branches
-    setBranches([repo.default_branch, "dev", "staging", "feature/new-ui"]);
+    
+    try {
+      const [owner, name] = repo.full_name.split('/');
+      const response = await fetch(`/api/github/branches/${owner}/${name}`);
+      if (response.ok) {
+        const data = await response.json();
+        setBranches((data.branches || []).map((b: { name: string }) => b.name));
+      } else {
+        setBranches([repo.default_branch]);
+      }
+    } catch (error) {
+      console.error("Failed to fetch branches:", error);
+      setBranches([repo.default_branch]);
+    }
   };
 
-  const handleStartScan = () => {
+  const handleStartScan = async () => {
     if (!selectedRepo || !selectedBranch) return;
-    
+
     setScanning(true);
-    
-    // Simulate scan starting then redirect
-    setTimeout(() => {
-      // In a real app we'd create the scan record and redirect to the scan ID
-      router.push("/dashboard/history");
-    }, 2000);
+
+    try {
+      setError(null);
+      const repoUrl = `https://github.com/${selectedRepo.full_name}`;
+      const response = await fetch("/api/scan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          repo: repoUrl,
+          branch: selectedBranch,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || "Failed to start scan");
+      }
+
+      if (data.scan_id) {
+        router.push(`/scan/${data.scan_id}`);
+        return;
+      }
+
+      throw new Error("Scan started but no scan ID was returned.");
+    } catch (err: any) {
+      setError(err.message || "Failed to start scan");
+      setScanning(false);
+    }
   };
 
   const filteredRepos = repos.filter(r => 
@@ -75,10 +138,30 @@ export default function NewScanPage() {
   );
 
   return (
-    <div className="flex-1 p-8 lg:p-10 max-w-5xl mx-auto w-full">
+    <div className="min-h-screen bg-white relative w-full overflow-hidden flex flex-col">
+      {/* Animated subtle grid background */}
+      <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,#f0f0f0_1px,transparent_1px),linear-gradient(to_bottom,#f0f0f0_1px,transparent_1px)] bg-[size:6rem_4rem] [mask-image:radial-gradient(ellipse_80%_50%_at_50%_0%,#000_70%,transparent_110%)] opacity-50" />
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-[600px] bg-gradient-to-b from-blue-50/50 to-transparent opacity-50 blur-3xl" />
+      </div>
+
+      {/* Header bar with Back Button */}
+      <div className="relative z-10 w-full px-6 py-4 flex items-center justify-between border-b border-gray-100 bg-white/80 backdrop-blur-md sticky top-0">
+        <Link 
+          href="/dashboard" 
+          className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-semibold text-gray-600 hover:text-gray-900 transition-colors rounded-lg hover:bg-gray-50"
+        >
+          <ArrowLeft size={16} />
+          Back to Dashboard
+        </Link>
+      </div>
+
+      <div className="flex-1 p-8 lg:p-10 max-w-5xl mx-auto w-full relative z-10">
       <header className="mb-10 text-center max-w-2xl mx-auto">
-        <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-blue-50 border-2 border-blue-100 text-[#3079FF] mb-6 shadow-sm">
-          <Shield size={32} strokeWidth={2.5} />
+        <div className="inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-white border border-blue-100 mb-6 shadow-sm relative overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-br from-blue-50 to-white" />
+          <div className="absolute w-28 h-28 rounded-full border-2 border-blue-200/70 animate-ping" />
+          <Image src="/ShipGuard.svg" alt="ShipGuard" width={36} height={36} className="relative z-10 h-9 w-auto animate-pulse" />
         </div>
         <h1 
           className="text-3xl md:text-4xl font-bold tracking-tight text-gray-900 mb-4"
@@ -218,7 +301,7 @@ export default function NewScanPage() {
                     </label>
                     <div className="grid grid-cols-2 gap-3">
                       {[
-                        { id: 'security', label: 'Security', icon: Shield, color: 'text-red-500', bg: 'bg-red-50' },
+                        { id: 'security', label: 'Security', icon: Github, color: 'text-red-500', bg: 'bg-red-50' },
                         { id: 'scalability', label: 'Scalability', icon: Zap, color: 'text-blue-500', bg: 'bg-blue-50' },
                         { id: 'monetization', label: 'Monetization', icon: DollarSign, color: 'text-green-500', bg: 'bg-green-50' },
                         { id: 'distribution', label: 'Distribution', icon: Globe, color: 'text-purple-500', bg: 'bg-purple-50' },
@@ -235,9 +318,9 @@ export default function NewScanPage() {
                   </div>
 
                   <div className="mt-8 pt-6 border-t border-gray-100">
-                    <button
-                      onClick={handleStartScan}
-                      disabled={scanning || !selectedBranch}
+                      <button
+                        onClick={handleStartScan}
+                        disabled={scanning || !selectedBranch}
                       className="w-full flex items-center justify-center gap-2 py-4 px-6 rounded-full bg-black text-white font-bold text-sm hover:bg-gray-800 transition-all duration-200 shadow-lg hover:shadow-xl hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0"
                       style={{ fontFamily: "var(--font-landing-body)" }}
                     >
@@ -273,5 +356,6 @@ export default function NewScanPage() {
         </div>
       </div>
     </div>
+  </div>
   );
 }

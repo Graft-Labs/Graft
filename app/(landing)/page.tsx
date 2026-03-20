@@ -17,7 +17,6 @@ import LandingNavbar from "@/components/layout/LandingNavbar";
 import LandingFooter from "@/components/layout/LandingFooter";
 import { SquigglyLine } from "@/components/ui/squiggly-line";
 import { GlowingBorder } from "@/components/ui/glowing-border";
-import { Marquee } from "@/components/ui/marquee";
 
 export default function LandingPage() {
   const { scrollYProgress } = useScroll();
@@ -25,39 +24,6 @@ export default function LandingPage() {
   // Subtle parallax for abstract background elements
   const y1 = useTransform(scrollYProgress, [0, 1], [0, 300]);
   const y2 = useTransform(scrollYProgress, [0, 1], [0, -200]);
-
-  const reviews = [
-    {
-      name: "Jack",
-      username: "@jack",
-      body: "ShipGuard caught a leaked Supabase service role key in my Next.js API route before I pushed to production. Absolute lifesaver.",
-    },
-    {
-      name: "Jill",
-      username: "@jill",
-      body: "I was using Cursor to build super fast, but I didn't realize my RLS policies were misconfigured. ShipGuard found it instantly.",
-    },
-    {
-      name: "John",
-      username: "@john",
-      body: "The architectural analysis is wild. It told me exactly why my client-side bundles were massive and how to fix it.",
-    },
-    {
-      name: "Jane",
-      username: "@jane",
-      body: "I don't ship without it anymore. It's like having a senior engineer reviewing all the code my AI agent generates.",
-    },
-    {
-      name: "Alex",
-      username: "@alex",
-      body: "Set it up in 2 minutes. The peace of mind when building with AI tools is worth 10x the price.",
-    },
-    {
-      name: "Sam",
-      username: "@sam",
-      body: "Found an N+1 query issue that would have wrecked my database scale. Incredible tool.",
-    },
-  ];
 
   return (
     <div className="min-h-screen bg-[#FDFDFD] text-gray-900 font-sans selection:bg-[#3079FF]/20 overflow-x-hidden relative">
@@ -253,45 +219,6 @@ export default function LandingPage() {
               </div>
             </div>
 
-          </div>
-        </section>
-
-        {/* ─── SOCIAL PROOF MARQUEE ──────────────────────────────────────────────── */}
-        <section className="py-24 px-6 relative bg-white border-b border-gray-100 overflow-hidden">
-          <div className="text-center mb-12">
-            <h2 className="text-2xl font-semibold tracking-tight text-gray-900" style={{ fontFamily: "var(--font-landing-heading)" }}>
-              Trusted by developers shipping with AI
-            </h2>
-          </div>
-          
-          <div className="relative flex w-full flex-col items-center justify-center overflow-hidden bg-white">
-            <Marquee pauseOnHover className="[--duration:40s]">
-              {reviews.map((review) => (
-                <div
-                  key={review.username}
-                  className="relative w-80 cursor-pointer overflow-hidden rounded-xl border border-gray-950/[.1] bg-gray-950/[.01] hover:bg-gray-950/[.05] p-6 transition-all duration-200"
-                >
-                  <div className="flex flex-row items-center gap-2">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-blue-100 to-blue-50 text-blue-600 font-semibold border border-blue-200">
-                      {review.name.charAt(0)}
-                    </div>
-                    <div className="flex flex-col">
-                      <figcaption className="text-sm font-medium dark:text-white">
-                        {review.name}
-                      </figcaption>
-                      <p className="text-xs font-medium dark:text-white/40">
-                        {review.username}
-                      </p>
-                    </div>
-                  </div>
-                  <blockquote className="mt-4 text-sm leading-relaxed text-gray-600">
-                    "{review.body}"
-                  </blockquote>
-                </div>
-              ))}
-            </Marquee>
-            <div className="pointer-events-none absolute inset-y-0 left-0 w-1/3 bg-gradient-to-r from-white dark:from-background"></div>
-            <div className="pointer-events-none absolute inset-y-0 right-0 w-1/3 bg-gradient-to-l from-white dark:from-background"></div>
           </div>
         </section>
 

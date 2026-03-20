@@ -1,6 +1,7 @@
 import { PostHog } from "posthog-node";
 
 let client: PostHog | null = null;
+let disabledUntil = 0;
 
 function getPosthogClient(): PostHog | null {
   const key = process.env.POSTHOG_API_KEY;
@@ -11,8 +12,9 @@ function getPosthogClient(): PostHog | null {
 
   client = new PostHog(key, {
     host,
-    flushAt: 1,
-    flushInterval: 0,
+    flushAt: 20,
+    flushInterval: 10000,
+    requestTimeout: 2000,
   });
 
   return client;
@@ -23,6 +25,8 @@ export async function captureServerEvent(
   event: string,
   properties?: Record<string, unknown>
 ) {
+  if (Date.now() < disabledUntil) return;
+
   const ph = getPosthogClient();
   if (!ph) return;
 
@@ -32,8 +36,9 @@ export async function captureServerEvent(
       event,
       properties,
     });
-    await ph.flush();
   } catch {
+    // Back off after network errors to avoid log spam + request overhead.
+    disabledUntil = Date.now() + 5 * 60 * 1000;
     // Ignore analytics failures so product flows are unaffected.
   }
 }

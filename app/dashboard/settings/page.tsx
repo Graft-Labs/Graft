@@ -71,7 +71,7 @@ export default function SettingsPage() {
   const tabs = [
     { id: "profile", label: "Profile", icon: User },
     { id: "billing", label: "Billing", icon: CreditCard },
-    { id: "notifications", label: "Notifications", icon: Bell },
+    
   ];
 
   return (
@@ -147,12 +147,8 @@ export default function SettingsPage() {
                       )}
                     </div>
                     <div>
-                      <button className="px-4 py-2 bg-white border border-gray-200 rounded-full text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors shadow-sm mb-2" style={{ fontFamily: "var(--font-landing-body)" }}>
-                        Change Avatar
-                      </button>
-                      <p className="text-xs text-gray-500 font-medium" style={{ fontFamily: "var(--font-landing-body)" }}>
-                        JPG, GIF or PNG. Max size of 2MB.
-                      </p>
+                      <p className="text-sm font-bold text-gray-900" style={{ fontFamily: "var(--font-landing-body)" }}>Profile Picture</p>
+                      <p className="text-xs text-gray-500 font-medium mt-1" style={{ fontFamily: "var(--font-landing-body)" }}>Avatar is synced from your login provider.</p>
                     </div>
                   </div>
 
@@ -256,40 +252,7 @@ export default function SettingsPage() {
                 </div>
               )}
 
-              {/* --- NOTIFICATIONS TAB --- */}
-              {activeTab === "notifications" && (
-                <div className="p-8">
-                  <h2 className="text-xl font-bold text-gray-900 mb-6" style={{ fontFamily: "var(--font-landing-heading)" }}>
-                    Email Notifications
-                  </h2>
-                  
-                  <div className="space-y-6">
-                    {[
-                      { title: "Scan Completed", desc: "Receive an email when a codebase scan finishes.", defaultChecked: true },
-                      { title: "Weekly Report", desc: "Receive a weekly summary of your repository health.", defaultChecked: false },
-                      { title: "Security Alerts", desc: "Immediate notifications for critical security vulnerabilities.", defaultChecked: true },
-                    ].map((item, i) => (
-                      <div key={i} className="flex items-start gap-4 p-4 rounded-xl border border-gray-100 bg-gray-50/50">
-                        <div className="flex-1">
-                          <h3 className="text-sm font-bold text-gray-900 mb-1" style={{ fontFamily: "var(--font-landing-body)" }}>{item.title}</h3>
-                          <p className="text-xs text-gray-500 font-medium" style={{ fontFamily: "var(--font-landing-body)" }}>{item.desc}</p>
-                        </div>
-                        <label className="relative inline-flex items-center cursor-pointer">
-                          <input type="checkbox" defaultChecked={item.defaultChecked} className="sr-only peer" />
-                          <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-100 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#3079FF]"></div>
-                        </label>
-                      </div>
-                    ))}
-                    
-                    <div className="pt-4">
-                      <button className="px-6 py-3 bg-black text-white rounded-full text-sm font-semibold hover:bg-gray-800 hover:-translate-y-0.5 transition-all shadow-sm" style={{ fontFamily: "var(--font-landing-body)" }}>
-                        Save Preferences
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
+              </div>
           )}
         </main>
       </div>

@@ -31,6 +31,8 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [isGithubLoading, setIsGithubLoading] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [error, setError] = useState("");
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -100,18 +102,7 @@ export default function LoginPage() {
           </div>
         </div>
 
-        {/* Bottom quote */}
-        <div className="relative z-10 mt-12 p-6 rounded-2xl bg-white border border-gray-100 shadow-sm">
-          <p className="text-sm text-gray-700 leading-relaxed italic mb-3 font-garamond text-lg">
-            &ldquo;ShipGuard found an exposed Supabase key in my API route right before I deployed. Saved me a massive headache.&rdquo;
-          </p>
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-sm">P</div>
-            <p className="text-sm font-medium text-gray-900">
-              Priya S. <span className="text-gray-500 font-normal">Indie Hacker</span>
-            </p>
-          </div>
-        </div>
+        <div />
       </div>
 
       {/* Right panel — form */}
@@ -146,37 +137,63 @@ export default function LoginPage() {
           <div className="space-y-3 mb-8">
             <button
               type="button"
+              disabled={loading || isGithubLoading || isGoogleLoading}
               onClick={async () => {
+                setError("");
+                setIsGithubLoading(true);
                 const supabase = createClient();
-                await supabase.auth.signInWithOAuth({
+                const { error: oauthError } = await supabase.auth.signInWithOAuth({
                   provider: "github",
                   options: {
                     redirectTo: getAuthRedirectUrl(),
                     scopes: "repo read:org user:email",
                   },
                 });
+                if (oauthError) {
+                  setError(oauthError.message);
+                  setIsGithubLoading(false);
+                }
               }}
               className="w-full flex items-center justify-center gap-3 py-3 rounded-full border border-gray-200 bg-white text-gray-900 font-medium text-sm hover:bg-gray-50 transition-colors shadow-sm"
             >
-              <Github className="w-5 h-5" />
-              Continue with GitHub
+              {isGithubLoading ? (
+                <div className="w-5 h-5 rounded-full border-2 border-gray-900/25 border-t-gray-900 animate-spin" />
+              ) : (
+                <>
+                  <Github className="w-5 h-5" />
+                  Continue with GitHub
+                </>
+              )}
             </button>
 
             <button
               type="button"
+              disabled={loading || isGithubLoading || isGoogleLoading}
               onClick={async () => {
+                setError("");
+                setIsGoogleLoading(true);
                 const supabase = createClient();
-                await supabase.auth.signInWithOAuth({
+                const { error: oauthError } = await supabase.auth.signInWithOAuth({
                   provider: "google",
                   options: {
                     redirectTo: getAuthRedirectUrl(),
                   },
                 });
+                if (oauthError) {
+                  setError(oauthError.message);
+                  setIsGoogleLoading(false);
+                }
               }}
               className="w-full flex items-center justify-center gap-3 py-3 rounded-full border border-gray-200 bg-white text-gray-900 font-medium text-sm hover:bg-gray-50 transition-colors shadow-sm"
             >
-              <GoogleIcon />
-              Continue with Google
+              {isGoogleLoading ? (
+                <div className="w-5 h-5 rounded-full border-2 border-gray-900/25 border-t-gray-900 animate-spin" />
+              ) : (
+                <>
+                  <GoogleIcon />
+                  Continue with Google
+                </>
+              )}
             </button>
           </div>
 

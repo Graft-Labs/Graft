@@ -71,9 +71,9 @@ export default function DashboardSidebar() {
 
   return (
     <aside
-      className="hidden lg:flex flex-col w-64 h-screen sticky top-0 border-r shadow-sm z-10"
+      className="hidden lg:flex flex-col w-64 h-[calc(100vh-3rem)] sticky top-6 rounded-2xl border shadow-sm z-10 overflow-hidden"
       style={{
-        background: "#F9FAFB",
+        background: "#FFFFFF",
         borderColor: "var(--landing-border)",
       }}
     >
@@ -83,9 +83,9 @@ export default function DashboardSidebar() {
         style={{ borderColor: "var(--landing-border)", background: "#FFFFFF" }}
       >
         <Link href="/" className="flex items-center gap-2 group">
-          <Image src="/ShipGuard.svg" alt="ShipGuard AI" width={28} height={28} className="h-7 w-auto transition-transform group-hover:scale-105" />
+          <Image src="/ShipGuard.svg" alt="ShipGuard AI" width={32} height={32} className="h-8 w-auto transition-transform group-hover:scale-105" />
           <span
-            className="font-bold text-base text-gray-900 tracking-tight"
+            className="font-bold text-lg text-gray-900 tracking-tight"
             style={{ fontFamily: "var(--font-landing-heading)" }}
           >
             ShipGuard AI

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase-server'
-import { runs } from '@trigger.dev/sdk/v3'
 
 // Step name → friendly label mapping (mirrors logger.log() calls in trigger/run-scan.ts)
 const STEP_LABELS: Record<string, string> = {
@@ -66,6 +65,32 @@ export async function GET(
       })
     }
 
+    // Auto-fail stale queued/pending scans (worker not dequeuing / expired run)
+    const createdAtRes = await supabase
+      .from('scans')
+      .select('created_at')
+      .eq('id', scanId)
+      .single()
+
+    const createdAt = createdAtRes.data?.created_at ? new Date(createdAtRes.data.created_at).getTime() : null
+    const ageMs = createdAt ? Date.now() - createdAt : 0
+    const staleThresholdMs = 10 * 60 * 1000
+
+    if ((scan.status === 'pending' || scan.status === 'scanning') && ageMs > staleThresholdMs) {
+      await supabase
+        .from('scans')
+        .update({ status: 'failed' })
+        .eq('id', scanId)
+
+      return NextResponse.json({
+        overallStatus: 'failed',
+        percent: 0,
+        steps: STEP_ORDER.map(key => ({ key, label: STEP_LABELS[key], status: 'pending' })),
+        currentStep: null,
+        message: 'Scan timed out in queue. Please retry and ensure Trigger worker is running.',
+      })
+    }
+
     // If no trigger_run_id yet (very early in the lifecycle), return pending
     if (!scan.trigger_run_id) {
       return NextResponse.json({
@@ -76,34 +101,25 @@ export async function GET(
       })
     }
 
-    // Retrieve the Trigger.dev run to get its status
-    let triggerStatus = 'QUEUED'
-    try {
-      const run = await runs.retrieve(scan.trigger_run_id)
-      triggerStatus = run.status
-    } catch {
-      // Trigger.dev API might be slow — fall back gracefully
+    // Avoid remote Trigger API lookups on every poll (they add 1-2s latency).
+    // Derive an approximate step from local scan status + age.
+    const elapsedSec = Math.max(0, Math.floor(ageMs / 1000))
+    let currentStepIndex = 0
+
+    if (scan.status === 'pending') {
+      currentStepIndex = STEP_ORDER.indexOf('scan_started')
+    } else {
+      // scanning: advance through a timed progression curve
+      if (elapsedSec < 15) currentStepIndex = STEP_ORDER.indexOf('cloning_repo')
+      else if (elapsedSec < 35) currentStepIndex = STEP_ORDER.indexOf('running_trufflehog')
+      else if (elapsedSec < 55) currentStepIndex = STEP_ORDER.indexOf('running_osv')
+      else if (elapsedSec < 90) currentStepIndex = STEP_ORDER.indexOf('running_semgrep')
+      else if (elapsedSec < 120) currentStepIndex = STEP_ORDER.indexOf('running_react_doctor')
+      else if (elapsedSec < 150) currentStepIndex = STEP_ORDER.indexOf('running_file_checks')
+      else currentStepIndex = STEP_ORDER.indexOf('analysis_complete')
     }
 
-    // Map Trigger.dev run status to our step progression
-    // Since we can't cheaply stream individual logger events via the management API,
-    // we derive approximate progress from the Trigger.dev run status + scan status.
-    let currentStepIndex = 0
-    if (triggerStatus === 'EXECUTING') {
-      // Scan is actively running — show a middle-of-scan step
-      // We don't know the exact step without streaming, so show "running semgrep" as midpoint
-      currentStepIndex = STEP_ORDER.indexOf('running_semgrep')
-      if (currentStepIndex < 0) currentStepIndex = 4
-    } else if (triggerStatus === 'COMPLETED' || triggerStatus === 'WAITING') {
-      currentStepIndex = STEP_ORDER.length - 1
-    } else if (triggerStatus === 'FAILED' || triggerStatus === 'CRASHED' || triggerStatus === 'SYSTEM_FAILURE') {
-      return NextResponse.json({
-        overallStatus: 'failed',
-        percent: 0,
-        steps: STEP_ORDER.map(key => ({ key, label: STEP_LABELS[key], status: 'pending' })),
-        currentStep: null,
-      })
-    }
+    if (currentStepIndex < 0) currentStepIndex = 0
 
     const percent = Math.round(((currentStepIndex + 1) / STEP_ORDER.length) * 100)
     const currentStep = STEP_ORDER[currentStepIndex]

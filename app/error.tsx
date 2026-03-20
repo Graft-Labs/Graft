@@ -14,32 +14,52 @@ export default function GlobalError({
   }, [error]);
 
   return (
-    <html>
-      <body style={{ background: "#0f0e0c", color: "#f4f0e6", margin: 0, fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, sans-serif" }}>
-        <main style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: "24px" }}>
-          <div style={{ maxWidth: 520, width: "100%", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 14, padding: 24, background: "rgba(255,255,255,0.03)" }}>
-            <p style={{ margin: 0, fontSize: 12, letterSpacing: ".08em", textTransform: "uppercase", color: "#ffdc61" }}>ShipGuard AI</p>
-            <h2 style={{ marginTop: 10, marginBottom: 8 }}>Something went wrong</h2>
-            <p style={{ marginTop: 0, marginBottom: 16, color: "#c7c2b8", fontSize: 14, lineHeight: 1.6 }}>
-              An unexpected error occurred. Please try again.
-            </p>
-            <button
-              onClick={reset}
-              style={{
-                border: "none",
-                borderRadius: 10,
-                background: "#ffdc61",
-                color: "#403718",
-                padding: "10px 14px",
-                fontWeight: 700,
-                cursor: "pointer",
-              }}
-            >
-              Try again
-            </button>
-          </div>
-        </main>
-      </body>
-    </html>
+    <main
+      style={{
+        minHeight: "100vh",
+        display: "grid",
+        placeItems: "center",
+        padding: "24px",
+        background: "#FAFAFA",
+        color: "#111827",
+        fontFamily: "var(--font-landing-body), system-ui, sans-serif",
+      }}
+    >
+      <div
+        style={{
+          maxWidth: 520,
+          width: "100%",
+          border: "1px solid #E5E7EB",
+          borderRadius: 16,
+          padding: 24,
+          background: "#FFFFFF",
+          boxShadow: "0 8px 24px rgba(17, 24, 39, 0.06)",
+        }}
+      >
+        <p style={{ margin: 0, fontSize: 12, letterSpacing: ".08em", textTransform: "uppercase", color: "#3079FF", fontWeight: 700 }}>
+          ShipGuard AI
+        </p>
+        <h2 style={{ marginTop: 10, marginBottom: 8, fontFamily: "var(--font-landing-heading), system-ui, sans-serif" }}>
+          Something went wrong
+        </h2>
+        <p style={{ marginTop: 0, marginBottom: 16, color: "#4B5563", fontSize: 14, lineHeight: 1.6 }}>
+          An unexpected error occurred. Please try again.
+        </p>
+        <button
+          onClick={reset}
+          style={{
+            border: "1px solid #111827",
+            borderRadius: 9999,
+            background: "#111827",
+            color: "#FFFFFF",
+            padding: "10px 16px",
+            fontWeight: 700,
+            cursor: "pointer",
+          }}
+        >
+          Try again
+        </button>
+      </div>
+    </main>
   );
 }

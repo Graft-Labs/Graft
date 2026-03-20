@@ -51,6 +51,8 @@ export default function SignupPage() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [isGithubLoading, setIsGithubLoading] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [step, setStep] = useState<"form" | "verify" | "error">("form");
   const [error, setError] = useState("");
 
@@ -144,24 +146,7 @@ export default function SignupPage() {
         </div>
 
         {/* Bottom stat */}
-        <div className="relative z-10 mt-12">
-          <div className="inline-flex flex-col p-6 rounded-2xl bg-white border border-gray-100 shadow-sm">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="flex -space-x-3">
-                <div className="w-10 h-10 rounded-full border-2 border-white bg-blue-100 flex items-center justify-center text-xs font-bold text-blue-700">T</div>
-                <div className="w-10 h-10 rounded-full border-2 border-white bg-purple-100 flex items-center justify-center text-xs font-bold text-purple-700">A</div>
-                <div className="w-10 h-10 rounded-full border-2 border-white bg-green-100 flex items-center justify-center text-xs font-bold text-green-700">M</div>
-              </div>
-              <div className="flex flex-col ml-2">
-                 <div className="flex text-yellow-400 text-sm">
-                   ★★★★★
-                 </div>
-                 <span className="text-sm font-semibold text-gray-900">847+ developers</span>
-              </div>
-            </div>
-            <p className="text-sm text-gray-500 mt-1">Already securing their apps with us.</p>
-          </div>
-        </div>
+        <div />
       </div>
 
       {/* Right panel — form */}
@@ -196,37 +181,63 @@ export default function SignupPage() {
           <div className="space-y-3 mb-8">
             <button
               type="button"
+              disabled={loading || isGithubLoading || isGoogleLoading}
               onClick={async () => {
+                setError("");
+                setIsGithubLoading(true);
                 const supabase = createClient();
-                await supabase.auth.signInWithOAuth({
+                const { error: oauthError } = await supabase.auth.signInWithOAuth({
                   provider: "github",
                   options: {
                     redirectTo: getAuthRedirectUrl(),
                     scopes: "repo read:org user:email",
                   },
                 });
+                if (oauthError) {
+                  setError(oauthError.message);
+                  setIsGithubLoading(false);
+                }
               }}
               className="w-full flex items-center justify-center gap-3 py-3 rounded-full border border-gray-200 bg-white text-gray-900 font-medium text-sm hover:bg-gray-50 transition-colors shadow-sm"
             >
-              <Github className="w-5 h-5" />
-              Continue with GitHub
+              {isGithubLoading ? (
+                <div className="w-5 h-5 rounded-full border-2 border-gray-900/25 border-t-gray-900 animate-spin" />
+              ) : (
+                <>
+                  <Github className="w-5 h-5" />
+                  Continue with GitHub
+                </>
+              )}
             </button>
 
             <button
               type="button"
+              disabled={loading || isGithubLoading || isGoogleLoading}
               onClick={async () => {
+                setError("");
+                setIsGoogleLoading(true);
                 const supabase = createClient();
-                await supabase.auth.signInWithOAuth({
+                const { error: oauthError } = await supabase.auth.signInWithOAuth({
                   provider: "google",
                   options: {
                     redirectTo: getAuthRedirectUrl(),
                   },
                 });
+                if (oauthError) {
+                  setError(oauthError.message);
+                  setIsGoogleLoading(false);
+                }
               }}
               className="w-full flex items-center justify-center gap-3 py-3 rounded-full border border-gray-200 bg-white text-gray-900 font-medium text-sm hover:bg-gray-50 transition-colors shadow-sm"
             >
-              <GoogleIcon />
-              Continue with Google
+              {isGoogleLoading ? (
+                <div className="w-5 h-5 rounded-full border-2 border-gray-900/25 border-t-gray-900 animate-spin" />
+              ) : (
+                <>
+                  <GoogleIcon />
+                  Continue with Google
+                </>
+              )}
             </button>
           </div>
 
