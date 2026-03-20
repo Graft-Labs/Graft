@@ -36,6 +36,13 @@ export async function GET(request: Request) {
   const connectingUserId = cookieStore.get('shipguard_connecting_user_id')?.value ?? null
   const oauthErrorCode = requestUrl.searchParams.get('error_code')
 
+  if (!code && isConnectingGithub) {
+    const redirect = NextResponse.redirect(
+      new URL('/dashboard/settings?integration_error=github_oauth_failed', requestUrl.origin)
+    )
+    return withClearedConnectCookies(redirect)
+  }
+
   if (code) {
     const supabase = await createServerClient()
     const { data, error } = await supabase.auth.exchangeCodeForSession(code)

@@ -17,6 +17,21 @@ import {
 import { createClient } from "@/lib/supabase";
 import Image from "next/image";
 
+function getErrorFromUrl() {
+  if (typeof window === "undefined") return "";
+  const query = new URLSearchParams(window.location.search);
+  const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+  const errorCode = hash.get("error_code") || query.get("error_code") || "";
+
+  if (errorCode === "identity_already_exists") {
+    return "This GitHub account is already connected to another ShipGuard account.";
+  }
+
+  return query.get("error") === "oauth_callback_failed"
+    ? "OAuth sign-in failed. Please try again."
+    : "";
+}
+
 function GoogleIcon() {
   return (
     <svg
@@ -61,7 +76,7 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [isGithubLoading, setIsGithubLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState(() => getErrorFromUrl());
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
