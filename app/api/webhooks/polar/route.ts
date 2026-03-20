@@ -19,13 +19,13 @@ interface PolarWebhookPayload {
       plan?: string
     }
     status?: string
+    created_at?: string
   }
 }
 
 const PLAN_SCANS_LIMITS: Record<string, number> = {
-  pro: 30,
+  pro: 50,
   unlimited: 999999,
-  lifetime: 999999,
 }
 
 type HitWindow = { count: number; resetAt: number }
@@ -50,6 +50,13 @@ function allowWebhookRequest(ip: string): boolean {
   return true
 }
 
+function timingSafeEqual(a: string, b: string): boolean {
+  const aBuf = Buffer.from(a)
+  const bBuf = Buffer.from(b)
+  if (aBuf.length !== bBuf.length) return false
+  return crypto.timingSafeEqual(aBuf, bBuf)
+}
+
 export async function POST(req: NextRequest) {
   try {
     const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
@@ -71,7 +78,7 @@ export async function POST(req: NextRequest) {
         .update(rawBody)
         .digest('hex')
 
-      if (signature !== expectedSignature) {
+      if (!timingSafeEqual(signature, expectedSignature)) {
         return NextResponse.json({ error: 'Invalid signature' }, { status: 401 })
       }
     }
@@ -85,6 +92,17 @@ export async function POST(req: NextRequest) {
     if (!userId) {
       console.error('No user_id in webhook metadata')
       return NextResponse.json({ error: 'No user_id' }, { status: 400 })
+    }
+
+    // Basic idempotency guard: if event already applied, skip duplicate side effects.
+    const { data: existingUser } = await supabase
+      .from('users')
+      .select('subscription_id, subscription_status')
+      .eq('id', userId)
+      .single()
+
+    if (existingUser?.subscription_id === data.id && existingUser?.subscription_status === (data.status || existingUser.subscription_status)) {
+      return NextResponse.json({ received: true, duplicate: true })
     }
 
     // Handle different event types
@@ -131,29 +149,6 @@ export async function POST(req: NextRequest) {
         }
 
         console.log(`User ${userId} downgraded to free`)
-        break
-      }
-
-      case 'order.created': {
-        if (planId === 'lifetime') {
-          const { error } = await supabase
-            .from('users')
-            .update({
-              plan: 'lifetime',
-              scans_limit: 999999,
-              subscription_id: data.id,
-              subscription_status: 'active',
-              updated_at: new Date().toISOString(),
-            })
-            .eq('id', userId)
-
-          if (error) {
-            console.error('Failed to update lifetime purchase:', error)
-            return NextResponse.json({ error: 'Failed to update user' }, { status: 500 })
-          }
-
-          console.log(`User ${userId} purchased lifetime plan`)
-        }
         break
       }
 

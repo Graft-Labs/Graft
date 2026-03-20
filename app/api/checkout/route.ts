@@ -1,25 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SECRET_KEY!
-)
+import { createServerClient } from '@/lib/supabase-server'
 
 const POLAR_ACCESS_TOKEN = process.env.POLAR_ACCESS_TOKEN
 const POLAR_ORGANIZATION = process.env.NEXT_PUBLIC_POLAR_ORGANIZATION
 
 const PLAN_PRICES: Record<string, { priceId: string; scansLimit: number }> = {
-  pro: { priceId: 'pro_monthly_price_id', scansLimit: 30 },
-  unlimited: { priceId: 'unlimited_monthly_price_id', scansLimit: 999999 },
-  lifetime: { priceId: 'lifetime_price_id', scansLimit: 999999 },
+  pro: { priceId: process.env.POLAR_PRO_PRICE_ID || '', scansLimit: 50 },
+  unlimited: { priceId: process.env.POLAR_UNLIMITED_PRICE_ID || '', scansLimit: 999999 },
 }
 
 export async function POST(req: NextRequest) {
   try {
-    const { planId, userId, email } = await req.json()
+    const { planId } = await req.json()
 
-    if (!userId) {
+    const supabase = await createServerClient()
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
@@ -31,7 +28,7 @@ export async function POST(req: NextRequest) {
     }
 
     const plan = PLAN_PRICES[planId]
-    if (!plan) {
+    if (!plan || !plan.priceId) {
       return NextResponse.json({ error: 'Invalid plan' }, { status: 400 })
     }
 
@@ -44,13 +41,13 @@ export async function POST(req: NextRequest) {
       },
       body: JSON.stringify({
         products: [{ price_id: plan.priceId, quantity: 1 }],
-        customer_email: email,
+        customer_email: user.email,
         metadata: {
-          user_id: userId,
+          user_id: user.id,
           plan: planId,
         },
         success_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard?upgrade=success`,
-        cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/pricing?upgrade=cancelled`,
+        cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/#pricing`,
       }),
     })
 

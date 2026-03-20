@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase";
+import { getCached, setCached } from "@/lib/client-cache";
 
 const navItems = [
   { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
@@ -25,13 +26,20 @@ const navItems = [
 export default function DashboardSidebar() {
   const pathname = usePathname();
   const router = useRouter();
-  const [user, setUser] = useState<{ email?: string | null; user_metadata?: { full_name?: string; name?: string; avatar_url?: string } } | null>(null);
+  const [user, setUser] = useState<{ email?: string | null; user_metadata?: { full_name?: string; name?: string; avatar_url?: string; picture?: string } } | null>(null);
   const [userData, setUserData] = useState<{ plan: string; scans_used: number; scans_limit: number; name?: string | null; email?: string | null; avatar_url?: string | null } | null>(null);
   const [loadingUser, setLoadingUser] = useState(true);
 
   // Fetch user on load
   useEffect(() => {
     async function fetchUser() {
+      const cached = getCached<{ user: typeof user; userData: typeof userData }>("sidebar:user");
+      if (cached) {
+        setUser(cached.user);
+        setUserData(cached.userData);
+        setLoadingUser(false);
+      }
+
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
       setUser(user);
@@ -39,10 +47,12 @@ export default function DashboardSidebar() {
       if (user) {
         const { data } = await supabase
           .from('users')
-          .select('plan, scans_used, scans_limit, name, email, avatar_url')
+          .select('plan, scans_used, scans_limit, name, email, avatar_url, github_token')
           .eq('id', user.id)
           .single();
         setUserData(data);
+
+        setCached("sidebar:user", { user, userData: data }, 60_000);
       }
 
       setLoadingUser(false);
@@ -60,7 +70,7 @@ export default function DashboardSidebar() {
   // Get user info from GitHub metadata or email
   const userEmail = userData?.email || user?.email || "";
   const userName = userData?.name || user?.user_metadata?.full_name || user?.user_metadata?.name || (userEmail ? userEmail.split("@")[0] : "");
-  const avatarUrl = userData?.avatar_url || user?.user_metadata?.avatar_url || null;
+  const avatarUrl = userData?.avatar_url || user?.user_metadata?.avatar_url || user?.user_metadata?.picture || null;
 
   // Plan display
   const plan = userData?.plan || 'free';
@@ -170,6 +180,7 @@ export default function DashboardSidebar() {
               src={avatarUrl}
               alt={userName || "User avatar"}
               className="w-9 h-9 rounded-full flex-shrink-0 shadow-sm border border-gray-200"
+              referrerPolicy="no-referrer"
             />
           ) : (
             <div

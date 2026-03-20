@@ -29,6 +29,7 @@ import DashboardSidebar from "@/components/layout/DashboardSidebar";
 import { createClient } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 import Image from "next/image";
+import { getCached, setCached } from "@/lib/client-cache";
 
 const progressUiStyles = `
 @keyframes slideIn {
@@ -440,6 +441,13 @@ export default function ScanReportPage() {
 
   useEffect(() => {
     async function fetchScanData() {
+      const cached = getCached<{ scan: Scan | null; issues: Issue[] }>(`scan:report:${scanId}`);
+      if (cached) {
+        setScan(cached.scan);
+        setIssues(cached.issues || []);
+        setLoading(false);
+      }
+
       const supabase = createClient();
       
       const { data: { user } } = await supabase.auth.getUser();
@@ -463,6 +471,7 @@ export default function ScanReportPage() {
 
       setScan(scanData);
       setIssues(issuesData || []);
+      setCached(`scan:report:${scanId}`, { scan: scanData, issues: issuesData || [] }, 20_000);
 
       setLoading(false);
     }
@@ -694,7 +703,7 @@ export default function ScanReportPage() {
         </div>
 
         <div className="flex-1 overflow-y-auto">
-          <div className="max-w-5xl mx-auto p-6">
+          <div className="max-w-5xl mx-auto p-4 sm:p-6">
 
             {/* Report Header */}
             <div
@@ -855,17 +864,20 @@ export default function ScanReportPage() {
                   <button
                     key={key}
                     onClick={() => setActiveGuard(activeGuard === key ? "all" : key)}
-                    className="p-5 rounded-2xl text-left transition-all duration-200 hover:shadow-sm"
+                    className="relative overflow-hidden p-5 rounded-3xl text-left transition-all duration-300 hover:shadow-md hover:-translate-y-0.5"
                     style={{
-                      background: activeGuard === key ? cfg.glow : "#F9FAFB",
+                      background: activeGuard === key ? cfg.glow : "#FFFFFF",
                       border: `1px solid ${activeGuard === key ? cfg.color + "44" : "#E5E7EB"}`,
                     }}
                   >
+                    <div className="absolute inset-0 pointer-events-none" style={{ background: `radial-gradient(140px 70px at 100% 0%, ${cfg.color}15 0%, transparent 70%)` }} />
                     <div className="flex items-center justify-between mb-4">
-                      <Icon size={15} style={{ color: cfg.color }} />
+                      <div className="w-8 h-8 rounded-lg border flex items-center justify-center" style={{ borderColor: `${cfg.color}33`, background: `${cfg.color}12` }}>
+                        <Icon size={15} style={{ color: cfg.color }} />
+                      </div>
                       <ScoreRing score={val.score} color={cfg.color} size={52} />
                     </div>
-                    <p style={{ fontSize: "15px", fontWeight: 700, color: "#111827", fontFamily: "var(--font-landing-heading)" }}>
+                    <p style={{ fontSize: "16px", fontWeight: 700, color: "#111827", fontFamily: "var(--font-landing-heading)" }}>
                       {cfg.label.split(" ")[0]}
                     </p>
                     <p style={{ fontSize: "13px", color: cfg.color, fontFamily: "var(--font-landing-body)", fontWeight: 600, marginTop: 2 }}>

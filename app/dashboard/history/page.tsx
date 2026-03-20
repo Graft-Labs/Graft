@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ChevronRight, Github, Clock, Search, Filter, Shield, AlertTriangle, Zap, DollarSign, Globe, CheckCircle, XCircle } from "lucide-react";
 import { formatRelativeTime, getScoreColor } from "@/lib/utils";
 import { createClient } from "@/lib/supabase";
+import { getCached, setCached } from "@/lib/client-cache";
 
 type Scan = {
   id: string;
@@ -69,6 +70,12 @@ export default function ScanHistoryPage() {
 
   useEffect(() => {
     async function fetchHistory() {
+      const cached = getCached<Scan[]>("dashboard:history");
+      if (cached) {
+        setScans(cached);
+        setLoading(false);
+      }
+
       const supabase = createClient();
       const { data, error } = await supabase
         .from("scans")
@@ -77,6 +84,7 @@ export default function ScanHistoryPage() {
 
       if (!error && data) {
         setScans(data);
+        setCached("dashboard:history", data, 45_000);
       }
       setLoading(false);
     }
@@ -90,7 +98,7 @@ export default function ScanHistoryPage() {
   });
 
   return (
-    <div className="flex-1 p-8 lg:p-10 max-w-7xl mx-auto w-full">
+    <div className="flex-1 p-4 sm:p-6 lg:p-10 max-w-7xl mx-auto w-full">
       <header className="mb-10">
         <h1 
           className="text-3xl font-bold tracking-tight text-gray-900 mb-2"

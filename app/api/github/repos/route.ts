@@ -83,7 +83,7 @@ export async function GET(_req: NextRequest) {
     }
 
     if (!token) {
-      return NextResponse.json({ error: 'github_not_connected', message: 'Connect your GitHub account in Settings to use the repo picker.' }, { status: 400 })
+      return NextResponse.json({ error: 'github_not_connected', message: 'GitHub is not connected yet. Go to Settings → Integrations and connect GitHub.' }, { status: 400 })
     }
 
     // Fetch user profile + personal repos in parallel; orgs may 403 if read:org scope is missing
@@ -145,7 +145,7 @@ export async function GET(_req: NextRequest) {
     const msg = error instanceof Error ? error.message : 'Unknown error'
     const unauth = msg.includes('GitHub API error 401') || msg.includes('GitHub API error 403')
     if (unauth) {
-      return NextResponse.json({ error: 'github_not_connected', message: 'GitHub token expired or missing required scope. Reconnect GitHub in Settings.' }, { status: 400 })
+      return NextResponse.json({ error: 'github_not_connected', message: 'GitHub is not connected yet. Go to Settings → Integrations and connect GitHub.' }, { status: 400 })
     }
     return NextResponse.json({ error: 'internal_error', message: msg }, { status: 500 })
   }

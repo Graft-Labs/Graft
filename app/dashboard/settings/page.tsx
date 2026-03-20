@@ -2,12 +2,15 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { User, Bell, Shield, Key, CreditCard, Github, AlertTriangle, CheckCircle, Upload } from "lucide-react";
+import { User, CreditCard, CheckCircle, Link2, AlertTriangle, LifeBuoy, ExternalLink } from "lucide-react";
 import { createClient } from "@/lib/supabase";
+import IntegrationsTab from "@/components/settings/IntegrationsTab";
+import { getCached, setCached } from "@/lib/client-cache";
+import Image from "next/image";
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState("profile");
-  const [user, setUser] = useState<{ email?: string; user_metadata?: { full_name?: string } } | null>(null);
+  const [user, setUser] = useState<{ email?: string; user_metadata?: { full_name?: string; name?: string; avatar_url?: string; picture?: string } } | null>(null);
   const [userData, setUserData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   
@@ -18,6 +21,14 @@ export default function SettingsPage() {
 
   useEffect(() => {
     async function loadData() {
+      const cached = getCached<{ user: typeof user; userData: any; fullName: string }>("settings:data");
+      if (cached) {
+        setUser(cached.user);
+        setUserData(cached.userData);
+        setFullName(cached.fullName);
+        setLoading(false);
+      }
+
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
       setUser(user);
@@ -32,6 +43,12 @@ export default function SettingsPage() {
         setUserData(data);
         if (data?.name) setFullName(data.name);
         else if (user?.user_metadata?.full_name) setFullName(user.user_metadata.full_name);
+
+        setCached("settings:data", {
+          user,
+          userData: data,
+          fullName: data?.name || user?.user_metadata?.full_name || "",
+        }, 60_000);
       }
       setLoading(false);
     }
@@ -70,12 +87,14 @@ export default function SettingsPage() {
 
   const tabs = [
     { id: "profile", label: "Profile", icon: User },
+    { id: "integrations", label: "Integrations", icon: Link2 },
+    { id: "support", label: "Support", icon: LifeBuoy },
     { id: "billing", label: "Billing", icon: CreditCard },
     
   ];
 
   return (
-    <div className="flex-1 p-8 lg:p-10 max-w-5xl mx-auto w-full">
+    <div className="flex-1 p-4 sm:p-6 lg:p-10 max-w-5xl mx-auto w-full">
       <header className="mb-10">
         <h1 
           className="text-3xl font-bold tracking-tight text-gray-900 mb-2"
@@ -91,7 +110,7 @@ export default function SettingsPage() {
         </p>
       </header>
 
-      <div className="flex flex-col md:flex-row gap-8">
+      <div className="flex flex-col md:flex-row gap-6 lg:gap-8">
         {/* Sidebar Navigation */}
         <aside className="w-full md:w-64 shrink-0">
           <nav className="flex flex-col gap-1.5">
@@ -139,9 +158,16 @@ export default function SettingsPage() {
                   
                   {/* Avatar Section */}
                   <div className="flex items-center gap-6 mb-8 pb-8 border-b border-gray-100">
-                    <div className="w-20 h-20 rounded-full bg-gray-100 border border-gray-200 flex items-center justify-center text-gray-400 shrink-0">
-                      {userData?.avatar_url ? (
-                        <img src={userData.avatar_url} alt="Avatar" className="w-full h-full rounded-full object-cover" />
+                    <div className="w-20 h-20 rounded-full bg-gray-100 border border-gray-200 flex items-center justify-center text-gray-400 shrink-0 overflow-hidden">
+                      {(userData?.avatar_url || user?.user_metadata?.avatar_url || user?.user_metadata?.picture) ? (
+                        <Image
+                          src={userData?.avatar_url || user?.user_metadata?.avatar_url || user?.user_metadata?.picture}
+                          alt="Avatar"
+                          width={80}
+                          height={80}
+                          className="w-full h-full rounded-full object-cover"
+                          referrerPolicy="no-referrer"
+                        />
                       ) : (
                         <User size={32} />
                       )}
@@ -197,6 +223,11 @@ export default function SettingsPage() {
                 </div>
               )}
 
+              {/* --- INTEGRATIONS TAB --- */}
+              {activeTab === "integrations" && (
+                <IntegrationsTab hasGithubToken={Boolean(userData?.github_token)} />
+              )}
+
               {/* --- BILLING TAB --- */}
               {activeTab === "billing" && (
                 <div className="p-8">
@@ -248,6 +279,58 @@ export default function SettingsPage() {
                         </p>
                       )}
                     </div>
+                  </div>
+                </div>
+              )}
+
+              {/* --- SUPPORT TAB --- */}
+              {activeTab === "support" && (
+                <div className="p-8">
+                  <h2 className="text-xl font-bold text-gray-900 mb-2" style={{ fontFamily: "var(--font-landing-heading)" }}>
+                    Support
+                  </h2>
+                  <p className="text-sm text-gray-500 mb-6 font-medium" style={{ fontFamily: "var(--font-landing-body)" }}>
+                    Need help or want to request a feature? Reach us directly through these forms.
+                  </p>
+
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <a
+                      href={process.env.NEXT_PUBLIC_SUPPORT_FORM_URL || "#"}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm hover:shadow-md transition-all"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-base font-bold text-gray-900" style={{ fontFamily: "var(--font-landing-heading)" }}>
+                            Contact Support
+                          </p>
+                          <p className="text-sm text-gray-500 mt-1" style={{ fontFamily: "var(--font-landing-body)" }}>
+                            Report bugs, account issues, billing questions, or scan failures.
+                          </p>
+                        </div>
+                        <ExternalLink size={16} className="text-gray-400 mt-1" />
+                      </div>
+                    </a>
+
+                    <a
+                      href={process.env.NEXT_PUBLIC_FEATURE_REQUEST_FORM_URL || "#"}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm hover:shadow-md transition-all"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-base font-bold text-gray-900" style={{ fontFamily: "var(--font-landing-heading)" }}>
+                            Request a Feature
+                          </p>
+                          <p className="text-sm text-gray-500 mt-1" style={{ fontFamily: "var(--font-landing-body)" }}>
+                            Tell us what you want next in ShipGuard AI.
+                          </p>
+                        </div>
+                        <ExternalLink size={16} className="text-gray-400 mt-1" />
+                      </div>
+                    </a>
                   </div>
                 </div>
               )}

@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { formatRelativeTime, getScoreColor } from "@/lib/utils";
 import { createClient } from "@/lib/supabase";
+import { getCached, setCached } from "@/lib/client-cache";
 
 // Types for our database data
 type Scan = {
@@ -125,16 +126,27 @@ export default function Dashboard() {
 
   useEffect(() => {
     async function fetchData() {
+      const cached = getCached<{ scans: Scan[]; user: User | null }>("dashboard:overview");
+      if (cached) {
+        setScans(cached.scans);
+        setUser(cached.user);
+        setLoading(false);
+      }
+
       const supabase = createClient();
       
       const { data: { user: authUser } } = await supabase.auth.getUser();
+      let latestUser: User | null = null;
       if (authUser) {
         const { data: userData } = await supabase
           .from('users')
           .select('*')
           .eq('id', authUser.id)
           .single();
-        if (userData) setUser(userData);
+        if (userData) {
+          setUser(userData);
+          latestUser = userData;
+        }
       }
 
       const { data, error } = await supabase
@@ -145,6 +157,7 @@ export default function Dashboard() {
 
       if (!error && data) {
         setScans(data);
+        setCached("dashboard:overview", { scans: data, user: latestUser }, 45_000);
       }
       setLoading(false);
     }
@@ -159,9 +172,9 @@ export default function Dashboard() {
   const totalIssues = completedScans.reduce((acc, s) => acc + s.critical_count + s.high_count, 0);
 
   return (
-    <div className="flex-1 p-8 lg:p-10 max-w-7xl mx-auto w-full">
+    <div className="flex-1 p-4 sm:p-6 lg:p-10 max-w-7xl mx-auto w-full">
       {/* Header */}
-      <header className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-10">
+      <header className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8 sm:mb-10">
         <div>
           <h1 
             className="text-3xl font-bold tracking-tight text-gray-900 mb-2"
@@ -193,30 +206,32 @@ export default function Dashboard() {
       {/* Quick Stats */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
         {[
-          { label: "Total Scans", value: scans.length, icon: FileText, color: "#3079FF", bg: "rgba(48, 121, 255, 0.1)" },
-          { label: "Avg. Score", value: avgScore, icon: TrendingUp, color: "#3B82F6", bg: "rgba(59, 130, 246, 0.1)" },
-          { label: "Critical Issues", value: totalIssues, icon: XCircle, color: "#EF4444", bg: "rgba(239, 68, 68, 0.1)" },
-          { label: "Completed Scans", value: completedScans.length, icon: CheckCircle, color: "#10B981", bg: "rgba(16, 185, 129, 0.1)" },
+          { label: "Total Scans", value: scans.length, icon: FileText, color: "#3079FF", bg: "rgba(48, 121, 255, 0.1)", tint: "from-blue-50/60 to-white" },
+          { label: "Avg. Score", value: avgScore, icon: TrendingUp, color: "#3B82F6", bg: "rgba(59, 130, 246, 0.1)", tint: "from-indigo-50/60 to-white" },
+          { label: "Critical Issues", value: totalIssues, icon: XCircle, color: "#EF4444", bg: "rgba(239, 68, 68, 0.1)", tint: "from-red-50/60 to-white" },
+          { label: "Completed Scans", value: completedScans.length, icon: CheckCircle, color: "#10B981", bg: "rgba(16, 185, 129, 0.1)", tint: "from-emerald-50/60 to-white" },
         ].map((stat, i) => (
           <div
             key={i}
-            className="p-5 rounded-2xl bg-white border border-gray-200 shadow-sm flex items-start justify-between"
+            className="relative overflow-hidden p-5 rounded-3xl bg-white border border-gray-200/90 shadow-sm hover:shadow-md transition-all duration-300 flex items-start justify-between"
           >
+            <div className={`absolute inset-0 bg-gradient-to-br ${stat.tint} pointer-events-none`} />
+            <div className="absolute -top-6 -right-6 w-24 h-24 rounded-full bg-white/60 blur-2xl" />
             <div>
-              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1 block" style={{ fontFamily: "var(--font-landing-body)" }}>
+              <span className="relative text-[11px] font-semibold text-gray-500 uppercase tracking-[0.12em] mb-1 block" style={{ fontFamily: "var(--font-landing-body)" }}>
                 {stat.label}
               </span>
               {loading ? (
-                <div className="w-8 h-8 flex items-center">
+                <div className="relative w-8 h-8 flex items-center">
                   <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
                 </div>
               ) : (
-                <span className="text-3xl font-bold text-gray-900 tracking-tight" style={{ fontFamily: "var(--font-landing-heading)" }}>
+                <span className="relative text-4xl font-bold text-gray-900 tracking-tight" style={{ fontFamily: "var(--font-landing-heading)" }}>
                   {stat.value}
                 </span>
               )}
             </div>
-            <div className="p-2.5 rounded-xl" style={{ background: stat.bg, color: stat.color }}>
+            <div className="relative p-2.5 rounded-xl border border-white/70 shadow-sm" style={{ background: stat.bg, color: stat.color }}>
               <stat.icon size={22} strokeWidth={2.5} />
             </div>
           </div>

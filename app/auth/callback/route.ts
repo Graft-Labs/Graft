@@ -1,10 +1,14 @@
 import { NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase-server'
+import { cookies } from 'next/headers'
 
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url)
   const code = requestUrl.searchParams.get('code')
-  const next = requestUrl.searchParams.get('next') ?? '/dashboard'
+  const cookieStore = await cookies()
+  const nextFromCookie = requestUrl.searchParams.get('next') ?? cookieStore.get('shipguard_next')?.value
+  const safeNextDecoded = nextFromCookie ? decodeURIComponent(nextFromCookie) : '/dashboard'
+  const next = safeNextDecoded.startsWith('/') ? safeNextDecoded : '/dashboard'
 
   if (code) {
     const supabase = await createServerClient()
@@ -66,7 +70,9 @@ export async function GET(request: Request) {
           .eq('id', userId)
       }
 
-      return NextResponse.redirect(new URL(next, requestUrl.origin))
+      const redirect = NextResponse.redirect(new URL(next, requestUrl.origin))
+      redirect.cookies.set('shipguard_next', '', { path: '/', maxAge: 0 })
+      return redirect
     }
   }
 

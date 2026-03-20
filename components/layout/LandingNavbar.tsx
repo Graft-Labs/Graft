@@ -5,6 +5,8 @@ import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import Image from "next/image";
+import { createClient } from "@/lib/supabase";
+import type { Session } from "@supabase/supabase-js";
 
 const navLinks = [
   { href: "/", label: "Home" },
@@ -15,11 +17,23 @@ export default function LandingNavbar() {
   const pathname = usePathname();
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [session, setSession] = useState<Session | null>(null);
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 20);
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+    return () => subscription.unsubscribe();
   }, []);
 
   return (
@@ -59,15 +73,25 @@ export default function LandingNavbar() {
           ))}
         </nav>
 
-        {/* CTA - Only Sign In */}
+        {/* CTA */}
         <div className="hidden md:flex items-center gap-3">
-          <Link
-            href="/auth/login"
-            className="landing-btn-secondary px-6 py-2.5 text-sm"
-            style={{ fontFamily: "var(--font-landing-body)" }}
-          >
-            Sign in
-          </Link>
+          {session ? (
+            <Link
+              href="/dashboard"
+              className="landing-btn-secondary px-6 py-2.5 text-sm"
+              style={{ fontFamily: "var(--font-landing-body)" }}
+            >
+              Go to Dashboard
+            </Link>
+          ) : (
+            <Link
+              href="/auth/login"
+              className="landing-btn-secondary px-6 py-2.5 text-sm"
+              style={{ fontFamily: "var(--font-landing-body)" }}
+            >
+              Sign in
+            </Link>
+          )}
         </div>
 
         {/* Mobile toggle */}
@@ -106,14 +130,25 @@ export default function LandingNavbar() {
             </Link>
           ))}
           <div className="flex flex-col gap-3 pt-4 border-t border-gray-100">
-            <Link
-              href="/auth/login"
-              onClick={() => setMobileOpen(false)}
-              className="landing-btn-secondary w-full py-3 text-sm"
-              style={{ fontFamily: "var(--font-landing-body)" }}
-            >
-              Sign in
-            </Link>
+            {session ? (
+              <Link
+                href="/dashboard"
+                onClick={() => setMobileOpen(false)}
+                className="landing-btn-secondary w-full py-3 text-sm"
+                style={{ fontFamily: "var(--font-landing-body)" }}
+              >
+                Go to Dashboard
+              </Link>
+            ) : (
+              <Link
+                href="/auth/login"
+                onClick={() => setMobileOpen(false)}
+                className="landing-btn-secondary w-full py-3 text-sm"
+                style={{ fontFamily: "var(--font-landing-body)" }}
+              >
+                Sign in
+              </Link>
+            )}
           </div>
         </div>
       )}

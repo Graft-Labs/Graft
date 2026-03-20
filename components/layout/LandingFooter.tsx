@@ -25,7 +25,7 @@ export default function LandingFooter() {
             <ul className="flex flex-col gap-4">
               {[
                 { href: "/", label: "Home" },
-                { href: "/pricing", label: "Pricing" },
+                { href: "/#pricing", label: "Pricing" },
                 { href: "/auth/signup", label: "Start Free" },
                 { href: "/dashboard", label: "Dashboard" },
               ].map((link) => (
@@ -84,6 +84,31 @@ export default function LandingFooter() {
                   >
                     {link.label}
                   </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Support */}
+          <div>
+            <h4 className="text-sm font-semibold text-gray-900 mb-6" style={{ fontFamily: "var(--font-landing-body)" }}>
+              Support
+            </h4>
+            <ul className="flex flex-col gap-4">
+              {[
+                { href: process.env.NEXT_PUBLIC_SUPPORT_FORM_URL || "#", label: "Contact Support" },
+                { href: process.env.NEXT_PUBLIC_FEATURE_REQUEST_FORM_URL || "#", label: "Feature Requests" },
+              ].map((link) => (
+                <li key={link.label}>
+                  <a
+                    href={link.href}
+                    target={link.href.startsWith("http") ? "_blank" : undefined}
+                    rel={link.href.startsWith("http") ? "noopener noreferrer" : undefined}
+                    className="text-sm text-gray-600 hover:text-[#0000EE] transition-colors"
+                    style={{ fontFamily: "var(--font-landing-body)" }}
+                  >
+                    {link.label}
+                  </a>
                 </li>
               ))}
             </ul>
