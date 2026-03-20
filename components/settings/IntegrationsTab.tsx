@@ -108,7 +108,14 @@ export default function IntegrationsTab({ hasGithubToken }: { hasGithubToken: bo
     try {
       clearCacheByPrefix("dashboard:");
       clearCacheByPrefix("scan:");
-      await fetch("/api/github/disconnect", { method: "POST" });
+      const res = await fetch("/api/github/disconnect", { method: "POST" });
+      const body = await res.json().catch(() => null);
+      if (!res.ok) {
+        setConflictError(
+          body?.message || "Could not disconnect GitHub right now. Please try again."
+        );
+        return;
+      }
       window.location.reload();
     } finally {
       setBusy(false);
