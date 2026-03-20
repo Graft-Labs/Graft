@@ -23,7 +23,7 @@ function redirectUsingHashError(origin: string) {
         var hash = new URLSearchParams(window.location.hash.replace(/^#/, ''));
         var code = hash.get('error_code');
         var integrationError = code === 'identity_already_exists' ? 'github_already_linked' : 'github_oauth_failed';
-        window.location.replace('${origin}/dashboard/settings?integration_error=' + integrationError);
+        window.location.replace('${origin}/dashboard/settings?tab=integrations&integration_error=' + integrationError);
       })();
     </script>
   </body>
@@ -79,7 +79,7 @@ export async function GET(request: Request) {
 
       if (isConnectingGithub && connectingUserId && userId !== connectingUserId) {
         const redirect = NextResponse.redirect(
-          new URL('/dashboard/settings?integration_error=oauth_user_mismatch', requestUrl.origin)
+          new URL('/dashboard/settings?tab=integrations&integration_error=oauth_user_mismatch', requestUrl.origin)
         )
         redirect.cookies.set('shipguard_next', '', { path: '/', maxAge: 0 })
         redirect.cookies.set('shipguard_connecting_github', '', { path: '/', maxAge: 0 })
@@ -108,7 +108,7 @@ export async function GET(request: Request) {
 
             if (conflictUser.data) {
               const redirect = NextResponse.redirect(
-                new URL('/dashboard/settings?integration_error=github_already_linked', requestUrl.origin)
+                new URL('/dashboard/settings?tab=integrations&integration_error=github_already_linked', requestUrl.origin)
               )
               return withClearedConnectCookies(redirect)
             }
@@ -181,7 +181,7 @@ export async function GET(request: Request) {
         ? 'github_already_linked'
         : 'github_oauth_failed'
       const redirect = NextResponse.redirect(
-        new URL(`/dashboard/settings?integration_error=${integrationError}`, requestUrl.origin)
+        new URL(`/dashboard/settings?tab=integrations&integration_error=${integrationError}`, requestUrl.origin)
       )
       return withClearedConnectCookies(redirect)
     }

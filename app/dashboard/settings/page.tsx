@@ -43,8 +43,11 @@ export default function SettingsPage() {
 
   useEffect(() => {
     const tab = searchParams.get("tab");
+    const integrationError = searchParams.get("integration_error");
     if (tab && ["profile", "integrations", "support", "billing"].includes(tab)) {
       setActiveTab(tab);
+    } else if (integrationError) {
+      setActiveTab("integrations");
     }
   }, [searchParams]);
 
