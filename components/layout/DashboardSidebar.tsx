@@ -117,19 +117,6 @@ export default function DashboardSidebar() {
             >
               <Icon size={18} strokeWidth={isActive ? 2.5 : 2} className={isActive ? "text-[#3079FF]" : "text-gray-400"} />
               {item.label}
-              {item.label === "New Scan" && (
-                <span
-                  className="ml-auto text-[10px] px-2 py-0.5 rounded-full"
-                  style={{
-                    background: "var(--landing-primary)",
-                    color: "#FFFFFF",
-                    fontFamily: "var(--font-landing-body)",
-                    fontWeight: 700,
-                  }}
-                >
-                  NEW
-                </span>
-              )}
             </Link>
           );
         })}

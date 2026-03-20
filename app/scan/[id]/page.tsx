@@ -15,6 +15,7 @@ import {
   CheckCircle,
   XCircle,
   AlertTriangle,
+  TriangleAlert,
   Info,
   ChevronDown,
   Lock,
@@ -586,24 +587,24 @@ export default function ScanReportPage() {
             </Link>
           </div>
 
-          <div className="flex-1 flex items-center justify-center p-8">
-            <div className="w-full max-w-xl rounded-3xl border border-gray-200 bg-white shadow-sm p-10 text-center relative overflow-hidden">
+          <div className="flex-1 flex items-center justify-center p-4 md:p-6">
+            <div className="w-full max-w-lg rounded-3xl border border-gray-200 bg-white shadow-sm p-6 md:p-7 text-center relative overflow-hidden">
               <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(48,121,255,0.08),transparent_60%)] pointer-events-none" />
 
-              <div className="relative inline-flex items-center justify-center w-24 h-24 rounded-3xl bg-white border border-blue-100 mb-6 shadow-sm">
-                <div className="absolute w-28 h-28 rounded-full border-2 border-blue-200/70 animate-ping" />
-                <div className="absolute w-20 h-20 rounded-full border border-blue-200/60 animate-pulse" />
-                <Image src="/ShipGuard.svg" alt="ShipGuard" width={42} height={42} className="relative z-10 h-10 w-auto" />
+              <div className="relative inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-white border border-blue-100 mb-4 shadow-sm">
+                <div className="absolute w-24 h-24 rounded-full border-2 border-blue-200/70 animate-ping" />
+                <div className="absolute w-16 h-16 rounded-full border border-blue-200/60 animate-pulse" />
+                <Image src="/ShipGuard.svg" alt="ShipGuard" width={36} height={36} className="relative z-10 h-9 w-auto" />
               </div>
 
-              <h2 className="text-2xl font-bold text-gray-900 mb-2" style={{ fontFamily: "var(--font-landing-heading)" }}>
+              <h2 className="text-xl md:text-2xl font-bold text-gray-900 mb-2" style={{ fontFamily: "var(--font-landing-heading)" }}>
                 {scan.status === "scanning" ? "Scanning in progress" : "Queued for scanning"}
               </h2>
-              <p className="text-gray-500 font-medium mb-8" style={{ fontFamily: "var(--font-landing-body)" }}>
+              <p className="text-gray-500 font-medium mb-5" style={{ fontFamily: "var(--font-landing-body)" }}>
                 We are analyzing your repository across security, scalability, monetization, and distribution.
               </p>
 
-              <div className="mb-7">
+              <div className="mb-5">
                 <div className="flex items-center justify-between text-xs font-semibold text-gray-500 mb-2" style={{ fontFamily: "var(--font-landing-body)" }}>
                   <span>Scan Progress</span>
                   <span>{Math.min(100, Math.max(0, percent))}%</span>
@@ -616,8 +617,8 @@ export default function ScanReportPage() {
                 </div>
               </div>
 
-              <div className="relative mb-6">
-                <div className="grid grid-cols-1 gap-2 text-left max-h-[248px] overflow-hidden">
+              <div className="relative mb-4">
+                <div className="grid grid-cols-1 gap-2 text-left max-h-[210px] overflow-hidden">
                   {visibleSteps.map((step) => (
                     <div
                       key={step.key}
@@ -636,7 +637,7 @@ export default function ScanReportPage() {
                     </div>
                   ))}
                 </div>
-                <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-white via-white/85 to-transparent" />
+                <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-white via-white/85 to-transparent" />
               </div>
 
               <div className="inline-flex items-center gap-1.5 text-xs text-gray-400 mb-2" style={{ fontFamily: "var(--font-landing-body)" }}>
@@ -644,8 +645,8 @@ export default function ScanReportPage() {
                 Completed steps slide away automatically
               </div>
 
-              <div className="inline-flex items-center gap-2 text-sm text-gray-600 font-medium" style={{ fontFamily: "var(--font-landing-body)" }}>
-                <div className="w-4 h-4 rounded-full border-2 border-[#3079FF]/30 border-t-[#3079FF] animate-spin" />
+              <div className="inline-flex items-center justify-center gap-2 text-sm text-gray-600 font-medium w-full" style={{ fontFamily: "var(--font-landing-body)" }}>
+                <div className="w-3.5 h-3.5 rounded-full border-2 border-[#3079FF]/30 border-t-[#3079FF] animate-spin shrink-0" />
                 Auto-refreshing results every 2.5s
               </div>
 
@@ -763,10 +764,10 @@ export default function ScanReportPage() {
                 {/* Overall score */}
                 <div className="flex items-center gap-4">
                   <div>
-                    <p style={{ fontSize: "11px", color: "#4B5563", fontFamily: "var(--font-landing-body)", marginBottom: 2 }}>
+                    <p style={{ fontSize: "13px", color: "#4B5563", fontFamily: "var(--font-landing-body)", marginBottom: 4, fontWeight: 600 }}>
                       Overall Score
                     </p>
-                    <p style={{ fontSize: "11px", color: report.overallScore < 50 ? "#D97706" : "#059669", fontFamily: "var(--font-landing-body)" }}>
+                    <p style={{ fontSize: "18px", color: report.overallScore < 50 ? "#D97706" : "#059669", fontFamily: "var(--font-landing-body)", fontWeight: 700 }}>
                       {report.overallScore < 50 ? "Needs Work" : "Good"}
                     </p>
                   </div>
@@ -790,15 +791,16 @@ export default function ScanReportPage() {
             </div>
 
             <div
-              className="p-4 rounded-xl mb-6"
+              className="p-4 rounded-xl mb-6 flex items-start gap-3"
               style={{
                 background: "rgba(251,191,36,0.08)",
                 border: "1px solid rgba(251,191,36,0.25)",
               }}
             >
+              <TriangleAlert size={18} className="text-amber-600 mt-0.5 shrink-0" />
               <p
                 style={{
-                  fontSize: "12px",
+                  fontSize: "13px",
                   color: "#4B5563",
                   fontFamily: "var(--font-landing-body)",
                   lineHeight: "1.6",
@@ -825,31 +827,54 @@ export default function ScanReportPage() {
                   <button
                     key={key}
                     onClick={() => setActiveGuard(activeGuard === key ? "all" : key)}
-                    className="p-4 rounded-2xl text-left transition-all duration-200 hover:shadow-sm"
+                    className="p-5 rounded-2xl text-left transition-all duration-200 hover:shadow-sm"
                     style={{
                       background: activeGuard === key ? cfg.glow : "#F9FAFB",
                       border: `1px solid ${activeGuard === key ? cfg.color + "44" : "#E5E7EB"}`,
                     }}
                   >
-                    <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center justify-between mb-4">
                       <Icon size={15} style={{ color: cfg.color }} />
                       <ScoreRing score={val.score} color={cfg.color} size={52} />
                     </div>
-                    <p style={{ fontSize: "12px", fontWeight: 600, color: "#111827", fontFamily: "var(--font-landing-body)" }}>
+                    <p style={{ fontSize: "15px", fontWeight: 700, color: "#111827", fontFamily: "var(--font-landing-heading)" }}>
                       {cfg.label.split(" ")[0]}
                     </p>
-                    <p style={{ fontSize: "11px", color: cfg.color, fontFamily: "var(--font-landing-body)" }}>
+                    <p style={{ fontSize: "13px", color: cfg.color, fontFamily: "var(--font-landing-body)", fontWeight: 600, marginTop: 2 }}>
                       {val.label}
                     </p>
                     {breakdown.length > 0 && (
-                      <p style={{ fontSize: "10px", color: "#4B5563", fontFamily: "var(--font-landing-body)", marginTop: 4 }}>
-                        {breakdown.join(" · ")}
-                      </p>
+                      <div className="mt-3 flex flex-wrap gap-1.5">
+                        {breakdown.map((item) => (
+                          <span
+                            key={item}
+                            className="text-[11px] px-2 py-1 rounded-full border font-semibold"
+                            style={{
+                              background: "#FFFFFF",
+                              color: "#4B5563",
+                              borderColor: "#D1D5DB",
+                              fontFamily: "var(--font-landing-body)",
+                            }}
+                          >
+                            {item}
+                          </span>
+                        ))}
+                      </div>
                     )}
                     {breakdown.length === 0 && guardIssues.length === 0 && (
-                      <p style={{ fontSize: "10px", color: "#059669", fontFamily: "var(--font-landing-body)", marginTop: 4 }}>
-                        No issues
-                      </p>
+                      <div className="mt-3">
+                        <span
+                          className="text-[11px] px-2 py-1 rounded-full border font-semibold"
+                          style={{
+                            background: "#ECFDF5",
+                            color: "#059669",
+                            borderColor: "#A7F3D0",
+                            fontFamily: "var(--font-landing-body)",
+                          }}
+                        >
+                          No issues
+                        </span>
+                      </div>
                     )}
                   </button>
                 );
@@ -861,16 +886,21 @@ export default function ScanReportPage() {
               const prompt = generateFixPrompt(issues, scan.repo, scan.framework, scan.created_at);
               return (
                 <div
-                  className="p-5 rounded-3xl mb-6 animate-fade-scale shadow-sm"
-                  style={{ background: "#FFFFFF", border: "1px solid rgba(48, 121, 255, 0.2)" }}
+                  className="p-6 rounded-3xl mb-6 animate-fade-scale shadow-sm"
+                  style={{
+                    background: "linear-gradient(180deg, #FFFFFF 0%, #F8FAFF 100%)",
+                    border: "1px solid rgba(48, 121, 255, 0.25)",
+                  }}
                 >
                   <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-                    <div className="flex items-center gap-2">
-                      <Wand2 size={15} style={{ color: "#3079FF" }} />
-                      <span style={{ fontSize: "14px", fontWeight: 600, fontFamily: "var(--font-landing-heading)", color: "#111827" }}>
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-lg bg-blue-100 border border-blue-200 flex items-center justify-center">
+                        <Wand2 size={15} style={{ color: "#3079FF" }} />
+                      </div>
+                      <span style={{ fontSize: "16px", fontWeight: 700, fontFamily: "var(--font-landing-heading)", color: "#111827" }}>
                         Fix-all prompt
                       </span>
-                      <span style={{ fontSize: "12px", color: "#4B5563", fontFamily: "var(--font-landing-body)" }}>
+                      <span style={{ fontSize: "13px", color: "#4B5563", fontFamily: "var(--font-landing-body)" }}>
                         Paste into Claude, Cursor, or any AI tool to fix everything at once
                       </span>
                     </div>
@@ -881,7 +911,7 @@ export default function ScanReportPage() {
                         posthog.capture("scan_fix_prompt_copied", { issuesCount: issues.length, scanId: scan.id });
                         setTimeout(() => setFixPromptCopied(false), 2000);
                       }}
-                      className="flex items-center gap-1.5 text-xs py-1.5 px-4 rounded-lg transition-all duration-300 hover:scale-105"
+                      className="flex items-center gap-1.5 text-xs py-2 px-4 rounded-full transition-all duration-300 hover:scale-105"
                       style={{
                         background: fixPromptCopied ? "#3079FF" : "#EFF6FF",
                         color: fixPromptCopied ? "#FFFFFF" : "#2563EB",
@@ -897,11 +927,13 @@ export default function ScanReportPage() {
                   <pre
                     className="code-block overflow-auto"
                     style={{
-                      fontSize: "11px",
+                      fontSize: "12px",
                       color: "#4B5563",
                       maxHeight: "240px",
                       background: "#FFFFFF",
                       border: "1px solid #E5E7EB",
+                      borderRadius: "14px",
+                      padding: "16px",
                     }}
                   >
                     <code>{prompt || "No issues to fix."}</code>
