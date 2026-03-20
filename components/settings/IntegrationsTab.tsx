@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
-import { Github, Link2, Unlink } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Github, Link2, Unlink, AlertCircle } from "lucide-react";
 import { createClient } from "@/lib/supabase";
 import { clearCacheByPrefix } from "@/lib/client-cache";
+import { useRouter, useSearchParams } from "next/navigation";
 
 function getAuthRedirectUrl() {
   if (typeof window !== "undefined") {
@@ -14,9 +15,25 @@ function getAuthRedirectUrl() {
 
 export default function IntegrationsTab({ hasGithubToken }: { hasGithubToken: boolean }) {
   const [busy, setBusy] = useState(false);
+  const [conflictError, setConflictError] = useState<string | null>(null);
+  const router = useRouter();
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const err = params.get('integration_error')
+    if (err === 'github_already_linked') {
+      setConflictError(
+        "This GitHub account is already connected to another ShipGuard account. Please disconnect it from that account first, or use a different GitHub account."
+      )
+      const clean = new URLSearchParams(window.location.search)
+      clean.delete('integration_error')
+      router.replace(`/dashboard/settings?${clean.toString()}`, { scroll: false })
+    }
+  }, [router])
 
   const connectGithub = async () => {
     setBusy(true);
+    setConflictError(null);
 
     clearCacheByPrefix("dashboard:");
     clearCacheByPrefix("scan:");
@@ -26,6 +43,49 @@ export default function IntegrationsTab({ hasGithubToken }: { hasGithubToken: bo
     }
 
     const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      setBusy(false);
+      setConflictError("You must be signed in to connect GitHub.");
+      return;
+    }
+
+    const { data: identities, error: identitiesError } = await supabase
+      .from("identities")
+      .select("id, user_id")
+      .eq("provider", "github")
+      .eq("user_id", user.id)
+      .limit(1);
+
+    if (identitiesError) {
+      setBusy(false);
+      setConflictError("Could not verify integration status. Please try again.");
+      return;
+    }
+
+    if (identities && identities.length > 0) {
+      setBusy(false);
+      setConflictError("GitHub is already connected to this account.");
+      return;
+    }
+
+    const { data: allGithubIdentities, error: allIdentitiesError } = await supabase
+      .from("identities")
+      .select("user_id")
+      .eq("provider", "github");
+
+    if (!allIdentitiesError && allGithubIdentities && allGithubIdentities.length > 0) {
+      const otherUserLinked = allGithubIdentities.some(i => i.user_id !== user.id);
+      if (otherUserLinked) {
+        setBusy(false);
+        setConflictError(
+          "This GitHub account is already connected to another ShipGuard account. Please disconnect it there first, or sign in with the GitHub account you originally used."
+        );
+        return;
+      }
+    }
+
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "github",
       options: {
@@ -36,12 +96,13 @@ export default function IntegrationsTab({ hasGithubToken }: { hasGithubToken: bo
 
     if (error) {
       setBusy(false);
-      alert(error.message);
+      setConflictError(error.message);
     }
   };
 
   const disconnectGithub = async () => {
     setBusy(true);
+    setConflictError(null);
     try {
       clearCacheByPrefix("dashboard:");
       clearCacheByPrefix("scan:");
@@ -60,6 +121,15 @@ export default function IntegrationsTab({ hasGithubToken }: { hasGithubToken: bo
       <p className="text-sm text-gray-500 mb-6 font-medium" style={{ fontFamily: "var(--font-landing-body)" }}>
         Connect providers to unlock repository scans and richer analysis.
       </p>
+
+      {conflictError && (
+        <div className="mb-4 flex items-start gap-3 p-4 bg-red-50 border border-red-100 rounded-xl">
+          <AlertCircle className="w-5 h-5 text-red-500 mt-0.5 shrink-0" />
+          <p className="text-sm text-red-700 font-medium leading-relaxed" style={{ fontFamily: "var(--font-landing-body)" }}>
+            {conflictError}
+          </p>
+        </div>
+      )}
 
       <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
         <div className="flex items-start justify-between gap-4 flex-wrap">

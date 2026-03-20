@@ -6,10 +6,10 @@ export async function POST() {
     const supabase = await createServerClient()
     const {
       data: { user },
-      error,
+      error: authError,
     } = await supabase.auth.getUser()
 
-    if (error || !user) {
+    if (authError || !user) {
       return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
     }
 
@@ -20,6 +20,17 @@ export async function POST() {
 
     if (updateError) {
       return NextResponse.json({ error: 'db_error', message: updateError.message }, { status: 500 })
+    }
+
+    const { data: identity } = await supabase
+      .from('identities')
+      .select('id, user_id, provider')
+      .eq('provider', 'github')
+      .eq('user_id', user.id)
+      .single()
+
+    if (identity) {
+      await supabase.auth.unlinkIdentity(identity as any)
     }
 
     return NextResponse.json({ success: true })

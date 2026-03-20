@@ -17,11 +17,32 @@ export async function GET(request: Request) {
     if (!error) {
       const provider = data.session?.user?.app_metadata?.provider
 
-      // Keep canonical profile info in users table for UI stability.
-      // If a user logs in with multiple providers, preserve existing values
-      // and only fill missing fields from current provider metadata.
       const userId = data.session?.user?.id
       if (userId) {
+        if (provider === 'github') {
+          const { data: existingIdentities } = await supabase
+            .from('identities')
+            .select('user_id')
+            .eq('provider', 'github')
+            .eq('user_id', userId)
+
+          if (!existingIdentities || existingIdentities.length === 0) {
+            const { data: allGithubIdentities } = await supabase
+              .from('identities')
+              .select('user_id')
+              .eq('provider', 'github')
+
+            const alreadyLinked = allGithubIdentities?.some(i => i.user_id !== userId)
+            if (alreadyLinked) {
+              const redirect = NextResponse.redirect(
+                new URL('/dashboard/settings?integration_error=github_already_linked', requestUrl.origin)
+              )
+              redirect.cookies.set('shipguard_next', '', { path: '/', maxAge: 0 })
+              return redirect
+            }
+          }
+        }
+
         const { data: existing } = await supabase
           .from('users')
           .select('name, email, avatar_url, plan, scans_used, scans_limit, github_token')
@@ -58,16 +79,14 @@ export async function GET(request: Request) {
             },
             { onConflict: 'id' }
           )
-      }
 
-      // Persist the provider_token immediately — it disappears after session refresh
-      // Only store it for GitHub; other OAuth providers should not overwrite github_token.
-      const providerToken = data.session?.provider_token
-      if (provider === 'github' && providerToken && userId) {
-        await supabase
-          .from('users')
-          .update({ github_token: providerToken })
-          .eq('id', userId)
+        const providerToken = data.session?.provider_token
+        if (provider === 'github' && providerToken) {
+          await supabase
+            .from('users')
+            .update({ github_token: providerToken })
+            .eq('id', userId)
+        }
       }
 
       const redirect = NextResponse.redirect(new URL(next, requestUrl.origin))

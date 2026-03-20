@@ -90,8 +90,11 @@ export default function SettingsPage() {
     { id: "integrations", label: "Integrations", icon: Link2 },
     { id: "support", label: "Support", icon: LifeBuoy },
     { id: "billing", label: "Billing", icon: CreditCard },
-    
-  ];
+  ]
+
+  const integrationError = typeof window !== 'undefined'
+    ? new URLSearchParams(window.location.search).get('integration_error')
+    : null
 
   return (
     <div className="flex-1 p-4 sm:p-6 lg:p-10 max-w-5xl mx-auto w-full">
