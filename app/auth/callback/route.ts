@@ -9,6 +9,34 @@ function withClearedConnectCookies(response: NextResponse) {
   return response
 }
 
+function redirectUsingHashError(origin: string) {
+  const html = `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Connecting GitHub...</title>
+  </head>
+  <body>
+    <script>
+      (function () {
+        var hash = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+        var code = hash.get('error_code');
+        var integrationError = code === 'identity_already_exists' ? 'github_already_linked' : 'github_oauth_failed';
+        window.location.replace('${origin}/dashboard/settings?integration_error=' + integrationError);
+      })();
+    </script>
+  </body>
+</html>`
+
+  const response = new NextResponse(html, {
+    status: 200,
+    headers: { 'content-type': 'text/html; charset=utf-8' },
+  })
+
+  return withClearedConnectCookies(response)
+}
+
 async function getGithubUserId(token: string): Promise<string | null> {
   try {
     const res = await fetch('https://api.github.com/user', {
@@ -37,10 +65,7 @@ export async function GET(request: Request) {
   const oauthErrorCode = requestUrl.searchParams.get('error_code')
 
   if (!code && isConnectingGithub) {
-    const redirect = NextResponse.redirect(
-      new URL('/dashboard/settings?integration_error=github_oauth_failed', requestUrl.origin)
-    )
-    return withClearedConnectCookies(redirect)
+    return redirectUsingHashError(requestUrl.origin)
   }
 
   if (code) {
