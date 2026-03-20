@@ -38,6 +38,9 @@ export default function IntegrationsTab({ hasGithubToken }: { hasGithubToken: bo
     if (err) {
       const clean = new URLSearchParams(window.location.search)
       clean.delete('integration_error')
+      if (!clean.get('tab')) {
+        clean.set('tab', 'integrations')
+      }
       router.replace(`/dashboard/settings?${clean.toString()}`, { scroll: false })
     }
   }, [router])
@@ -71,7 +74,7 @@ export default function IntegrationsTab({ hasGithubToken }: { hasGithubToken: bo
     }
 
     if (typeof document !== "undefined") {
-      document.cookie = "shipguard_next=%2Fdashboard%2Fsettings; Path=/; Max-Age=600; SameSite=Lax";
+      document.cookie = "shipguard_next=%2Fdashboard%2Fsettings%3Ftab%3Dintegrations; Path=/; Max-Age=600; SameSite=Lax";
       document.cookie = "shipguard_connecting_github=1; Path=/; Max-Age=600; SameSite=Lax";
       document.cookie = `shipguard_connecting_user_id=${encodeURIComponent(user.id)}; Path=/; Max-Age=600; SameSite=Lax`;
     }

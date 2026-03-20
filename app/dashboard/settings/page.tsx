@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase";
 import IntegrationsTab from "@/components/settings/IntegrationsTab";
 import { getCached, setCached } from "@/lib/client-cache";
 import Image from "next/image";
+import { useSearchParams } from "next/navigation";
 
 type UserData = {
   id: string;
@@ -29,6 +30,7 @@ type CachedData = {
 };
 
 export default function SettingsPage() {
+  const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState("profile");
   const [user, setUser] = useState<{ email?: string; user_metadata?: { full_name?: string; name?: string; avatar_url?: string; picture?: string } } | null>(null);
   const [userData, setUserData] = useState<UserData | null>(null);
@@ -38,6 +40,13 @@ export default function SettingsPage() {
   const [fullName, setFullName] = useState("");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    const tab = searchParams.get("tab");
+    if (tab && ["profile", "integrations", "support", "billing"].includes(tab)) {
+      setActiveTab(tab);
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     async function loadData() {
