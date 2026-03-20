@@ -23,15 +23,11 @@ export async function POST() {
       return NextResponse.json({ error: 'db_error', message: updateError.message }, { status: 500 })
     }
 
-    const { data: identity } = await supabase
-      .from('identities')
-      .select('id, user_id, provider')
-      .eq('provider', 'github')
-      .eq('user_id', user.id)
-      .single()
+    const { data: identitiesResponse } = await supabase.auth.getUserIdentities()
+    const githubIdentity = identitiesResponse?.identities?.find((identity) => identity.provider === 'github')
 
-    if (identity) {
-      await supabase.auth.unlinkIdentity(identity as unknown as UserIdentity)
+    if (githubIdentity) {
+      await supabase.auth.unlinkIdentity(githubIdentity as UserIdentity)
     }
 
     return NextResponse.json({ success: true })

@@ -25,9 +25,8 @@ export async function GET(request: Request) {
   const nextFromCookie = requestUrl.searchParams.get('next') ?? cookieStore.get('shipguard_next')?.value
   const safeNextDecoded = nextFromCookie ? decodeURIComponent(nextFromCookie) : '/dashboard'
   const next = safeNextDecoded.startsWith('/') ? safeNextDecoded : '/dashboard'
-  const isConnectingGithub = cookieStore.get('shipguard_next')?.value
-    ? cookieStore.get('shipguard_connecting_github')?.value === '1'
-    : false
+  const isConnectingGithub = cookieStore.get('shipguard_connecting_github')?.value === '1'
+  const connectingUserId = cookieStore.get('shipguard_connecting_user_id')?.value ?? null
 
   if (code) {
     const supabase = await createServerClient()
@@ -37,6 +36,16 @@ export async function GET(request: Request) {
       const provider = data.session?.user?.app_metadata?.provider
       const userId = data.session?.user?.id
       const providerToken = data.session?.provider_token
+
+      if (isConnectingGithub && connectingUserId && userId !== connectingUserId) {
+        const redirect = NextResponse.redirect(
+          new URL('/dashboard/settings?integration_error=oauth_user_mismatch', requestUrl.origin)
+        )
+        redirect.cookies.set('shipguard_next', '', { path: '/', maxAge: 0 })
+        redirect.cookies.set('shipguard_connecting_github', '', { path: '/', maxAge: 0 })
+        redirect.cookies.set('shipguard_connecting_user_id', '', { path: '/', maxAge: 0 })
+        return redirect
+      }
 
       if (userId) {
         const { data: existingUser } = await supabase
@@ -63,6 +72,7 @@ export async function GET(request: Request) {
               )
               redirect.cookies.set('shipguard_next', '', { path: '/', maxAge: 0 })
               redirect.cookies.set('shipguard_connecting_github', '', { path: '/', maxAge: 0 })
+              redirect.cookies.set('shipguard_connecting_user_id', '', { path: '/', maxAge: 0 })
               return redirect
             }
 
@@ -79,6 +89,7 @@ export async function GET(request: Request) {
               const redirect = NextResponse.redirect(new URL(next, requestUrl.origin))
               redirect.cookies.set('shipguard_next', '', { path: '/', maxAge: 0 })
               redirect.cookies.set('shipguard_connecting_github', '', { path: '/', maxAge: 0 })
+              redirect.cookies.set('shipguard_connecting_user_id', '', { path: '/', maxAge: 0 })
               return redirect
             }
 
@@ -130,6 +141,7 @@ export async function GET(request: Request) {
       const redirect = NextResponse.redirect(new URL(next, requestUrl.origin))
       redirect.cookies.set('shipguard_next', '', { path: '/', maxAge: 0 })
       redirect.cookies.set('shipguard_connecting_github', '', { path: '/', maxAge: 0 })
+      redirect.cookies.set('shipguard_connecting_user_id', '', { path: '/', maxAge: 0 })
       return redirect
     }
   }
@@ -137,5 +149,6 @@ export async function GET(request: Request) {
   const errorRedirect = NextResponse.redirect(new URL('/auth/login?error=oauth_callback_failed', requestUrl.origin))
   errorRedirect.cookies.set('shipguard_next', '', { path: '/', maxAge: 0 })
   errorRedirect.cookies.set('shipguard_connecting_github', '', { path: '/', maxAge: 0 })
+  errorRedirect.cookies.set('shipguard_connecting_user_id', '', { path: '/', maxAge: 0 })
   return errorRedirect
 }

@@ -25,6 +25,13 @@ export default function IntegrationsTab({ hasGithubToken }: { hasGithubToken: bo
       setConflictError(
         "This GitHub account is already connected to another ShipGuard account. Please disconnect it from that account first, or use a different GitHub account."
       )
+    } else if (err === 'oauth_user_mismatch') {
+      setConflictError(
+        "GitHub connection failed because the OAuth callback returned a different account session. Please sign in to the intended account and try again."
+      )
+    }
+
+    if (err) {
       const clean = new URLSearchParams(window.location.search)
       clean.delete('integration_error')
       router.replace(`/dashboard/settings?${clean.toString()}`, { scroll: false })
@@ -37,11 +44,6 @@ export default function IntegrationsTab({ hasGithubToken }: { hasGithubToken: bo
 
     clearCacheByPrefix("dashboard:");
     clearCacheByPrefix("scan:");
-
-    if (typeof document !== "undefined") {
-      document.cookie = "shipguard_next=%2Fdashboard%2Fsettings; Path=/; Max-Age=600; SameSite=Lax";
-      document.cookie = "shipguard_connecting_github=1; Path=/; Max-Age=600; SameSite=Lax";
-    }
 
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
@@ -64,7 +66,13 @@ export default function IntegrationsTab({ hasGithubToken }: { hasGithubToken: bo
       return;
     }
 
-    const { error } = await supabase.auth.signInWithOAuth({
+    if (typeof document !== "undefined") {
+      document.cookie = "shipguard_next=%2Fdashboard%2Fsettings; Path=/; Max-Age=600; SameSite=Lax";
+      document.cookie = "shipguard_connecting_github=1; Path=/; Max-Age=600; SameSite=Lax";
+      document.cookie = `shipguard_connecting_user_id=${encodeURIComponent(user.id)}; Path=/; Max-Age=600; SameSite=Lax`;
+    }
+
+    const { data, error } = await supabase.auth.linkIdentity({
       provider: "github",
       options: {
         redirectTo: getAuthRedirectUrl(),
@@ -75,7 +83,16 @@ export default function IntegrationsTab({ hasGithubToken }: { hasGithubToken: bo
     if (error) {
       setBusy(false);
       setConflictError(error.message);
+      return;
     }
+
+    if (data?.url) {
+      window.location.assign(data.url);
+      return;
+    }
+
+    setBusy(false);
+    setConflictError("Could not start GitHub connection. Please try again.");
   };
 
   const disconnectGithub = async () => {
