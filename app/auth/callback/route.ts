@@ -2,6 +2,13 @@ import { NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase-server'
 import { cookies } from 'next/headers'
 
+function withClearedConnectCookies(response: NextResponse) {
+  response.cookies.set('shipguard_next', '', { path: '/', maxAge: 0 })
+  response.cookies.set('shipguard_connecting_github', '', { path: '/', maxAge: 0 })
+  response.cookies.set('shipguard_connecting_user_id', '', { path: '/', maxAge: 0 })
+  return response
+}
+
 async function getGithubUserId(token: string): Promise<string | null> {
   try {
     const res = await fetch('https://api.github.com/user', {
@@ -27,6 +34,7 @@ export async function GET(request: Request) {
   const next = safeNextDecoded.startsWith('/') ? safeNextDecoded : '/dashboard'
   const isConnectingGithub = cookieStore.get('shipguard_connecting_github')?.value === '1'
   const connectingUserId = cookieStore.get('shipguard_connecting_user_id')?.value ?? null
+  const oauthErrorCode = requestUrl.searchParams.get('error_code')
 
   if (code) {
     const supabase = await createServerClient()
@@ -70,10 +78,7 @@ export async function GET(request: Request) {
               const redirect = NextResponse.redirect(
                 new URL('/dashboard/settings?integration_error=github_already_linked', requestUrl.origin)
               )
-              redirect.cookies.set('shipguard_next', '', { path: '/', maxAge: 0 })
-              redirect.cookies.set('shipguard_connecting_github', '', { path: '/', maxAge: 0 })
-              redirect.cookies.set('shipguard_connecting_user_id', '', { path: '/', maxAge: 0 })
-              return redirect
+              return withClearedConnectCookies(redirect)
             }
 
             if (isConnectingGithub) {
@@ -87,10 +92,7 @@ export async function GET(request: Request) {
                 .eq('id', userId)
 
               const redirect = NextResponse.redirect(new URL(next, requestUrl.origin))
-              redirect.cookies.set('shipguard_next', '', { path: '/', maxAge: 0 })
-              redirect.cookies.set('shipguard_connecting_github', '', { path: '/', maxAge: 0 })
-              redirect.cookies.set('shipguard_connecting_user_id', '', { path: '/', maxAge: 0 })
-              return redirect
+              return withClearedConnectCookies(redirect)
             }
 
             await supabase
@@ -139,16 +141,20 @@ export async function GET(request: Request) {
       }
 
       const redirect = NextResponse.redirect(new URL(next, requestUrl.origin))
-      redirect.cookies.set('shipguard_next', '', { path: '/', maxAge: 0 })
-      redirect.cookies.set('shipguard_connecting_github', '', { path: '/', maxAge: 0 })
-      redirect.cookies.set('shipguard_connecting_user_id', '', { path: '/', maxAge: 0 })
-      return redirect
+      return withClearedConnectCookies(redirect)
+    }
+
+    if (isConnectingGithub) {
+      const integrationError = oauthErrorCode === 'identity_already_exists'
+        ? 'github_already_linked'
+        : 'github_oauth_failed'
+      const redirect = NextResponse.redirect(
+        new URL(`/dashboard/settings?integration_error=${integrationError}`, requestUrl.origin)
+      )
+      return withClearedConnectCookies(redirect)
     }
   }
 
   const errorRedirect = NextResponse.redirect(new URL('/auth/login?error=oauth_callback_failed', requestUrl.origin))
-  errorRedirect.cookies.set('shipguard_next', '', { path: '/', maxAge: 0 })
-  errorRedirect.cookies.set('shipguard_connecting_github', '', { path: '/', maxAge: 0 })
-  errorRedirect.cookies.set('shipguard_connecting_user_id', '', { path: '/', maxAge: 0 })
-  return errorRedirect
+  return withClearedConnectCookies(errorRedirect)
 }

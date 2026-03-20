@@ -29,6 +29,10 @@ export default function IntegrationsTab({ hasGithubToken }: { hasGithubToken: bo
       setConflictError(
         "GitHub connection failed because the OAuth callback returned a different account session. Please sign in to the intended account and try again."
       )
+    } else if (err === 'github_oauth_failed') {
+      setConflictError(
+        "GitHub connection failed. Please try again. If this keeps happening, sign out and back in before reconnecting GitHub."
+      )
     }
 
     if (err) {
