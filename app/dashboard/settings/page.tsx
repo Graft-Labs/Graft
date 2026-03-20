@@ -24,7 +24,12 @@ type UserData = {
 };
 
 type CachedData = {
-  user: { email?: string; user_metadata?: { full_name?: string; name?: string; avatar_url?: string; picture?: string } } | null;
+  user: {
+    email?: string;
+    app_metadata?: { provider?: string };
+    user_metadata?: { full_name?: string; name?: string; avatar_url?: string; picture?: string };
+    identities?: Array<{ provider?: string }>;
+  } | null;
   userData: UserData | null;
   fullName: string;
 };
@@ -32,7 +37,12 @@ type CachedData = {
 export default function SettingsPage() {
   const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState("profile");
-  const [user, setUser] = useState<{ email?: string; user_metadata?: { full_name?: string; name?: string; avatar_url?: string; picture?: string } } | null>(null);
+  const [user, setUser] = useState<{
+    email?: string;
+    app_metadata?: { provider?: string };
+    user_metadata?: { full_name?: string; name?: string; avatar_url?: string; picture?: string };
+    identities?: Array<{ provider?: string }>;
+  } | null>(null);
   const [userData, setUserData] = useState<UserData | null>(null);
   const [loading, setLoading] = useState(true);
   
@@ -123,6 +133,15 @@ export default function SettingsPage() {
     { id: "support", label: "Support", icon: LifeBuoy },
     { id: "billing", label: "Billing", icon: CreditCard },
   ]
+
+  const hasGithubIdentity = Boolean(
+    user?.app_metadata?.provider === "github" ||
+      user?.identities?.some((identity) => identity.provider === "github")
+  );
+
+  const hasGithubConnected = Boolean(
+    userData?.github_token || userData?.github_user_id || hasGithubIdentity
+  );
 
   return (
     <div className="flex-1 p-4 sm:p-6 lg:p-10 max-w-5xl mx-auto w-full">
@@ -256,7 +275,7 @@ export default function SettingsPage() {
 
               {/* --- INTEGRATIONS TAB --- */}
               {activeTab === "integrations" && (
-                <IntegrationsTab hasGithubToken={Boolean(userData?.github_token)} />
+                <IntegrationsTab hasGithubToken={hasGithubConnected} />
               )}
 
               {/* --- BILLING TAB --- */}
