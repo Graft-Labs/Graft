@@ -50,6 +50,8 @@ export default function SettingsPage() {
   const [fullName, setFullName] = useState("");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
+  const [deleteAccountError, setDeleteAccountError] = useState<string | null>(null);
 
   useEffect(() => {
     const tab = searchParams.get("tab");
@@ -127,6 +129,30 @@ export default function SettingsPage() {
     }
   };
 
+  const handleDeleteAccount = async () => {
+    const confirmation = window.prompt('Type DELETE to permanently delete your account.');
+    if (confirmation !== 'DELETE') return;
+
+    setDeletingAccount(true);
+    setDeleteAccountError(null);
+
+    try {
+      const res = await fetch('/api/account/delete', { method: 'DELETE' });
+      const body = await res.json().catch(() => null);
+
+      if (!res.ok) {
+        setDeleteAccountError(body?.message || 'Could not delete account right now. Please try again.');
+        return;
+      }
+
+      const supabase = createClient();
+      await supabase.auth.signOut();
+      window.location.assign('/');
+    } finally {
+      setDeletingAccount(false);
+    }
+  };
+
   const tabs = [
     { id: "profile", label: "Profile", icon: User },
     { id: "integrations", label: "Integrations", icon: Link2 },
@@ -141,6 +167,11 @@ export default function SettingsPage() {
 
   const hasGithubConnected = Boolean(
     userData?.github_token || userData?.github_user_id || hasGithubIdentity
+  );
+
+  const hasGoogleConnected = Boolean(
+    user?.app_metadata?.provider === "google" ||
+      user?.identities?.some((identity) => identity.provider === "google")
   );
 
   return (
@@ -270,12 +301,35 @@ export default function SettingsPage() {
                       </button>
                     </div>
                   </form>
+
+                  <div className="mt-10 pt-8 border-t border-red-100 max-w-md">
+                    <h3 className="text-base font-bold text-red-700 mb-2" style={{ fontFamily: "var(--font-landing-heading)" }}>
+                      Danger Zone
+                    </h3>
+                    <p className="text-sm text-gray-600 mb-4" style={{ fontFamily: "var(--font-landing-body)" }}>
+                      Permanently delete your account and all associated scans and issues. This action cannot be undone.
+                    </p>
+                    {deleteAccountError && (
+                      <p className="text-sm text-red-600 mb-3" style={{ fontFamily: "var(--font-landing-body)" }}>
+                        {deleteAccountError}
+                      </p>
+                    )}
+                    <button
+                      type="button"
+                      onClick={handleDeleteAccount}
+                      disabled={deletingAccount}
+                      className="inline-flex items-center justify-center px-5 py-2.5 rounded-full border border-red-200 bg-red-50 text-red-700 text-sm font-semibold hover:bg-red-100 transition-colors disabled:opacity-50"
+                      style={{ fontFamily: "var(--font-landing-body)" }}
+                    >
+                      {deletingAccount ? 'Deleting Account...' : 'Delete Account'}
+                    </button>
+                  </div>
                 </div>
               )}
 
               {/* --- INTEGRATIONS TAB --- */}
               {activeTab === "integrations" && (
-                <IntegrationsTab hasGithubToken={hasGithubConnected} />
+                <IntegrationsTab hasGithubConnected={hasGithubConnected} hasGoogleConnected={hasGoogleConnected} />
               )}
 
               {/* --- BILLING TAB --- */}

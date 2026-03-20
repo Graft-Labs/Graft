@@ -13,10 +13,31 @@ function getAuthRedirectUrl() {
   return `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/auth/callback`;
 }
 
-export default function IntegrationsTab({ hasGithubToken }: { hasGithubToken: boolean }) {
+type IntegrationsTabProps = {
+  hasGithubConnected: boolean;
+  hasGoogleConnected: boolean;
+};
+
+export default function IntegrationsTab({ hasGithubConnected, hasGoogleConnected }: IntegrationsTabProps) {
   const [busy, setBusy] = useState(false);
   const [conflictError, setConflictError] = useState<string | null>(null);
+  const [githubConnected, setGithubConnected] = useState(hasGithubConnected);
+  const [googleConnected, setGoogleConnected] = useState(hasGoogleConnected);
   const router = useRouter();
+
+  useEffect(() => {
+    setGithubConnected(hasGithubConnected);
+    setGoogleConnected(hasGoogleConnected);
+  }, [hasGithubConnected, hasGoogleConnected]);
+
+  useEffect(() => {
+    const supabase = createClient();
+    void supabase.auth.getUserIdentities().then(({ data }) => {
+      const identities = data?.identities ?? [];
+      setGithubConnected(identities.some((identity) => identity.provider === "github") || hasGithubConnected);
+      setGoogleConnected(identities.some((identity) => identity.provider === "google") || hasGoogleConnected);
+    });
+  }, [hasGithubConnected, hasGoogleConnected]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -25,13 +46,21 @@ export default function IntegrationsTab({ hasGithubToken }: { hasGithubToken: bo
       setConflictError(
         "This GitHub account is already connected to another ShipGuard account. Please disconnect it from that account first, or use a different GitHub account."
       )
+    } else if (err === 'google_already_linked') {
+      setConflictError(
+        "This Google account is already connected to another ShipGuard account. Please disconnect it from that account first, or use a different Google account."
+      )
     } else if (err === 'oauth_user_mismatch') {
       setConflictError(
-        "GitHub connection failed because the OAuth callback returned a different account session. Please sign in to the intended account and try again."
+        "Connection failed because the OAuth callback returned a different account session. Please sign in to the intended account and try again."
       )
     } else if (err === 'github_oauth_failed') {
       setConflictError(
         "GitHub connection failed. Please try again. If this keeps happening, sign out and back in before reconnecting GitHub."
+      )
+    } else if (err === 'google_oauth_failed') {
+      setConflictError(
+        "Google connection failed. Please try again. If this keeps happening, sign out and back in before reconnecting Google."
       )
     }
 
@@ -45,7 +74,7 @@ export default function IntegrationsTab({ hasGithubToken }: { hasGithubToken: bo
     }
   }, [router])
 
-  const connectGithub = async () => {
+  const connectProvider = async (provider: "github" | "google") => {
     setBusy(true);
     setConflictError(null);
 
@@ -57,33 +86,33 @@ export default function IntegrationsTab({ hasGithubToken }: { hasGithubToken: bo
 
     if (!user) {
       setBusy(false);
-      setConflictError("You must be signed in to connect GitHub.");
+      setConflictError("You must be signed in to connect an integration.");
       return;
     }
 
-    const { data: currentUser } = await supabase
-      .from("users")
-      .select("github_user_id")
-      .eq("id", user.id)
-      .single();
-
-    if (currentUser?.github_user_id) {
+    if (provider === "github" && githubConnected) {
       setBusy(false);
       setConflictError("GitHub is already connected to this account.");
       return;
     }
 
+    if (provider === "google" && googleConnected) {
+      setBusy(false);
+      setConflictError("Google is already connected to this account.");
+      return;
+    }
+
     if (typeof document !== "undefined") {
       document.cookie = "shipguard_next=%2Fdashboard%2Fsettings%3Ftab%3Dintegrations; Path=/; Max-Age=600; SameSite=Lax";
-      document.cookie = "shipguard_connecting_github=1; Path=/; Max-Age=600; SameSite=Lax";
+      document.cookie = `shipguard_connecting_provider=${provider}; Path=/; Max-Age=600; SameSite=Lax`;
       document.cookie = `shipguard_connecting_user_id=${encodeURIComponent(user.id)}; Path=/; Max-Age=600; SameSite=Lax`;
     }
 
     const { data, error } = await supabase.auth.linkIdentity({
-      provider: "github",
+      provider,
       options: {
         redirectTo: getAuthRedirectUrl(),
-        scopes: "repo read:org user:email",
+        ...(provider === "github" ? { scopes: "repo read:org user:email" } : {}),
       },
     });
 
@@ -99,20 +128,24 @@ export default function IntegrationsTab({ hasGithubToken }: { hasGithubToken: bo
     }
 
     setBusy(false);
-    setConflictError("Could not start GitHub connection. Please try again.");
+    setConflictError(`Could not start ${provider === "github" ? "GitHub" : "Google"} connection. Please try again.`);
   };
 
-  const disconnectGithub = async () => {
+  const disconnectProvider = async (provider: "github" | "google") => {
     setBusy(true);
     setConflictError(null);
     try {
       clearCacheByPrefix("dashboard:");
       clearCacheByPrefix("scan:");
-      const res = await fetch("/api/github/disconnect", { method: "POST" });
+      const res = await fetch("/api/integrations/disconnect", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ provider }),
+      });
       const body = await res.json().catch(() => null);
       if (!res.ok) {
         setConflictError(
-          body?.message || "Could not disconnect GitHub right now. Please try again."
+          body?.message || "Could not disconnect this integration right now. Please try again."
         );
         return;
       }
@@ -149,14 +182,14 @@ export default function IntegrationsTab({ hasGithubToken }: { hasGithubToken: bo
             <div>
               <p className="font-bold text-gray-900" style={{ fontFamily: "var(--font-landing-heading)" }}>GitHub</p>
               <p className="text-sm text-gray-500 font-medium" style={{ fontFamily: "var(--font-landing-body)" }}>
-                {hasGithubToken ? "Connected. Repo picker is enabled." : "Connect GitHub to scan repositories."}
+                {githubConnected ? "Connected. Repo picker is enabled." : "Connect GitHub to scan repositories."}
               </p>
             </div>
           </div>
 
-          {hasGithubToken ? (
+          {githubConnected ? (
             <button
-              onClick={disconnectGithub}
+              onClick={() => disconnectProvider("github")}
               disabled={busy}
               className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-gray-200 bg-white text-gray-700 text-sm font-semibold hover:bg-gray-50 transition-colors disabled:opacity-50"
               style={{ fontFamily: "var(--font-landing-body)" }}
@@ -166,13 +199,51 @@ export default function IntegrationsTab({ hasGithubToken }: { hasGithubToken: bo
             </button>
           ) : (
             <button
-              onClick={connectGithub}
+              onClick={() => connectProvider("github")}
               disabled={busy}
               className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-black text-white text-sm font-semibold hover:bg-gray-800 transition-colors disabled:opacity-50"
               style={{ fontFamily: "var(--font-landing-body)" }}
             >
               {busy ? <div className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" /> : <Link2 size={16} />}
               Connect GitHub
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm mt-4">
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-xl border border-gray-200 bg-gray-50 flex items-center justify-center">
+              <span className="text-sm font-bold text-gray-700" style={{ fontFamily: "var(--font-landing-body)" }}>G</span>
+            </div>
+            <div>
+              <p className="font-bold text-gray-900" style={{ fontFamily: "var(--font-landing-heading)" }}>Google</p>
+              <p className="text-sm text-gray-500 font-medium" style={{ fontFamily: "var(--font-landing-body)" }}>
+                {googleConnected ? "Connected for sign-in." : "Connect Google as an additional sign-in method."}
+              </p>
+            </div>
+          </div>
+
+          {googleConnected ? (
+            <button
+              onClick={() => disconnectProvider("google")}
+              disabled={busy}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-gray-200 bg-white text-gray-700 text-sm font-semibold hover:bg-gray-50 transition-colors disabled:opacity-50"
+              style={{ fontFamily: "var(--font-landing-body)" }}
+            >
+              <Unlink size={16} />
+              Disconnect
+            </button>
+          ) : (
+            <button
+              onClick={() => connectProvider("google")}
+              disabled={busy}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-black text-white text-sm font-semibold hover:bg-gray-800 transition-colors disabled:opacity-50"
+              style={{ fontFamily: "var(--font-landing-body)" }}
+            >
+              {busy ? <div className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" /> : <Link2 size={16} />}
+              Connect Google
             </button>
           )}
         </div>

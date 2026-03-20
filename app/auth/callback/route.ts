@@ -4,12 +4,25 @@ import { cookies } from 'next/headers'
 
 function withClearedConnectCookies(response: NextResponse) {
   response.cookies.set('shipguard_next', '', { path: '/', maxAge: 0 })
-  response.cookies.set('shipguard_connecting_github', '', { path: '/', maxAge: 0 })
+  response.cookies.set('shipguard_connecting_provider', '', { path: '/', maxAge: 0 })
   response.cookies.set('shipguard_connecting_user_id', '', { path: '/', maxAge: 0 })
+  response.cookies.set('shipguard_connecting_github', '', { path: '/', maxAge: 0 })
   return response
 }
 
-function redirectUsingHashError(origin: string) {
+function resolveConnectingProvider(cookieStore: Awaited<ReturnType<typeof cookies>>): 'github' | 'google' | null {
+  const provider = cookieStore.get('shipguard_connecting_provider')?.value
+  if (provider === 'github' || provider === 'google') return provider
+  if (cookieStore.get('shipguard_connecting_github')?.value === '1') return 'github'
+  return null
+}
+
+function mapIntegrationError(provider: 'github' | 'google', errorCode: string | null) {
+  if (errorCode === 'identity_already_exists') return `${provider}_already_linked`
+  return `${provider}_oauth_failed`
+}
+
+function redirectUsingHashError(origin: string, provider: 'github' | 'google') {
   const html = `<!doctype html>
 <html>
   <head>
@@ -22,7 +35,7 @@ function redirectUsingHashError(origin: string) {
       (function () {
         var hash = new URLSearchParams(window.location.hash.replace(/^#/, ''));
         var code = hash.get('error_code');
-        var integrationError = code === 'identity_already_exists' ? 'github_already_linked' : 'github_oauth_failed';
+        var integrationError = code === 'identity_already_exists' ? '${provider}_already_linked' : '${provider}_oauth_failed';
         window.location.replace('${origin}/dashboard/settings?tab=integrations&integration_error=' + integrationError);
       })();
     </script>
@@ -60,12 +73,13 @@ export async function GET(request: Request) {
   const nextFromCookie = requestUrl.searchParams.get('next') ?? cookieStore.get('shipguard_next')?.value
   const safeNextDecoded = nextFromCookie ? decodeURIComponent(nextFromCookie) : '/dashboard'
   const next = safeNextDecoded.startsWith('/') ? safeNextDecoded : '/dashboard'
-  const isConnectingGithub = cookieStore.get('shipguard_connecting_github')?.value === '1'
+  const connectingProvider = resolveConnectingProvider(cookieStore)
+  const isConnectingProvider = Boolean(connectingProvider)
   const connectingUserId = cookieStore.get('shipguard_connecting_user_id')?.value ?? null
   const oauthErrorCode = requestUrl.searchParams.get('error_code')
 
-  if (!code && isConnectingGithub) {
-    return redirectUsingHashError(requestUrl.origin)
+  if (!code && connectingProvider) {
+    return redirectUsingHashError(requestUrl.origin, connectingProvider)
   }
 
   if (code) {
@@ -77,14 +91,11 @@ export async function GET(request: Request) {
       const userId = data.session?.user?.id
       const providerToken = data.session?.provider_token
 
-      if (isConnectingGithub && connectingUserId && userId !== connectingUserId) {
+      if (isConnectingProvider && connectingUserId && userId !== connectingUserId) {
         const redirect = NextResponse.redirect(
           new URL('/dashboard/settings?tab=integrations&integration_error=oauth_user_mismatch', requestUrl.origin)
         )
-        redirect.cookies.set('shipguard_next', '', { path: '/', maxAge: 0 })
-        redirect.cookies.set('shipguard_connecting_github', '', { path: '/', maxAge: 0 })
-        redirect.cookies.set('shipguard_connecting_user_id', '', { path: '/', maxAge: 0 })
-        return redirect
+        return withClearedConnectCookies(redirect)
       }
 
       if (userId) {
@@ -113,7 +124,7 @@ export async function GET(request: Request) {
               return withClearedConnectCookies(redirect)
             }
 
-            if (isConnectingGithub) {
+            if (isConnectingProvider && connectingProvider === 'github') {
               await supabase
                 .from('users')
                 .update({
@@ -136,6 +147,11 @@ export async function GET(request: Request) {
               })
               .eq('id', userId)
           }
+        }
+
+        if (isConnectingProvider && connectingProvider === 'google') {
+          const redirect = NextResponse.redirect(new URL(next, requestUrl.origin))
+          return withClearedConnectCookies(redirect)
         }
 
         const metadata = data.session?.user?.user_metadata ?? {}
@@ -176,10 +192,8 @@ export async function GET(request: Request) {
       return withClearedConnectCookies(redirect)
     }
 
-    if (isConnectingGithub) {
-      const integrationError = oauthErrorCode === 'identity_already_exists'
-        ? 'github_already_linked'
-        : 'github_oauth_failed'
+    if (connectingProvider) {
+      const integrationError = mapIntegrationError(connectingProvider, oauthErrorCode)
       const redirect = NextResponse.redirect(
         new URL(`/dashboard/settings?tab=integrations&integration_error=${integrationError}`, requestUrl.origin)
       )
