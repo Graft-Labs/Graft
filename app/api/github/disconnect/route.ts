@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase-server'
+import type { UserIdentity } from '@supabase/supabase-js'
 
 export async function POST() {
   try {
@@ -15,7 +16,7 @@ export async function POST() {
 
     const { error: updateError } = await supabase
       .from('users')
-      .update({ github_token: null })
+      .update({ github_token: null, github_user_id: null })
       .eq('id', user.id)
 
     if (updateError) {
@@ -30,7 +31,7 @@ export async function POST() {
       .single()
 
     if (identity) {
-      await supabase.auth.unlinkIdentity(identity as any)
+      await supabase.auth.unlinkIdentity(identity as unknown as UserIdentity)
     }
 
     return NextResponse.json({ success: true })

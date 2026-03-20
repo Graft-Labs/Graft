@@ -8,10 +8,30 @@ import IntegrationsTab from "@/components/settings/IntegrationsTab";
 import { getCached, setCached } from "@/lib/client-cache";
 import Image from "next/image";
 
+type UserData = {
+  id: string;
+  name: string | null;
+  email: string | null;
+  avatar_url: string | null;
+  plan: string | null;
+  scans_used: number | null;
+  scans_limit: number | null;
+  github_token: string | null;
+  github_user_id: string | null;
+  subscription_id: string | null;
+  subscription_status: string | null;
+};
+
+type CachedData = {
+  user: { email?: string; user_metadata?: { full_name?: string; name?: string; avatar_url?: string; picture?: string } } | null;
+  userData: UserData | null;
+  fullName: string;
+};
+
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState("profile");
   const [user, setUser] = useState<{ email?: string; user_metadata?: { full_name?: string; name?: string; avatar_url?: string; picture?: string } } | null>(null);
-  const [userData, setUserData] = useState<any>(null);
+  const [userData, setUserData] = useState<UserData | null>(null);
   const [loading, setLoading] = useState(true);
   
   // Profile Form State
@@ -21,7 +41,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     async function loadData() {
-      const cached = getCached<{ user: typeof user; userData: any; fullName: string }>("settings:data");
+      const cached = getCached<CachedData>("settings:data");
       if (cached) {
         setUser(cached.user);
         setUserData(cached.userData);
@@ -92,10 +112,6 @@ export default function SettingsPage() {
     { id: "billing", label: "Billing", icon: CreditCard },
   ]
 
-  const integrationError = typeof window !== 'undefined'
-    ? new URLSearchParams(window.location.search).get('integration_error')
-    : null
-
   return (
     <div className="flex-1 p-4 sm:p-6 lg:p-10 max-w-5xl mx-auto w-full">
       <header className="mb-10">
@@ -164,7 +180,7 @@ export default function SettingsPage() {
                     <div className="w-20 h-20 rounded-full bg-gray-100 border border-gray-200 flex items-center justify-center text-gray-400 shrink-0 overflow-hidden">
                       {(userData?.avatar_url || user?.user_metadata?.avatar_url || user?.user_metadata?.picture) ? (
                         <Image
-                          src={userData?.avatar_url || user?.user_metadata?.avatar_url || user?.user_metadata?.picture}
+                          src={userData?.avatar_url || user?.user_metadata?.avatar_url || user?.user_metadata?.picture || ''}
                           alt="Avatar"
                           width={80}
                           height={80}
@@ -265,17 +281,17 @@ export default function SettingsPage() {
                     <div className="space-y-3">
                       <div className="flex justify-between text-sm font-bold text-gray-900 mb-2" style={{ fontFamily: "var(--font-landing-body)" }}>
                         <span>Scans Used</span>
-                        <span>{userData?.scans_used || 0} / {userData?.scans_limit >= 999999 ? 'Unlimited' : (userData?.scans_limit || 3)}</span>
+                        <span>{(userData?.scans_used ?? 0)} / {((userData?.scans_limit ?? 3) >= 999999 ? 'Unlimited' : (userData?.scans_limit ?? 3))}</span>
                       </div>
                       <div className="h-2 rounded-full bg-gray-200 overflow-hidden">
                         <div 
                           className="h-full bg-[#3079FF] rounded-full transition-all duration-1000"
                           style={{ 
-                            width: userData?.scans_limit >= 999999 ? '100%' : `${Math.min(100, ((userData?.scans_used || 0) / (userData?.scans_limit || 1)) * 100)}%` 
+                            width: (userData?.scans_limit ?? 3) >= 999999 ? '100%' : `${Math.min(100, ((userData?.scans_used ?? 0) / (userData?.scans_limit ?? 1)) * 100)}%` 
                           }}
                         />
                       </div>
-                      {userData?.scans_limit < 999999 && (userData?.scans_used || 0) >= (userData?.scans_limit || 3) && (
+                      {(userData?.scans_limit ?? 3) < 999999 && ((userData?.scans_used ?? 0)) >= (userData?.scans_limit ?? 3) && (
                         <p className="text-xs text-red-600 font-bold flex items-center gap-1 mt-2">
                           <AlertTriangle size={12} />
                           You have reached your scan limit. Please upgrade to continue.

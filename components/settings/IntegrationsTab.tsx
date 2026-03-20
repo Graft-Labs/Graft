@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { Github, Link2, Unlink, AlertCircle } from "lucide-react";
 import { createClient } from "@/lib/supabase";
 import { clearCacheByPrefix } from "@/lib/client-cache";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 
 function getAuthRedirectUrl() {
   if (typeof window !== "undefined") {
@@ -40,6 +40,7 @@ export default function IntegrationsTab({ hasGithubToken }: { hasGithubToken: bo
 
     if (typeof document !== "undefined") {
       document.cookie = "shipguard_next=%2Fdashboard%2Fsettings; Path=/; Max-Age=600; SameSite=Lax";
+      document.cookie = "shipguard_connecting_github=1; Path=/; Max-Age=600; SameSite=Lax";
     }
 
     const supabase = createClient();
@@ -51,39 +52,16 @@ export default function IntegrationsTab({ hasGithubToken }: { hasGithubToken: bo
       return;
     }
 
-    const { data: identities, error: identitiesError } = await supabase
-      .from("identities")
-      .select("id, user_id")
-      .eq("provider", "github")
-      .eq("user_id", user.id)
-      .limit(1);
+    const { data: currentUser } = await supabase
+      .from("users")
+      .select("github_user_id")
+      .eq("id", user.id)
+      .single();
 
-    if (identitiesError) {
-      setBusy(false);
-      setConflictError("Could not verify integration status. Please try again.");
-      return;
-    }
-
-    if (identities && identities.length > 0) {
+    if (currentUser?.github_user_id) {
       setBusy(false);
       setConflictError("GitHub is already connected to this account.");
       return;
-    }
-
-    const { data: allGithubIdentities, error: allIdentitiesError } = await supabase
-      .from("identities")
-      .select("user_id")
-      .eq("provider", "github");
-
-    if (!allIdentitiesError && allGithubIdentities && allGithubIdentities.length > 0) {
-      const otherUserLinked = allGithubIdentities.some(i => i.user_id !== user.id);
-      if (otherUserLinked) {
-        setBusy(false);
-        setConflictError(
-          "This GitHub account is already connected to another ShipGuard account. Please disconnect it there first, or sign in with the GitHub account you originally used."
-        );
-        return;
-      }
     }
 
     const { error } = await supabase.auth.signInWithOAuth({
