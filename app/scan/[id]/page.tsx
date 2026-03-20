@@ -587,70 +587,74 @@ export default function ScanReportPage() {
             </Link>
           </div>
 
-          <div className="flex-1 flex items-center justify-center p-4 md:p-6">
-            <div className="w-full max-w-lg rounded-3xl border border-gray-200 bg-white shadow-sm p-6 md:p-7 text-center relative overflow-hidden">
-              <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(48,121,255,0.08),transparent_60%)] pointer-events-none" />
+          <div className="flex-1 p-4 md:p-6 overflow-auto">
+            <div className="w-full max-w-5xl mx-auto rounded-3xl border border-gray-200 bg-white shadow-sm p-5 md:p-6 lg:p-7 relative overflow-hidden">
+              <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,rgba(48,121,255,0.08),transparent_60%)] pointer-events-none" />
 
-              <div className="relative inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-white border border-blue-100 mb-4 shadow-sm">
-                <div className="absolute w-24 h-24 rounded-full border-2 border-blue-200/70 animate-ping" />
-                <div className="absolute w-16 h-16 rounded-full border border-blue-200/60 animate-pulse" />
-                <Image src="/ShipGuard.svg" alt="ShipGuard" width={36} height={36} className="relative z-10 h-9 w-auto" />
-              </div>
+              <div className="relative grid lg:grid-cols-[1.1fr_1fr] gap-6 lg:gap-8 items-start">
+                <div>
+                  <div className="inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-white border border-blue-100 mb-4 shadow-sm relative">
+                    <div className="absolute w-24 h-24 rounded-full border-2 border-blue-200/70 animate-ping" />
+                    <div className="absolute w-16 h-16 rounded-full border border-blue-200/60 animate-pulse" />
+                    <Image src="/ShipGuard.svg" alt="ShipGuard" width={36} height={36} className="relative z-10 h-9 w-auto" />
+                  </div>
 
-              <h2 className="text-xl md:text-2xl font-bold text-gray-900 mb-2" style={{ fontFamily: "var(--font-landing-heading)" }}>
-                {scan.status === "scanning" ? "Scanning in progress" : "Queued for scanning"}
-              </h2>
-              <p className="text-gray-500 font-medium mb-5" style={{ fontFamily: "var(--font-landing-body)" }}>
-                We are analyzing your repository across security, scalability, monetization, and distribution.
-              </p>
+                  <h2 className="text-xl md:text-2xl font-bold text-gray-900 mb-2" style={{ fontFamily: "var(--font-landing-heading)" }}>
+                    {scan.status === "scanning" ? "Scanning in progress" : "Queued for scanning"}
+                  </h2>
+                  <p className="text-gray-500 font-medium mb-5" style={{ fontFamily: "var(--font-landing-body)" }}>
+                    We are analyzing your repository across security, scalability, monetization, and distribution.
+                  </p>
 
-              <div className="mb-5">
-                <div className="flex items-center justify-between text-xs font-semibold text-gray-500 mb-2" style={{ fontFamily: "var(--font-landing-body)" }}>
-                  <span>Scan Progress</span>
-                  <span>{Math.min(100, Math.max(0, percent))}%</span>
-                </div>
-                <div className="h-2 rounded-full bg-gray-100 border border-gray-200 overflow-hidden">
-                  <div
-                    className="h-full rounded-full bg-gradient-to-r from-[#3079FF] to-[#5B9BFF] transition-all duration-700"
-                    style={{ width: `${Math.min(100, Math.max(0, percent))}%` }}
-                  />
-                </div>
-              </div>
-
-              <div className="relative mb-4">
-                <div className="grid grid-cols-1 gap-2 text-left max-h-[210px] overflow-hidden">
-                  {visibleSteps.map((step) => (
-                    <div
-                      key={step.key}
-                      className="flex items-center gap-3 px-3 py-2 rounded-lg bg-gray-50 border border-gray-100 transition-all duration-500 animate-[slideIn_.45s_ease]"
-                    >
-                    {step.status === "done" ? (
-                      <CheckCircle size={16} className="text-emerald-600" />
-                    ) : step.status === "active" ? (
-                      <div className="w-4 h-4 rounded-full border-2 border-[#3079FF]/35 border-t-[#3079FF] animate-spin" />
-                    ) : (
-                      <div className="w-4 h-4 rounded-full border border-gray-300 bg-white" />
-                    )}
-                    <span className={`text-sm ${step.status === "pending" ? "text-gray-500" : "text-gray-800"}`} style={{ fontFamily: "var(--font-landing-body)" }}>
-                      {step.label}
-                    </span>
+                  <div className="mb-4">
+                    <div className="flex items-center justify-between text-xs font-semibold text-gray-500 mb-2" style={{ fontFamily: "var(--font-landing-body)" }}>
+                      <span>Scan Progress</span>
+                      <span>{Math.min(100, Math.max(0, percent))}%</span>
                     </div>
-                  ))}
+                    <div className="h-2 rounded-full bg-gray-100 border border-gray-200 overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-[#3079FF] to-[#5B9BFF] transition-all duration-700"
+                        style={{ width: `${Math.min(100, Math.max(0, percent))}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="inline-flex items-center gap-2 text-sm text-gray-600 font-medium" style={{ fontFamily: "var(--font-landing-body)" }}>
+                    <div className="w-3.5 h-3.5 rounded-full border-2 border-[#3079FF]/30 border-t-[#3079FF] animate-spin shrink-0" />
+                    Auto-refreshing results every 2.5s
+                  </div>
                 </div>
-                <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-white via-white/85 to-transparent" />
+
+                <div className="relative">
+                  <div className="grid grid-cols-1 gap-2 text-left max-h-[280px] overflow-hidden">
+                    {visibleSteps.map((step) => (
+                      <div
+                        key={step.key}
+                        className="flex items-center gap-3 px-3 py-2 rounded-lg bg-gray-50 border border-gray-100 transition-all duration-500 animate-[slideIn_.45s_ease]"
+                      >
+                        {step.status === "done" ? (
+                          <CheckCircle size={16} className="text-emerald-600" />
+                        ) : step.status === "active" ? (
+                          <div className="w-4 h-4 rounded-full border-2 border-[#3079FF]/35 border-t-[#3079FF] animate-spin" />
+                        ) : (
+                          <div className="w-4 h-4 rounded-full border border-gray-300 bg-white" />
+                        )}
+                        <span className={`text-sm ${step.status === "pending" ? "text-gray-500" : "text-gray-800"}`} style={{ fontFamily: "var(--font-landing-body)" }}>
+                          {step.label}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-white via-white/85 to-transparent" />
+
+                  <div className="inline-flex items-center gap-1.5 text-xs text-gray-400 mt-3" style={{ fontFamily: "var(--font-landing-body)" }}>
+                    <ChevronUp size={12} />
+                    Completed steps slide away automatically
+                  </div>
+                </div>
               </div>
 
-              <div className="inline-flex items-center gap-1.5 text-xs text-gray-400 mb-2" style={{ fontFamily: "var(--font-landing-body)" }}>
-                <ChevronUp size={12} />
-                Completed steps slide away automatically
-              </div>
-
-              <div className="inline-flex items-center justify-center gap-2 text-sm text-gray-600 font-medium w-full" style={{ fontFamily: "var(--font-landing-body)" }}>
-                <div className="w-3.5 h-3.5 rounded-full border-2 border-[#3079FF]/30 border-t-[#3079FF] animate-spin shrink-0" />
-                Auto-refreshing results every 2.5s
-              </div>
-
-              <p className="mt-3 text-xs text-gray-400" style={{ fontFamily: "var(--font-landing-body)" }}>
+              <p className="mt-4 text-xs text-gray-400" style={{ fontFamily: "var(--font-landing-body)" }}>
                 If this stays queued for more than 10 minutes, your Trigger worker is likely not dequeuing jobs.
               </p>
             </div>
@@ -742,19 +746,43 @@ export default function ScanReportPage() {
                   </div>
 
                   {/* Issue summary */}
-                  <div className="flex items-center gap-3 flex-wrap">
+                  <div className="flex items-center gap-2 flex-wrap">
                     {criticalCount > 0 && (
-                      <span className="badge-critical text-xs px-2 py-0.5 rounded" style={{ fontFamily: "var(--font-landing-body)" }}>
+                      <span
+                        className="text-xs px-2 py-1 rounded-full border font-semibold"
+                        style={{
+                          background: "#FEF2F2",
+                          color: "#DC2626",
+                          borderColor: "#FECACA",
+                          fontFamily: "var(--font-landing-body)",
+                        }}
+                      >
                         {criticalCount} critical
                       </span>
                     )}
                     {highCount > 0 && (
-                      <span className="badge-high text-xs px-2 py-0.5 rounded" style={{ fontFamily: "var(--font-landing-body)" }}>
+                      <span
+                        className="text-xs px-2 py-1 rounded-full border font-semibold"
+                        style={{
+                          background: "#FFF7ED",
+                          color: "#EA580C",
+                          borderColor: "#FED7AA",
+                          fontFamily: "var(--font-landing-body)",
+                        }}
+                      >
                         {highCount} high
                       </span>
                     )}
                     {mediumCount > 0 && (
-                      <span className="badge-medium text-xs px-2 py-0.5 rounded" style={{ fontFamily: "var(--font-landing-body)" }}>
+                      <span
+                        className="text-xs px-2 py-1 rounded-full border font-semibold"
+                        style={{
+                          background: "#FFFBEB",
+                          color: "#B45309",
+                          borderColor: "#FDE68A",
+                          fontFamily: "var(--font-landing-body)",
+                        }}
+                      >
                         {mediumCount} medium
                       </span>
                     )}
