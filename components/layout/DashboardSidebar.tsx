@@ -201,7 +201,7 @@ export default function DashboardSidebar() {
               className="text-xs truncate text-gray-500 font-medium"
               style={{ fontFamily: "var(--font-landing-body)" }}
             >
-              {loadingUser ? "" : userEmail}
+              {loadingUser ? "" : "ShipGuard account"}
             </p>
           </div>
           <button

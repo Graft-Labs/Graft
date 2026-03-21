@@ -273,19 +273,12 @@ export default function SettingsPage() {
                         style={{ fontFamily: "var(--font-landing-body)" }}
                       />
                     </div>
-                    <div>
-                      <label className="block text-sm font-bold text-gray-900 mb-2" style={{ fontFamily: "var(--font-landing-body)" }}>
-                        Email Address
-                      </label>
-                      <input
-                        type="email"
-                        value={user?.email || ""}
-                        disabled
-                        className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-500 cursor-not-allowed font-medium"
-                        style={{ fontFamily: "var(--font-landing-body)" }}
-                      />
-                      <p className="mt-2 text-xs text-gray-500 font-medium" style={{ fontFamily: "var(--font-landing-body)" }}>
-                        Email cannot be changed directly. Contact support if you need to migrate your account.
+                    <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
+                      <p className="text-sm font-semibold text-gray-900" style={{ fontFamily: "var(--font-landing-body)" }}>
+                        Sign-in methods
+                      </p>
+                      <p className="mt-1 text-xs text-gray-600" style={{ fontFamily: "var(--font-landing-body)" }}>
+                        Manage GitHub and Google sign-in providers in the Integrations tab.
                       </p>
                     </div>
                     <div className="pt-4">
