@@ -55,13 +55,13 @@ function getAuthRedirectUrl() {
   return `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/auth/callback`;
 }
 
-function getEmailConfirmRedirectUrl() {
+function getPostConfirmRedirectUrl() {
   const baseUrl =
     typeof window !== "undefined"
       ? window.location.origin
       : (process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").replace(/\/$/, "");
 
-  return `${baseUrl}/auth/confirm?next=%2Fdashboard`;
+  return `${baseUrl}/dashboard`;
 }
 
 const perks = [
@@ -97,7 +97,7 @@ export default function SignupPage() {
       password,
       options: {
         data: { full_name: name },
-        emailRedirectTo: getEmailConfirmRedirectUrl(),
+        emailRedirectTo: getPostConfirmRedirectUrl(),
       },
     });
 
@@ -169,7 +169,7 @@ export default function SignupPage() {
                 const { error: resendError } = await supabase.auth.resend({
                   type: "signup",
                   email,
-                  options: { emailRedirectTo: getEmailConfirmRedirectUrl() },
+                  options: { emailRedirectTo: getPostConfirmRedirectUrl() },
                 });
                 if (resendError) {
                   setResendMessage(resendError.message);
