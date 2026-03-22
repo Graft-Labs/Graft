@@ -2,7 +2,15 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { User, CreditCard, CheckCircle, Link2, AlertTriangle, LifeBuoy, ExternalLink } from "lucide-react";
+import {
+  User,
+  CreditCard,
+  CheckCircle,
+  Link2,
+  AlertTriangle,
+  LifeBuoy,
+  ExternalLink,
+} from "lucide-react";
 import { createClient } from "@/lib/supabase";
 import IntegrationsTab from "@/components/settings/IntegrationsTab";
 import { getCached, setCached } from "@/lib/client-cache";
@@ -27,7 +35,12 @@ type CachedData = {
   user: {
     email?: string;
     app_metadata?: { provider?: string };
-    user_metadata?: { full_name?: string; name?: string; avatar_url?: string; picture?: string };
+    user_metadata?: {
+      full_name?: string;
+      name?: string;
+      avatar_url?: string;
+      picture?: string;
+    };
     identities?: Array<{ provider?: string }>;
   } | null;
   userData: UserData | null;
@@ -40,23 +53,35 @@ export default function SettingsPage() {
   const [user, setUser] = useState<{
     email?: string;
     app_metadata?: { provider?: string };
-    user_metadata?: { full_name?: string; name?: string; avatar_url?: string; picture?: string };
+    user_metadata?: {
+      full_name?: string;
+      name?: string;
+      avatar_url?: string;
+      picture?: string;
+    };
     identities?: Array<{ provider?: string }>;
   } | null>(null);
   const [userData, setUserData] = useState<UserData | null>(null);
   const [loading, setLoading] = useState(true);
-  
+
   // Profile Form State
   const [fullName, setFullName] = useState("");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [deletingAccount, setDeletingAccount] = useState(false);
-  const [deleteAccountError, setDeleteAccountError] = useState<string | null>(null);
+  const [deleteAccountError, setDeleteAccountError] = useState<string | null>(
+    null,
+  );
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
 
   useEffect(() => {
     const tab = searchParams.get("tab");
     const integrationError = searchParams.get("integration_error");
-    if (tab && ["profile", "integrations", "support", "billing"].includes(tab)) {
+    if (
+      tab &&
+      ["profile", "integrations", "support", "billing"].includes(tab)
+    ) {
       setActiveTab(tab);
     } else if (integrationError) {
       setActiveTab("integrations");
@@ -74,25 +99,32 @@ export default function SettingsPage() {
       }
 
       const supabase = createClient();
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       setUser(user);
-      
+
       if (user) {
         const { data } = await supabase
           .from("users")
           .select("*")
           .eq("id", user.id)
           .single();
-          
+
         setUserData(data);
         if (data?.name) setFullName(data.name);
-        else if (user?.user_metadata?.full_name) setFullName(user.user_metadata.full_name);
+        else if (user?.user_metadata?.full_name)
+          setFullName(user.user_metadata.full_name);
 
-        setCached("settings:data", {
-          user,
-          userData: data,
-          fullName: data?.name || user?.user_metadata?.full_name || "",
-        }, 60_000);
+        setCached(
+          "settings:data",
+          {
+            user,
+            userData: data,
+            fullName: data?.name || user?.user_metadata?.full_name || "",
+          },
+          60_000,
+        );
       }
       setLoading(false);
     }
@@ -102,23 +134,25 @@ export default function SettingsPage() {
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
-    
+
     try {
       const supabase = createClient();
-      const { data: { user } } = await supabase.auth.getUser();
-      
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
       if (user) {
         // Update auth metadata
         await supabase.auth.updateUser({
-          data: { full_name: fullName }
+          data: { full_name: fullName },
         });
-        
+
         // Update users table
         await supabase
           .from("users")
           .update({ name: fullName })
           .eq("id", user.id);
-          
+
         setSaved(true);
         setTimeout(() => setSaved(false), 3000);
       }
@@ -130,24 +164,24 @@ export default function SettingsPage() {
   };
 
   const handleDeleteAccount = async () => {
-    const confirmation = window.prompt('Type DELETE to permanently delete your account.');
-    if (confirmation !== 'DELETE') return;
-
     setDeletingAccount(true);
     setDeleteAccountError(null);
 
     try {
-      const res = await fetch('/api/account/delete', { method: 'DELETE' });
+      const res = await fetch("/api/account/delete", { method: "DELETE" });
       const body = await res.json().catch(() => null);
 
       if (!res.ok) {
-        setDeleteAccountError(body?.message || 'Could not delete account right now. Please try again.');
+        setDeleteAccountError(
+          body?.message ||
+            "Could not delete account right now. Please try again.",
+        );
         return;
       }
 
       const supabase = createClient();
       await supabase.auth.signOut();
-      window.location.assign('/');
+      window.location.assign("/");
     } finally {
       setDeletingAccount(false);
     }
@@ -158,32 +192,32 @@ export default function SettingsPage() {
     { id: "integrations", label: "Integrations", icon: Link2 },
     { id: "support", label: "Support", icon: LifeBuoy },
     { id: "billing", label: "Billing", icon: CreditCard },
-  ]
+  ];
 
   const hasGithubIdentity = Boolean(
     user?.app_metadata?.provider === "github" ||
-      user?.identities?.some((identity) => identity.provider === "github")
+    user?.identities?.some((identity) => identity.provider === "github"),
   );
 
   const hasGithubConnected = Boolean(
-    userData?.github_token || userData?.github_user_id || hasGithubIdentity
+    userData?.github_token || userData?.github_user_id || hasGithubIdentity,
   );
 
   const hasGoogleConnected = Boolean(
     user?.app_metadata?.provider === "google" ||
-      user?.identities?.some((identity) => identity.provider === "google")
+    user?.identities?.some((identity) => identity.provider === "google"),
   );
 
   return (
     <div className="flex-1 p-4 sm:p-6 lg:p-10 max-w-5xl mx-auto w-full">
       <header className="mb-10">
-        <h1 
+        <h1
           className="text-3xl font-bold tracking-tight text-gray-900 mb-2"
           style={{ fontFamily: "var(--font-landing-heading)" }}
         >
           Settings
         </h1>
-        <p 
+        <p
           className="text-gray-500 font-medium"
           style={{ fontFamily: "var(--font-landing-body)" }}
         >
@@ -203,13 +237,17 @@ export default function SettingsPage() {
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
                   className={`flex items-center gap-3 w-full px-4 py-3 rounded-xl text-sm font-semibold transition-all duration-200 text-left ${
-                    isActive 
-                      ? "bg-white shadow-sm ring-1 ring-gray-900/5 text-gray-900" 
+                    isActive
+                      ? "bg-white shadow-sm ring-1 ring-gray-900/5 text-gray-900"
                       : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
                   }`}
                   style={{ fontFamily: "var(--font-landing-body)" }}
                 >
-                  <Icon size={18} strokeWidth={isActive ? 2.5 : 2} className={isActive ? "text-[#3079FF]" : "text-gray-400"} />
+                  <Icon
+                    size={18}
+                    strokeWidth={isActive ? 2.5 : 2}
+                    className={isActive ? "text-[#3079FF]" : "text-gray-400"}
+                  />
                   {tab.label}
                 </button>
               );
@@ -229,20 +267,29 @@ export default function SettingsPage() {
             </div>
           ) : (
             <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-              
               {/* --- PROFILE TAB --- */}
               {activeTab === "profile" && (
                 <div className="p-8">
-                  <h2 className="text-xl font-bold text-gray-900 mb-6" style={{ fontFamily: "var(--font-landing-heading)" }}>
+                  <h2
+                    className="text-xl font-bold text-gray-900 mb-6"
+                    style={{ fontFamily: "var(--font-landing-heading)" }}
+                  >
                     Profile Settings
                   </h2>
-                  
+
                   {/* Avatar Section */}
                   <div className="flex items-center gap-6 mb-8 pb-8 border-b border-gray-100">
                     <div className="w-20 h-20 rounded-full bg-gray-100 border border-gray-200 flex items-center justify-center text-gray-400 shrink-0 overflow-hidden">
-                      {(userData?.avatar_url || user?.user_metadata?.avatar_url || user?.user_metadata?.picture) ? (
+                      {userData?.avatar_url ||
+                      user?.user_metadata?.avatar_url ||
+                      user?.user_metadata?.picture ? (
                         <Image
-                          src={userData?.avatar_url || user?.user_metadata?.avatar_url || user?.user_metadata?.picture || ''}
+                          src={
+                            userData?.avatar_url ||
+                            user?.user_metadata?.avatar_url ||
+                            user?.user_metadata?.picture ||
+                            ""
+                          }
                           alt="Avatar"
                           width={80}
                           height={80}
@@ -254,15 +301,31 @@ export default function SettingsPage() {
                       )}
                     </div>
                     <div>
-                      <p className="text-sm font-bold text-gray-900" style={{ fontFamily: "var(--font-landing-body)" }}>Profile Picture</p>
-                      <p className="text-xs text-gray-500 font-medium mt-1" style={{ fontFamily: "var(--font-landing-body)" }}>Avatar is synced from your login provider.</p>
+                      <p
+                        className="text-sm font-bold text-gray-900"
+                        style={{ fontFamily: "var(--font-landing-body)" }}
+                      >
+                        Profile Picture
+                      </p>
+                      <p
+                        className="text-xs text-gray-500 font-medium mt-1"
+                        style={{ fontFamily: "var(--font-landing-body)" }}
+                      >
+                        Avatar is synced from your login provider.
+                      </p>
                     </div>
                   </div>
 
                   {/* Form */}
-                  <form onSubmit={handleSaveProfile} className="space-y-6 max-w-md">
+                  <form
+                    onSubmit={handleSaveProfile}
+                    className="space-y-6 max-w-md"
+                  >
                     <div>
-                      <label className="block text-sm font-bold text-gray-900 mb-2" style={{ fontFamily: "var(--font-landing-body)" }}>
+                      <label
+                        className="block text-sm font-bold text-gray-900 mb-2"
+                        style={{ fontFamily: "var(--font-landing-body)" }}
+                      >
                         Full Name
                       </label>
                       <input
@@ -273,48 +336,66 @@ export default function SettingsPage() {
                         style={{ fontFamily: "var(--font-landing-body)" }}
                       />
                     </div>
-                    <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
-                      <p className="text-sm font-semibold text-gray-900" style={{ fontFamily: "var(--font-landing-body)" }}>
-                        Sign-in methods
-                      </p>
-                      <p className="mt-1 text-xs text-gray-600" style={{ fontFamily: "var(--font-landing-body)" }}>
-                        Manage GitHub and Google sign-in providers in the Integrations tab.
-                      </p>
-                    </div>
                     <div className="pt-4">
                       <button
                         type="submit"
                         disabled={saving}
                         className={`flex items-center justify-center gap-2 px-6 py-3 rounded-full text-sm font-semibold transition-all duration-200 shadow-sm ${
-                          saved ? "bg-green-100 text-green-700" : "bg-black text-white hover:bg-gray-800 hover:-translate-y-0.5 hover:shadow-md"
+                          saved
+                            ? "bg-green-100 text-green-700"
+                            : "bg-black text-white hover:bg-gray-800 hover:-translate-y-0.5 hover:shadow-md"
                         }`}
                         style={{ fontFamily: "var(--font-landing-body)" }}
                       >
-                        {saving ? "Saving..." : saved ? <><CheckCircle size={16} /> Saved</> : "Save Changes"}
+                        {saving ? (
+                          "Saving..."
+                        ) : saved ? (
+                          <>
+                            <CheckCircle size={16} /> Saved
+                          </>
+                        ) : (
+                          "Save Changes"
+                        )}
                       </button>
                     </div>
                   </form>
 
                   <div className="mt-10 pt-8 border-t border-red-100 max-w-md">
-                    <h3 className="text-base font-bold text-red-700 mb-2" style={{ fontFamily: "var(--font-landing-heading)" }}>
+                    <h3
+                      className="text-base font-bold text-red-700 mb-2"
+                      style={{ fontFamily: "var(--font-landing-heading)" }}
+                    >
                       Danger Zone
                     </h3>
-                    <p className="text-sm text-gray-600 mb-4" style={{ fontFamily: "var(--font-landing-body)" }}>
-                      Permanently delete your account and all associated scans and issues. This action cannot be undone.
+                    <p
+                      className="text-sm text-gray-600 mb-4"
+                      style={{ fontFamily: "var(--font-landing-body)" }}
+                    >
+                      Permanently delete your account and all associated scans
+                      and issues. This action cannot be undone.
                     </p>
                     {deleteAccountError && (
-                      <p className="text-sm text-red-600 mb-3" style={{ fontFamily: "var(--font-landing-body)" }}>
+                      <p
+                        className="text-sm text-red-600 mb-3"
+                        style={{ fontFamily: "var(--font-landing-body)" }}
+                      >
                         {deleteAccountError}
                       </p>
                     )}
                     <button
                       type="button"
-                      onClick={handleDeleteAccount}
+                      onClick={() => {
+                        setDeleteAccountError(null);
+                        setDeleteConfirmText("");
+                        setShowDeleteDialog(true);
+                      }}
                       disabled={deletingAccount}
                       className="inline-flex items-center justify-center px-5 py-2.5 rounded-full border border-red-200 bg-red-50 text-red-700 text-sm font-semibold hover:bg-red-100 transition-colors disabled:opacity-50"
                       style={{ fontFamily: "var(--font-landing-body)" }}
                     >
-                      {deletingAccount ? 'Deleting Account...' : 'Delete Account'}
+                      {deletingAccount
+                        ? "Deleting Account..."
+                        : "Delete Account"}
                     </button>
                   </div>
                 </div>
@@ -322,29 +403,48 @@ export default function SettingsPage() {
 
               {/* --- INTEGRATIONS TAB --- */}
               {activeTab === "integrations" && (
-                <IntegrationsTab hasGithubConnected={hasGithubConnected} hasGoogleConnected={hasGoogleConnected} />
+                <IntegrationsTab
+                  hasGithubConnected={hasGithubConnected}
+                  hasGoogleConnected={hasGoogleConnected}
+                />
               )}
 
               {/* --- BILLING TAB --- */}
               {activeTab === "billing" && (
                 <div className="p-8">
-                  <h2 className="text-xl font-bold text-gray-900 mb-6" style={{ fontFamily: "var(--font-landing-heading)" }}>
+                  <h2
+                    className="text-xl font-bold text-gray-900 mb-6"
+                    style={{ fontFamily: "var(--font-landing-heading)" }}
+                  >
                     Billing & Plan
                   </h2>
-                  
+
                   <div className="bg-gray-50 border border-gray-200 rounded-2xl p-6 mb-8 shadow-sm">
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
                       <div>
                         <div className="flex items-center gap-3 mb-1">
-                          <h3 className="text-lg font-bold text-gray-900" style={{ fontFamily: "var(--font-landing-heading)" }}>
-                            {userData?.plan === 'pro' ? 'Pro Plan' : userData?.plan === 'unlimited' ? 'Unlimited Plan' : 'Free Plan'}
+                          <h3
+                            className="text-lg font-bold text-gray-900"
+                            style={{
+                              fontFamily: "var(--font-landing-heading)",
+                            }}
+                          >
+                            {userData?.plan === "pro"
+                              ? "Pro Plan"
+                              : userData?.plan === "unlimited"
+                                ? "Unlimited Plan"
+                                : "Free Plan"}
                           </h3>
                           <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase bg-blue-100 text-blue-700 border border-blue-200">
                             Active
                           </span>
                         </div>
-                        <p className="text-sm text-gray-500 font-medium" style={{ fontFamily: "var(--font-landing-body)" }}>
-                          You are currently on the {userData?.plan || 'free'} plan.
+                        <p
+                          className="text-sm text-gray-500 font-medium"
+                          style={{ fontFamily: "var(--font-landing-body)" }}
+                        >
+                          You are currently on the {userData?.plan || "free"}{" "}
+                          plan.
                         </p>
                       </div>
                       <Link
@@ -357,24 +457,38 @@ export default function SettingsPage() {
                     </div>
 
                     <div className="space-y-3">
-                      <div className="flex justify-between text-sm font-bold text-gray-900 mb-2" style={{ fontFamily: "var(--font-landing-body)" }}>
+                      <div
+                        className="flex justify-between text-sm font-bold text-gray-900 mb-2"
+                        style={{ fontFamily: "var(--font-landing-body)" }}
+                      >
                         <span>Scans Used</span>
-                        <span>{(userData?.scans_used ?? 0)} / {((userData?.scans_limit ?? 3) >= 999999 ? 'Unlimited' : (userData?.scans_limit ?? 3))}</span>
+                        <span>
+                          {userData?.scans_used ?? 0} /{" "}
+                          {(userData?.scans_limit ?? 3) >= 999999
+                            ? "Unlimited"
+                            : (userData?.scans_limit ?? 3)}
+                        </span>
                       </div>
                       <div className="h-2 rounded-full bg-gray-200 overflow-hidden">
-                        <div 
+                        <div
                           className="h-full bg-[#3079FF] rounded-full transition-all duration-1000"
-                          style={{ 
-                            width: (userData?.scans_limit ?? 3) >= 999999 ? '100%' : `${Math.min(100, ((userData?.scans_used ?? 0) / (userData?.scans_limit ?? 1)) * 100)}%` 
+                          style={{
+                            width:
+                              (userData?.scans_limit ?? 3) >= 999999
+                                ? "100%"
+                                : `${Math.min(100, ((userData?.scans_used ?? 0) / (userData?.scans_limit ?? 1)) * 100)}%`,
                           }}
                         />
                       </div>
-                      {(userData?.scans_limit ?? 3) < 999999 && ((userData?.scans_used ?? 0)) >= (userData?.scans_limit ?? 3) && (
-                        <p className="text-xs text-red-600 font-bold flex items-center gap-1 mt-2">
-                          <AlertTriangle size={12} />
-                          You have reached your scan limit. Please upgrade to continue.
-                        </p>
-                      )}
+                      {(userData?.scans_limit ?? 3) < 999999 &&
+                        (userData?.scans_used ?? 0) >=
+                          (userData?.scans_limit ?? 3) && (
+                          <p className="text-xs text-red-600 font-bold flex items-center gap-1 mt-2">
+                            <AlertTriangle size={12} />
+                            You have reached your scan limit. Please upgrade to
+                            continue.
+                          </p>
+                        )}
                     </div>
                   </div>
                 </div>
@@ -383,11 +497,18 @@ export default function SettingsPage() {
               {/* --- SUPPORT TAB --- */}
               {activeTab === "support" && (
                 <div className="p-8">
-                  <h2 className="text-xl font-bold text-gray-900 mb-2" style={{ fontFamily: "var(--font-landing-heading)" }}>
+                  <h2
+                    className="text-xl font-bold text-gray-900 mb-2"
+                    style={{ fontFamily: "var(--font-landing-heading)" }}
+                  >
                     Support
                   </h2>
-                  <p className="text-sm text-gray-500 mb-6 font-medium" style={{ fontFamily: "var(--font-landing-body)" }}>
-                    Need help or want to request a feature? Reach us directly through these forms.
+                  <p
+                    className="text-sm text-gray-500 mb-6 font-medium"
+                    style={{ fontFamily: "var(--font-landing-body)" }}
+                  >
+                    Need help or want to request a feature? Reach us directly
+                    through these forms.
                   </p>
 
                   <div className="grid md:grid-cols-2 gap-4">
@@ -399,43 +520,142 @@ export default function SettingsPage() {
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div>
-                          <p className="text-base font-bold text-gray-900" style={{ fontFamily: "var(--font-landing-heading)" }}>
+                          <p
+                            className="text-base font-bold text-gray-900"
+                            style={{
+                              fontFamily: "var(--font-landing-heading)",
+                            }}
+                          >
                             Contact Support
                           </p>
-                          <p className="text-sm text-gray-500 mt-1" style={{ fontFamily: "var(--font-landing-body)" }}>
-                            Report bugs, account issues, billing questions, or scan failures.
+                          <p
+                            className="text-sm text-gray-500 mt-1"
+                            style={{ fontFamily: "var(--font-landing-body)" }}
+                          >
+                            Report bugs, account issues, billing questions, or
+                            scan failures.
                           </p>
                         </div>
-                        <ExternalLink size={16} className="text-gray-400 mt-1" />
+                        <ExternalLink
+                          size={16}
+                          className="text-gray-400 mt-1"
+                        />
                       </div>
                     </a>
 
                     <a
-                      href={process.env.NEXT_PUBLIC_FEATURE_REQUEST_FORM_URL || "#"}
+                      href={
+                        process.env.NEXT_PUBLIC_FEATURE_REQUEST_FORM_URL || "#"
+                      }
                       target="_blank"
                       rel="noopener noreferrer"
                       className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm hover:shadow-md transition-all"
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div>
-                          <p className="text-base font-bold text-gray-900" style={{ fontFamily: "var(--font-landing-heading)" }}>
+                          <p
+                            className="text-base font-bold text-gray-900"
+                            style={{
+                              fontFamily: "var(--font-landing-heading)",
+                            }}
+                          >
                             Request a Feature
                           </p>
-                          <p className="text-sm text-gray-500 mt-1" style={{ fontFamily: "var(--font-landing-body)" }}>
+                          <p
+                            className="text-sm text-gray-500 mt-1"
+                            style={{ fontFamily: "var(--font-landing-body)" }}
+                          >
                             Tell us what you want next in ShipGuard AI.
                           </p>
                         </div>
-                        <ExternalLink size={16} className="text-gray-400 mt-1" />
+                        <ExternalLink
+                          size={16}
+                          className="text-gray-400 mt-1"
+                        />
                       </div>
                     </a>
                   </div>
                 </div>
               )}
-
-              </div>
+            </div>
           )}
         </main>
       </div>
+
+      {showDeleteDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/40"
+            onClick={() => {
+              if (!deletingAccount) setShowDeleteDialog(false);
+            }}
+          />
+          <div className="relative w-full max-w-md rounded-2xl border border-red-100 bg-white p-6 shadow-xl">
+            <h3
+              className="text-lg font-bold text-red-700"
+              style={{ fontFamily: "var(--font-landing-heading)" }}
+            >
+              Delete Account
+            </h3>
+            <p
+              className="mt-2 text-sm text-gray-700"
+              style={{ fontFamily: "var(--font-landing-body)" }}
+            >
+              This permanently deletes your account and all scans/issues. Type
+              <span className="font-bold"> DELETE</span> to continue.
+            </p>
+
+            <input
+              type="text"
+              value={deleteConfirmText}
+              onChange={(e) => setDeleteConfirmText(e.target.value)}
+              disabled={deletingAccount}
+              placeholder="Type DELETE"
+              className="mt-4 w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+              style={{ fontFamily: "var(--font-landing-body)" }}
+            />
+
+            {deleteAccountError && (
+              <p
+                className="mt-3 text-sm text-red-600"
+                style={{ fontFamily: "var(--font-landing-body)" }}
+              >
+                {deleteAccountError}
+              </p>
+            )}
+
+            <div className="mt-5 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowDeleteDialog(false)}
+                disabled={deletingAccount}
+                className="px-4 py-2 rounded-full border border-gray-200 text-gray-700 text-sm font-semibold hover:bg-gray-50 disabled:opacity-50"
+                style={{ fontFamily: "var(--font-landing-body)" }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  if (deleteConfirmText !== "DELETE") {
+                    setDeleteAccountError(
+                      "Please type DELETE exactly to confirm.",
+                    );
+                    return;
+                  }
+                  await handleDeleteAccount();
+                }}
+                disabled={deletingAccount}
+                className="px-4 py-2 rounded-full bg-red-600 text-white text-sm font-semibold hover:bg-red-700 disabled:opacity-50"
+                style={{ fontFamily: "var(--font-landing-body)" }}
+              >
+                {deletingAccount ? "Deleting..." : "Delete Permanently"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

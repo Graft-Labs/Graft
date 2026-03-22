@@ -55,6 +55,15 @@ function getAuthRedirectUrl() {
   return `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/auth/callback`;
 }
 
+function getEmailConfirmRedirectUrl() {
+  const baseUrl =
+    typeof window !== "undefined"
+      ? window.location.origin
+      : (process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").replace(/\/$/, "");
+
+  return `${baseUrl}/auth/confirm?next=%2Fdashboard`;
+}
+
 const perks = [
   "Free security scans",
   "Full architectural analysis",
@@ -73,6 +82,9 @@ export default function SignupPage() {
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [step, setStep] = useState<"form" | "verify" | "error">("form");
   const [error, setError] = useState("");
+  const [resending, setResending] = useState(false);
+  const [resendMessage, setResendMessage] = useState<string | null>(null);
+  const [verifyMessage, setVerifyMessage] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -83,6 +95,10 @@ export default function SignupPage() {
     const { data, error: signUpError } = await supabase.auth.signUp({
       email,
       password,
+      options: {
+        data: { full_name: name },
+        emailRedirectTo: getEmailConfirmRedirectUrl(),
+      },
     });
 
     if (signUpError) {
@@ -92,7 +108,28 @@ export default function SignupPage() {
       return;
     }
 
+    const isRepeatedSignup =
+      Array.isArray(data.user?.identities) && data.user?.identities.length === 0;
+
+    if (isRepeatedSignup) {
+      setLoading(false);
+      setStep("error");
+      setError(
+        "This email is already registered. Try signing in, resetting your password, or using Resend verification from the login page.",
+      );
+      return;
+    }
+
     setLoading(false);
+
+    if (data.session) {
+      router.push("/dashboard");
+      return;
+    }
+
+    setVerifyMessage(
+      "Verification email sent. If it does not arrive in 1-2 minutes, use Resend and check spam/promotions.",
+    );
     setStep("verify");
   };
 
@@ -114,6 +151,45 @@ export default function SignupPage() {
             <span className="font-semibold text-gray-900">{email}</span>. Click
             the link to activate your account and start scanning.
           </p>
+          {verifyMessage && (
+            <p
+              className="mb-5 text-sm text-gray-600"
+              style={{ fontFamily: "var(--font-landing-body)" }}
+            >
+              {verifyMessage}
+            </p>
+          )}
+          <div className="mb-6">
+            <button
+              type="button"
+              onClick={async () => {
+                setResending(true);
+                setResendMessage(null);
+                const supabase = createClient();
+                const { error: resendError } = await supabase.auth.resend({
+                  type: "signup",
+                  email,
+                  options: { emailRedirectTo: getEmailConfirmRedirectUrl() },
+                });
+                if (resendError) {
+                  setResendMessage(resendError.message);
+                } else {
+                  setResendMessage("Verification email sent again. Check spam/promotions too.");
+                }
+                setResending(false);
+              }}
+              disabled={resending}
+              className="inline-flex items-center justify-center px-4 py-2 rounded-full border border-gray-200 bg-white text-gray-700 text-sm font-semibold hover:bg-gray-50 transition-colors disabled:opacity-50"
+              style={{ fontFamily: "var(--font-landing-body)" }}
+            >
+              {resending ? "Resending..." : "Resend email"}
+            </button>
+            {resendMessage && (
+              <p className="mt-3 text-sm text-gray-600" style={{ fontFamily: "var(--font-landing-body)" }}>
+                {resendMessage}
+              </p>
+            )}
+          </div>
           <Link
             href="/auth/login"
             className="inline-flex items-center gap-2 text-sm font-medium text-[#3079FF] hover:text-[#0000EE] transition-colors"

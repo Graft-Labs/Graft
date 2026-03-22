@@ -27,7 +27,15 @@ function getErrorFromUrl() {
     return "This GitHub account is already connected to another ShipGuard account.";
   }
 
-  return query.get("error") === "oauth_callback_failed"
+  const error = query.get("error");
+  if (error === "email_verification_failed") {
+    return "Email verification failed or expired. Please sign up again or resend the verification email.";
+  }
+  if (error === "invalid_confirmation_link") {
+    return "Invalid email confirmation link. Please request a new verification email.";
+  }
+
+  return error === "oauth_callback_failed"
     ? "OAuth sign-in failed. Please try again."
     : "";
 }
@@ -68,6 +76,15 @@ function getAuthRedirectUrl() {
   return `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/auth/callback`;
 }
 
+function getEmailConfirmRedirectUrl() {
+  const baseUrl =
+    typeof window !== "undefined"
+      ? window.location.origin
+      : (process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").replace(/\/$/, "");
+
+  return `${baseUrl}/auth/confirm?next=%2Fdashboard`;
+}
+
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -77,6 +94,8 @@ export default function LoginPage() {
   const [isGithubLoading, setIsGithubLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [error, setError] = useState(() => getErrorFromUrl());
+  const [resending, setResending] = useState(false);
+  const [resendMessage, setResendMessage] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -93,6 +112,7 @@ export default function LoginPage() {
 
     if (signInError) {
       setError(signInError.message);
+      setResendMessage(null);
       setLoading(false);
       return;
     }
@@ -209,6 +229,41 @@ export default function LoginPage() {
               {error}
             </div>
           )}
+
+          <div className="mb-4">
+            <button
+              type="button"
+              disabled={resending || !email}
+              onClick={async () => {
+                setResending(true);
+                setResendMessage(null);
+                setError("");
+                const supabase = createClient();
+                const { error: resendError } = await supabase.auth.resend({
+                  type: "signup",
+                  email,
+                  options: { emailRedirectTo: getEmailConfirmRedirectUrl() },
+                });
+
+                if (resendError) {
+                  setResendMessage(resendError.message);
+                } else {
+                  setResendMessage(
+                    "Verification email sent. Please check inbox, spam, and promotions.",
+                  );
+                }
+                setResending(false);
+              }}
+              className="text-sm text-[#3079FF] hover:text-[#0000EE] font-medium transition-colors disabled:text-gray-400 disabled:cursor-not-allowed"
+            >
+              {resending ? "Resending verification..." : "Resend verification email"}
+            </button>
+            {resendMessage && (
+              <p className="mt-2 text-xs text-gray-500" style={{ fontFamily: "var(--font-landing-body)" }}>
+                {resendMessage}
+              </p>
+            )}
+          </div>
 
           {/* Social Auth */}
           <div className="space-y-3 mb-8">
