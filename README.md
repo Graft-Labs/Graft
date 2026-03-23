@@ -1,6 +1,6 @@
 ## Graft
 
-Graft is a SaaS readiness scanner that evaluates repositories across security, scalability, monetization, and distribution.
+Graft is a SaaS readiness scanner that evaluates repositories across security, scalability, monetization and distribution.
 
 ## Production hardening checklist
 
