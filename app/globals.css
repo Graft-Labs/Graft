@@ -3,17 +3,19 @@
 @import url('https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600;1,700&display=swap');
 @import "tailwindcss";
 
+@custom-variant dark (&:is(.dark *));
+
 :root {
   /* Core palette - warm golden theme (dark mode) */
   --primary: #ffdc61;
   --primary-dark: #e6c84f;
   --primary-glow: rgba(255, 220, 97, 0.15);
   --primary-glow-strong: rgba(255, 220, 97, 0.3);
-  
+
   --secondary: #403718;
   --secondary-light: #5a4d22;
   --secondary-glow: rgba(64, 55, 24, 0.3);
-  
+
   --accent: #806e31;
   --accent-bright: #a68f3d;
   --accent-muted: #5d5224;
@@ -42,7 +44,7 @@
   --text-secondary: #a1a1aa;
   --text-tertiary: #71717a;
   --text-inverse: #0a0a0c;
-  
+
   /* Warm accent text */
   --text-primary-warm: #ffdc61;
   --text-secondary-warm: #c9b84a;
@@ -66,7 +68,7 @@
   --font-ui: 'Geist', system-ui, sans-serif;
   --font-label: 'DM Sans', system-ui, sans-serif;
   --font-mono: 'Geist Mono', 'Cascadia Code', monospace;
-  
+
   --font-landing-body: 'Inter', system-ui, sans-serif;
   --font-landing-heading: 'Geist', system-ui, -apple-system, sans-serif;
   --font-garamond: 'EB Garamond', serif;
@@ -75,10 +77,10 @@
 @theme inline {
   --color-background: var(--landing-bg);
   --color-foreground: var(--text-primary);
-  
+
   --animate-marquee: marquee var(--duration) linear infinite;
   --animate-marquee-vertical: marquee-vertical var(--duration) linear infinite;
-  
+
   @keyframes marquee {
     from {
       transform: translateX(0);
@@ -87,7 +89,7 @@
       transform: translateX(calc(-100% - var(--gap)));
     }
   }
-  
+
   @keyframes marquee-vertical {
     from {
       transform: translateY(0);
@@ -96,7 +98,54 @@
       transform: translateY(calc(-100% - var(--gap)));
     }
   }
-}
+
+  --animate-orbit: orbit calc(var(--duration)*1s) linear infinite;
+
+  --animate-shimmer-slide: shimmer-slide var(--speed) ease-in-out infinite alternate;
+
+  --animate-spin-around: spin-around calc(var(--speed) * 2) infinite linear
+;
+  @keyframes orbit {
+  0% {
+    transform: rotate(calc(var(--angle) * 1deg)) translateY(calc(var(--radius) * 1px)) rotate(calc(var(--angle) * -1deg));
+    }
+  100% {
+    transform: rotate(calc(var(--angle) * 1deg + 360deg)) translateY(calc(var(--radius) * 1px)) rotate(calc((var(--angle) * -1deg) - 360deg));
+    }
+  }
+  @keyframes shimmer-slide {
+  to {
+    transform: translate(calc(100cqw - 100%), 0);
+    }
+  }
+  @keyframes spin-around {
+  0% {
+    transform: translateZ(0) rotate(0);
+    }
+  15%, 35% {
+    transform: translateZ(0) rotate(90deg);
+    }
+  65%, 85% {
+    transform: translateZ(0) rotate(270deg);
+    }
+  100% {
+    transform: translateZ(0) rotate(360deg);
+    }
+  }
+  --animate-meteor: meteor 5s linear infinite;
+  @keyframes meteor {
+  0% {
+    transform: rotate(var(--angle)) translateX(0);
+    opacity: 1;
+    }
+  70% {
+    opacity: 1;
+    }
+  100% {
+    transform: rotate(var(--angle)) translateX(-500px);
+    opacity: 0;
+    }
+  }}
 
 /* ─── Base Reset ─── */
 *, *::before, *::after {
