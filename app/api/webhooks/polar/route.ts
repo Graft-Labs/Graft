@@ -26,6 +26,7 @@ interface PolarWebhookPayload {
 const PLAN_SCANS_LIMITS: Record<string, number> = {
   pro: 50,
   unlimited: 999999,
+  lifetime: 999999,
 }
 
 type HitWindow = { count: number; resetAt: number }

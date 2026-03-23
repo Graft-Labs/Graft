@@ -4,9 +4,10 @@ import { createServerClient } from '@/lib/supabase-server'
 const POLAR_ACCESS_TOKEN = process.env.POLAR_ACCESS_TOKEN
 const POLAR_ORGANIZATION = process.env.NEXT_PUBLIC_POLAR_ORGANIZATION
 
-const PLAN_PRICES: Record<string, { priceId: string; scansLimit: number }> = {
-  pro: { priceId: process.env.POLAR_PRO_PRICE_ID || '', scansLimit: 50 },
-  unlimited: { priceId: process.env.POLAR_UNLIMITED_PRICE_ID || '', scansLimit: 999999 },
+const PLAN_PRICES: Record<string, { productId: string; priceId: string; scansLimit: number }> = {
+  pro: { productId: process.env.POLAR_PRO_PRODUCT_ID || '', priceId: process.env.POLAR_PRO_PRICE_ID || '', scansLimit: 50 },
+  unlimited: { productId: process.env.POLAR_UNLIMITED_PRODUCT_ID || '', priceId: process.env.POLAR_UNLIMITED_PRICE_ID || '', scansLimit: 999999 },
+  lifetime: { productId: process.env.POLAR_LIFETIME_PRODUCT_ID || '', priceId: process.env.POLAR_LIFETIME_PRICE_ID || '', scansLimit: 999999 },
 }
 
 export async function POST(req: NextRequest) {
@@ -28,7 +29,7 @@ export async function POST(req: NextRequest) {
     }
 
     const plan = PLAN_PRICES[planId]
-    if (!plan || !plan.priceId) {
+    if (!plan || !plan.productId) {
       return NextResponse.json({ error: 'Invalid plan' }, { status: 400 })
     }
 
@@ -40,7 +41,9 @@ export async function POST(req: NextRequest) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        products: [{ price_id: plan.priceId, quantity: 1 }],
+        products: [plan.productId],
+        product_id: plan.productId,
+        product_price_id: plan.priceId,
         customer_email: user.email,
         metadata: {
           user_id: user.id,

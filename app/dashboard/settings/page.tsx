@@ -63,6 +63,7 @@ export default function SettingsPage() {
   } | null>(null);
   const [userData, setUserData] = useState<UserData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showUpgradeSuccess, setShowUpgradeSuccess] = useState(false);
 
   // Profile Form State
   const [fullName, setFullName] = useState("");
@@ -78,7 +79,14 @@ export default function SettingsPage() {
   useEffect(() => {
     const tab = searchParams.get("tab");
     const integrationError = searchParams.get("integration_error");
-    if (
+    const upgradeSuccess = searchParams.get("upgrade");
+    if (upgradeSuccess === "success") {
+      setActiveTab("billing");
+      setShowUpgradeSuccess(true);
+      const url = new URL(window.location.href);
+      url.searchParams.delete("upgrade");
+      window.history.replaceState({}, "", url.pathname + url.search);
+    } else if (
       tab &&
       ["profile", "integrations", "support", "billing"].includes(tab)
     ) {
@@ -87,6 +95,13 @@ export default function SettingsPage() {
       setActiveTab("integrations");
     }
   }, [searchParams]);
+
+  useEffect(() => {
+    if (showUpgradeSuccess) {
+      const timer = setTimeout(() => setShowUpgradeSuccess(false), 8000);
+      return () => clearTimeout(timer);
+    }
+  }, [showUpgradeSuccess]);
 
   useEffect(() => {
     async function loadData() {
@@ -412,6 +427,30 @@ export default function SettingsPage() {
               {/* --- BILLING TAB --- */}
               {activeTab === "billing" && (
                 <div className="p-8">
+                  {showUpgradeSuccess && (
+                    <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-2xl flex items-start gap-3">
+                      <CheckCircle
+                        size={20}
+                        className="text-green-600 shrink-0 mt-0.5"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-bold text-green-800">
+                          Upgrade successful! Welcome to your new plan.
+                        </p>
+                        <p className="text-xs text-green-700 mt-0.5">
+                          Your plan has been updated and your new scan limits
+                          are active.
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => setShowUpgradeSuccess(false)}
+                        className="text-green-600 hover:text-green-800 shrink-0"
+                        aria-label="Dismiss"
+                      >
+                        <span className="text-lg leading-none">&times;</span>
+                      </button>
+                    </div>
+                  )}
                   <h2
                     className="text-xl font-bold text-gray-900 mb-6"
                     style={{ fontFamily: "var(--font-landing-heading)" }}
