@@ -16,7 +16,7 @@ const sections = [
   },
   {
     title: "Third-Party Services",
-    body: "ShipGuard AI uses third-party infrastructure and analytics providers (such as Supabase, Trigger.dev, and PostHog) to deliver product functionality. Data processing is limited to service delivery and platform security.",
+    body: "Graft uses third-party infrastructure and analytics providers (such as Supabase, Trigger.dev, and PostHog) to deliver product functionality. Data processing is limited to service delivery and platform security.",
   },
   {
     title: "Data Retention",
@@ -28,7 +28,7 @@ const sections = [
   },
   {
     title: "Contact",
-    body: "For privacy requests or questions, contact support@shipguard.ai.",
+    body: "For privacy requests or questions, contact support@usegraft.com.",
   },
 ];
 

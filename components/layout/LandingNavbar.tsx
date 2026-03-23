@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase";
 import type { Session } from "@supabase/supabase-js";
+import { InteractiveHoverButton } from "@/components/ui/interactive-hover-button";
 
 const navLinks = [
   { href: "/", label: "Home" },
@@ -48,9 +49,9 @@ export default function LandingNavbar() {
       <div className="px-6 h-16 flex items-center justify-between">
         {/* Logo and Name */}
         <Link href="/" className="flex items-center gap-2.5 group">
-          <Image src="/ShipGuard.svg" alt="ShipGuard AI" width={32} height={32} className="h-8 w-auto transition-transform group-hover:scale-105" />
+          <Image src="/graft.svg" alt="Graft" width={32} height={32} className="h-8 w-auto transition-transform group-hover:scale-105" />
           <span className="font-bold text-lg tracking-tight text-gray-900" style={{ fontFamily: "var(--font-landing-heading)" }}>
-            ShipGuard AI
+            Graft
           </span>
         </Link>
 
@@ -84,13 +85,13 @@ export default function LandingNavbar() {
               Go to Dashboard
             </Link>
           ) : (
-            <Link
-              href="/auth/login"
-              className="landing-btn-secondary px-6 py-2.5 text-sm"
-              style={{ fontFamily: "var(--font-landing-body)" }}
+            <InteractiveHoverButton
+              onClick={() => (window.location.href = "/auth/login")}
+              hideDot
+              className="bg-black text-white border-black hover:border-gray-900 text-sm"
             >
               Sign in
-            </Link>
+            </InteractiveHoverButton>
           )}
         </div>
 

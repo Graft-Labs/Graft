@@ -4,11 +4,11 @@ import Footer from "@/components/layout/LandingFooter";
 const sections = [
   {
     title: "Acceptance of Terms",
-    body: "By accessing or using ShipGuard AI, you agree to these Terms of Service. If you do not agree, do not use the platform.",
+    body: "By accessing or using Graft, you agree to these Terms of Service. If you do not agree, do not use the platform.",
   },
   {
     title: "Service Description",
-    body: "ShipGuard AI provides automated repository analysis and readiness guidance. Outputs are advisory and should be reviewed before production changes.",
+    body: "Graft provides automated repository analysis and readiness guidance. Outputs are advisory and should be reviewed before production changes.",
   },
   {
     title: "Account Responsibilities",
@@ -16,7 +16,7 @@ const sections = [
   },
   {
     title: "Usage Restrictions",
-    body: "You may not use ShipGuard AI for unlawful activity, unauthorized security testing, abuse of third-party services, or attempts to disrupt platform availability.",
+    body: "You may not use Graft for unlawful activity, unauthorized security testing, abuse of third-party services, or attempts to disrupt platform availability.",
   },
   {
     title: "Billing and Subscriptions",
@@ -24,15 +24,15 @@ const sections = [
   },
   {
     title: "Intellectual Property",
-    body: "ShipGuard AI, including software, branding, and platform content, is protected by applicable intellectual property laws. You retain ownership of your repositories and code.",
+    body: "Graft, including software, branding, and platform content, is protected by applicable intellectual property laws. You retain ownership of your repositories and code.",
   },
   {
     title: "Disclaimer and Limitation of Liability",
-    body: "The service is provided on an 'as is' basis without warranties. To the maximum extent permitted by law, ShipGuard AI is not liable for indirect, incidental, or consequential damages.",
+    body: "The service is provided on an 'as is' basis without warranties. To the maximum extent permitted by law, Graft is not liable for indirect, incidental, or consequential damages.",
   },
   {
     title: "Contact",
-    body: "For legal questions, contact support@shipguard.ai.",
+    body: "For legal questions, contact support@usegraft.com.",
   },
 ];
 

@@ -44,11 +44,11 @@ export default function IntegrationsTab({ hasGithubConnected, hasGoogleConnected
     const err = params.get('integration_error')
     if (err === 'github_already_linked') {
       setConflictError(
-        "This GitHub account is already connected to another ShipGuard account. Please disconnect it from that account first, or use a different GitHub account."
+        "This GitHub account is already connected to another Graft account. Please disconnect it from that account first, or use a different GitHub account."
       )
     } else if (err === 'google_already_linked') {
       setConflictError(
-        "This Google account is already connected to another ShipGuard account. Please disconnect it from that account first, or use a different Google account."
+        "This Google account is already connected to another Graft account. Please disconnect it from that account first, or use a different Google account."
       )
     } else if (err === 'oauth_user_mismatch') {
       setConflictError(
@@ -103,6 +103,9 @@ export default function IntegrationsTab({ hasGithubConnected, hasGoogleConnected
     }
 
     if (typeof document !== "undefined") {
+      document.cookie = "graft_next=%2Fdashboard%2Fsettings%3Ftab%3Dintegrations; Path=/; Max-Age=600; SameSite=Lax";
+      document.cookie = `graft_connecting_provider=${provider}; Path=/; Max-Age=600; SameSite=Lax`;
+      document.cookie = `graft_connecting_user_id=${encodeURIComponent(user.id)}; Path=/; Max-Age=600; SameSite=Lax`;
       document.cookie = "shipguard_next=%2Fdashboard%2Fsettings%3Ftab%3Dintegrations; Path=/; Max-Age=600; SameSite=Lax";
       document.cookie = `shipguard_connecting_provider=${provider}; Path=/; Max-Age=600; SameSite=Lax`;
       document.cookie = `shipguard_connecting_user_id=${encodeURIComponent(user.id)}; Path=/; Max-Age=600; SameSite=Lax`;

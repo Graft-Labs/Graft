@@ -1,15 +1,15 @@
-# ShipGuard AI – Product Requirements Document (PRD)
+# Graft – Product Requirements Document (PRD)
 **Version:** 1.0
 **Date:** March 10, 2026
 **Author:** Grok (for solo indie hacker build)
-**Project Name:** ShipGuard AI
+**Project Name:** Graft
 **Tagline:** The one-click production-readiness scanner that turns AI prototypes into $1k+/mo businesses.
 **Status:** Ready for immediate MVP development
 
 ---
 
 ## 1. Executive Summary
-ShipGuard AI is a SaaS tool that instantly audits any indie hacker’s codebase (or AI prototype) and delivers a production-readiness report covering security, scalability, monetization, distribution, and reliability.
+Graft is a SaaS tool that instantly audits any indie hacker’s codebase (or AI prototype) and delivers a production-readiness report covering security, scalability, monetization, distribution, and reliability.
 
 It solves the #1 2026 indie hacker failure mode: “I can build it with AI in a weekend, but I can’t ship it profitably.”
 
@@ -61,11 +61,11 @@ Freemium model + viral shareable reports = built-in growth.
 |---------|----------|-------------|---------------------|
 | GitHub OAuth Connect | Must | Connect repo, list repos, select one | Works with private repos |
 | One-Click Scan | Must | Upload zip or paste code + optional product description | Handles Next.js, Supabase, T3, ShipFast stacks |
-| 5-Guard AI Report | Must | Security, Scalability, Monetization, Distribution, Overall | Scores 0–100 + color-coded + PDF export |
-| Security Guard | Must | Exposed keys, CORS, auth, prompt injection, CVEs | Flags real examples with line numbers |
-| Scalability Guard | Must | Missing Sentry, rate limits, logging, DB pooling | Realistic indie-scale recommendations |
-| Monetization Guard | Must | Stripe checklist, pricing gaps, trial logic, tax/VAT | Secret sauce – unique to ShipGuard |
-| Distribution Guard | Must | Analytics, SEO meta, ToS/Privacy, social proof | Suggests Plausible + exact copy templates |
+| Production Readiness Report | Must | Security, Scalability, Monetization, Distribution, Overall | Scores 0–100 + color-coded + PDF export |
+| Security | Must | Exposed keys, CORS, auth, prompt injection, CVEs | Flags real examples with line numbers |
+| Scalability | Must | Missing Sentry, rate limits, logging, DB pooling | Realistic indie-scale recommendations |
+| Monetization | Must | Stripe checklist, pricing gaps, trial logic, tax/VAT | Secret sauce – unique to Graft |
+| Distribution | Must | Analytics, SEO meta, ToS/Privacy, social proof | Suggests Plausible + exact copy templates |
 | One-Click Fix Suggestions | Must | Copy-paste code + step-by-step guide | Includes exact env var fixes, middleware, etc. |
 | Scan History Dashboard | Must | List + score trend chart | Protected route |
 | Freemium Gate | Must | Free = 1 scan/month | Pro = unlimited + $19/mo |
@@ -107,7 +107,7 @@ Freemium model + viral shareable reports = built-in growth.
 **Non-functional:**
 - Scan time < 90 seconds
 - 99.9% uptime
-- GDPR compliant (ToS/Privacy auto-generated in Distribution Guard)
+- GDPR compliant (ToS/Privacy auto-generated in Distribution)
 - Mobile responsive
 
 ---

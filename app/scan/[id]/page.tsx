@@ -93,10 +93,10 @@ type ScanProgress = {
 };
 
 const guardConfig: Record<Guard, { label: string; icon: typeof Shield; color: string; glow: string }> = {
-  security:     { label: "Security Guard",     icon: Lock,       color: "#DC2626", glow: "#FEF2F2" },
-  scalability:  { label: "Scalability Guard",  icon: Zap,        color: "#2563EB", glow: "#EFF6FF" },
-  monetization: { label: "Monetization Guard", icon: DollarSign, color: "#059669", glow: "#ECFDF5" },
-  distribution: { label: "Distribution Guard", icon: Globe,      color: "#7C3AED", glow: "#F5F3FF" },
+  security:     { label: "Security",       icon: Lock,       color: "#DC2626", glow: "#FEF2F2" },
+  scalability:  { label: "Scalability",     icon: Zap,        color: "#2563EB", glow: "#EFF6FF" },
+  monetization: { label: "Monetization",   icon: DollarSign, color: "#059669", glow: "#ECFDF5" },
+  distribution: { label: "Distribution",   icon: Globe,      color: "#7C3AED", glow: "#F5F3FF" },
 };
 
 // Human-readable framework labels
@@ -127,7 +127,7 @@ function generateFixPrompt(
     : "Unknown";
 
   const lines: string[] = [
-    `I need you to fix the following production-readiness issues found in my codebase by ShipGuard AI.`,
+    `I need you to fix the following production-readiness issues found in my codebase by Graft.`,
     `Please fix all of them in one pass.`,
     ``,
     `## Codebase: ${repo} (${frameworkLabel})`,
@@ -605,7 +605,7 @@ export default function ScanReportPage() {
                   <div className="inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-white border border-blue-100 mb-4 shadow-sm relative">
                     <div className="absolute w-24 h-24 rounded-full border-2 border-blue-200/70 animate-ping" />
                     <div className="absolute w-16 h-16 rounded-full border border-blue-200/60 animate-pulse" />
-                    <Image src="/ShipGuard.svg" alt="ShipGuard" width={36} height={36} className="relative z-10 h-9 w-auto" />
+                    <Image src="/graft.svg" alt="Graft" width={36} height={36} className="relative z-10 h-9 w-auto" />
                   </div>
 
                   <h2 className="text-xl md:text-2xl font-bold text-gray-900 mb-2" style={{ fontFamily: "var(--font-landing-heading)" }}>
@@ -843,7 +843,7 @@ export default function ScanReportPage() {
                   lineHeight: "1.6",
                 }}
               >
-                ShipGuard AI can make mistakes. Review important security, legal, and production decisions before applying changes.
+                Graft can make mistakes. Review important security, legal, and production decisions before applying changes.
               </p>
             </div>
 

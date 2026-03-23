@@ -216,8 +216,8 @@ export default function SignupPage() {
           className="relative flex items-center gap-3 w-fit z-10 group"
         >
           <Image
-            src="/ShipGuard.svg"
-            alt="ShipGuard AI"
+            src="/graft.svg"
+            alt="Graft"
             width={32}
             height={32}
             className="h-8 w-auto group-hover:scale-105 transition-transform"
@@ -226,7 +226,7 @@ export default function SignupPage() {
             className="font-bold text-lg tracking-tight text-gray-900"
             style={{ fontFamily: "var(--font-landing-heading)" }}
           >
-            ShipGuard AI
+            Graft
           </span>
         </Link>
 
@@ -268,8 +268,8 @@ export default function SignupPage() {
           {/* Mobile logo */}
           <div className="flex items-center gap-3 mb-12 lg:hidden justify-center">
             <Image
-              src="/ShipGuard.svg"
-              alt="ShipGuard AI"
+              src="/graft.svg"
+              alt="Graft"
               width={32}
               height={32}
               className="h-8 w-auto"
@@ -278,7 +278,7 @@ export default function SignupPage() {
               className="font-bold text-lg tracking-tight text-gray-900"
               style={{ fontFamily: "var(--font-landing-heading)" }}
             >
-              ShipGuard AI
+              Graft
             </span>
           </div>
 

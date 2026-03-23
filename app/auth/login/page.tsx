@@ -24,7 +24,7 @@ function getErrorFromUrl() {
   const errorCode = hash.get("error_code") || query.get("error_code") || "";
 
   if (errorCode === "identity_already_exists") {
-    return "This GitHub account is already connected to another ShipGuard account.";
+    return "This GitHub account is already connected to another Graft account.";
   }
 
   const error = query.get("error");
@@ -126,8 +126,8 @@ export default function LoginPage() {
           className="relative flex items-center gap-3 w-fit z-10 group"
         >
           <Image
-            src="/ShipGuard.svg"
-            alt="ShipGuard AI"
+            src="/graft.svg"
+            alt="Graft"
             width={32}
             height={32}
             className="h-8 w-auto group-hover:scale-105 transition-transform"
@@ -136,7 +136,7 @@ export default function LoginPage() {
             className="font-bold text-lg tracking-tight text-gray-900"
             style={{ fontFamily: "var(--font-landing-heading)" }}
           >
-            ShipGuard AI
+            Graft
           </span>
         </Link>
 
@@ -185,8 +185,8 @@ export default function LoginPage() {
           {/* Mobile logo */}
           <div className="flex items-center gap-3 mb-12 lg:hidden justify-center">
             <Image
-              src="/ShipGuard.svg"
-              alt="ShipGuard AI"
+              src="/graft.svg"
+              alt="Graft"
               width={32}
               height={32}
               className="h-8 w-auto"
@@ -195,7 +195,7 @@ export default function LoginPage() {
               className="font-bold text-lg tracking-tight text-gray-900"
               style={{ fontFamily: "var(--font-landing-heading)" }}
             >
-              ShipGuard AI
+              Graft
             </span>
           </div>
 
@@ -207,7 +207,7 @@ export default function LoginPage() {
               Welcome back
             </h1>
             <p className="text-gray-500 text-sm">
-              Sign in to your ShipGuard account
+              Sign in to your Graft account
             </p>
           </div>
 

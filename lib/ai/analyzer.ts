@@ -253,11 +253,11 @@ function parseSemgrep(semgrep: unknown): EnrichedIssue[] {
     // Derive guard from check_id
     let guard = 'security'
     const id  = r.check_id.toLowerCase()
-    if (id.includes('shipguard.distribution') || id.includes('.seo') || id.includes('.og') || id.includes('.meta') || id.includes('cookie-consent')) {
+    if (id.includes('graft.distribution') || id.includes('shipguard.distribution') || id.includes('.seo') || id.includes('.og') || id.includes('.meta') || id.includes('cookie-consent')) {
       guard = 'distribution'
-    } else if (id.includes('shipguard.monetization') || id.includes('webhook') || id.includes('stripe') || id.includes('checkout') || id.includes('price') || id.includes('paddle') || id.includes('lemonsqueezy')) {
+    } else if (id.includes('graft.monetization') || id.includes('shipguard.monetization') || id.includes('webhook') || id.includes('stripe') || id.includes('checkout') || id.includes('price') || id.includes('paddle') || id.includes('lemonsqueezy')) {
       guard = 'monetization'
-    } else if (id.includes('shipguard.scalability') || id.includes('console') || id.includes('performance') || id.includes('prisma') || id.includes('pagination') || id.includes('use-client')) {
+    } else if (id.includes('graft.scalability') || id.includes('shipguard.scalability') || id.includes('console') || id.includes('performance') || id.includes('prisma') || id.includes('pagination') || id.includes('use-client')) {
       guard = 'scalability'
     }
     if (r.extra?.metadata?.guard) guard = r.extra.metadata.guard

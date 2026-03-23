@@ -186,8 +186,8 @@ export default function NewScanPage() {
             <div className="absolute inset-0 bg-gradient-to-br from-blue-50 to-white" />
             <div className="absolute w-28 h-28 rounded-full border-2 border-blue-200/70 animate-ping" />
             <Image
-              src="/ShipGuard.svg"
-              alt="ShipGuard"
+              src="/graft.svg"
+              alt="Graft"
               width={36}
               height={36}
               className="relative z-10 h-9 w-auto animate-pulse"

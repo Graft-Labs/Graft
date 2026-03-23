@@ -136,8 +136,8 @@ export default function DashboardSidebar() {
       >
         <Link href="/" className="flex items-center gap-2 group">
           <Image
-            src="/ShipGuard.svg"
-            alt="ShipGuard AI"
+            src="/graft.svg"
+            alt="Graft"
             width={32}
             height={32}
             className="h-8 w-auto transition-transform group-hover:scale-105"
@@ -146,7 +146,7 @@ export default function DashboardSidebar() {
             className="font-bold text-lg text-gray-900 tracking-tight"
             style={{ fontFamily: "var(--font-landing-heading)" }}
           >
-            ShipGuard AI
+            Graft
           </span>
         </Link>
       </div>

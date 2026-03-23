@@ -21,7 +21,7 @@ export default function AppLoading() {
             borderTopColor: "transparent",
           }}
         />
-        <span style={{ fontSize: 13 }}>Loading ShipGuard AI...</span>
+        <span style={{ fontSize: 13 }}>Loading Graft...</span>
       </div>
     </main>
   );

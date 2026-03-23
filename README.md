@@ -1,6 +1,6 @@
-## ShipGuard AI
+## Graft
 
-ShipGuard AI is a SaaS readiness scanner that evaluates repositories across security, scalability, monetization, and distribution.
+Graft is a SaaS readiness scanner that evaluates repositories across security, scalability, monetization, and distribution.
 
 ## Production hardening checklist
 
@@ -45,7 +45,7 @@ CENSYS_API_ID=<your_censys_api_id>
 CENSYS_API_SECRET=<your_censys_api_secret>
 ```
 
-If these are not set, ShipGuard still runs DNS-based OSINT checks.
+If these are not set, Graft still runs DNS-based OSINT checks.
 
 Where to get values:
 - `SHODAN_API_KEY`: https://account.shodan.io/
@@ -91,16 +91,16 @@ Recommended templates to customize first:
 - Reset password
 
 Suggested baseline:
-- Set brand name to ShipGuard AI
+- Set brand name to Graft
 - Add support contact
 - Use your app URL for CTA links
 - Keep security messaging concise and clear
 
 Example confirm-signup subject:
-`Confirm your ShipGuard AI account`
+`Confirm your Graft account`
 
 Example opening line:
-`Welcome to ShipGuard AI. Confirm your email to start running repository scans.`
+`Welcome to Graft. Confirm your email to start running repository scans.`
 
 ## Environment variables
 

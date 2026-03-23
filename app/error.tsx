@@ -37,7 +37,7 @@ export default function GlobalError({
         }}
       >
         <p style={{ margin: 0, fontSize: 12, letterSpacing: ".08em", textTransform: "uppercase", color: "#3079FF", fontWeight: 700 }}>
-          ShipGuard AI
+          Graft
         </p>
         <h2 style={{ marginTop: 10, marginBottom: 8, fontFamily: "var(--font-landing-heading), system-ui, sans-serif" }}>
           Something went wrong

@@ -3,6 +3,10 @@ import { createServerClient } from '@/lib/supabase-server'
 import { cookies } from 'next/headers'
 
 function withClearedConnectCookies(response: NextResponse) {
+  response.cookies.set('graft_next', '', { path: '/', maxAge: 0 })
+  response.cookies.set('graft_connecting_provider', '', { path: '/', maxAge: 0 })
+  response.cookies.set('graft_connecting_user_id', '', { path: '/', maxAge: 0 })
+  response.cookies.set('graft_connecting_github', '', { path: '/', maxAge: 0 })
   response.cookies.set('shipguard_next', '', { path: '/', maxAge: 0 })
   response.cookies.set('shipguard_connecting_provider', '', { path: '/', maxAge: 0 })
   response.cookies.set('shipguard_connecting_user_id', '', { path: '/', maxAge: 0 })
@@ -11,8 +15,9 @@ function withClearedConnectCookies(response: NextResponse) {
 }
 
 function resolveConnectingProvider(cookieStore: Awaited<ReturnType<typeof cookies>>): 'github' | 'google' | null {
-  const provider = cookieStore.get('shipguard_connecting_provider')?.value
+  const provider = cookieStore.get('graft_connecting_provider')?.value ?? cookieStore.get('shipguard_connecting_provider')?.value
   if (provider === 'github' || provider === 'google') return provider
+  if (cookieStore.get('graft_connecting_github')?.value === '1') return 'github'
   if (cookieStore.get('shipguard_connecting_github')?.value === '1') return 'github'
   return null
 }
@@ -70,12 +75,12 @@ export async function GET(request: Request) {
   const requestUrl = new URL(request.url)
   const code = requestUrl.searchParams.get('code')
   const cookieStore = await cookies()
-  const nextFromCookie = requestUrl.searchParams.get('next') ?? cookieStore.get('shipguard_next')?.value
+  const nextFromCookie = requestUrl.searchParams.get('next') ?? cookieStore.get('graft_next')?.value ?? cookieStore.get('shipguard_next')?.value
   const safeNextDecoded = nextFromCookie ? decodeURIComponent(nextFromCookie) : '/dashboard'
   const next = safeNextDecoded.startsWith('/') ? safeNextDecoded : '/dashboard'
   const connectingProvider = resolveConnectingProvider(cookieStore)
   const isConnectingProvider = Boolean(connectingProvider)
-  const connectingUserId = cookieStore.get('shipguard_connecting_user_id')?.value ?? null
+  const connectingUserId = cookieStore.get('graft_connecting_user_id')?.value ?? cookieStore.get('shipguard_connecting_user_id')?.value ?? null
   const oauthErrorCode = requestUrl.searchParams.get('error_code')
 
   if (!code && connectingProvider) {

@@ -18,12 +18,12 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "ShipGuard AI — Production-Readiness Scanner for AI Apps",
+  title: "Graft — Production-Readiness Scanner for AI Apps",
   description:
     "The one-click production-readiness scanner that turns AI prototypes into $1k+/mo businesses. Scan your GitHub repo for security holes, scalability issues, monetization gaps, and distribution failures.",
   keywords: ["production readiness", "AI apps", "security scanner", "SaaS", "indie hacker"],
   openGraph: {
-    title: "ShipGuard AI",
+    title: "Graft",
     description: "Production-readiness scanner for AI-built indie apps",
     type: "website",
   },

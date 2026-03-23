@@ -565,7 +565,7 @@ export default function SettingsPage() {
                             className="text-sm text-gray-500 mt-1"
                             style={{ fontFamily: "var(--font-landing-body)" }}
                           >
-                            Tell us what you want next in ShipGuard AI.
+                            Tell us what you want next in Graft.
                           </p>
                         </div>
                         <ExternalLink

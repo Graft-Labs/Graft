@@ -1,7 +1,7 @@
 ```markdown
-# ShipGuard AI – Phase Roadmap.md
-Project ShipGuard AI  
-Goal Production-readiness scanner for AI-built indie apps  
+# Graft – Phase Roadmap.md
+Project Graft  
+Goal Production-readiness scanner for AI-built indie apps
 Stack Next.js 15 + Supabase + Claude-3.5 Sonnet + Stripe + Vercel  
 Target Launch MVP in 7–14 days (March 2026)  
 Revenue Goal $3k–8k MRR in first 90 days  
@@ -60,24 +60,24 @@ Launch criteria Users can connect repo → get full 5-guard report → see fix s
    - List user repos → pick one
    - Or upload zip  paste code (for non-GitHub prototypes)
 
-2. AI Production Readiness Report
-   - 5 sections with score 0–100
-     - Security Guard
-     - Scalability & Reliability Guard
-     - Monetization Readiness
-     - Distribution & Launch Guard
+   2. AI Production Readiness Report
+    - 5 sections with score 0–100
+      - Security
+      - Scalability & Reliability
+      - Monetization Readiness
+      - Distribution & Launch
      - Overall Score + “Why this won’t hit $1k MRR yet”
 
-3. Security Guard (use static + LLM)
+3. Security (use static + LLM)
    - Exposed keys, CORS, auth holes, prompt injection, dependency CVEs
 
-4. Scalability Guard
+4. Scalability
    - Missing error tracking, rate limits, logging, DB pooling
 
-5. Monetization Guard (your secret sauce)
+5. Monetization (your secret sauce)
    - Stripe integration checklist, pricing page gaps, trial logic, tax setup
 
-6. Distribution Guard
+6. Distribution
    - Analytics, SEO, ToSPrivacy page, social proof placeholders
 
 7. One-Click Fix Suggestions
@@ -146,7 +146,7 @@ Monetization Expansions
 Exit-Ready
 - Full open revenue on TrustMRR
 - Public roadmap + GitHub issues
-- API for other tools to embed ShipGuard scan
+- API for other tools to embed Graft scan
 
 ---
 

@@ -1,26 +1,24 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import {
-  Shield,
-  Zap,
-  Globe,
-  ArrowRight,
-  Github,
-  CheckCircle,
-  AlertTriangle,
-  Lock,
-  Loader2,
-} from "lucide-react";
-import { motion, useScroll, useTransform } from "framer-motion";
+import { useState } from "react";
+import { ArrowRight, Github, CheckCircle, Loader2, X, AlertTriangle } from "lucide-react";
+import { motion } from "framer-motion";
 import LandingNavbar from "@/components/layout/LandingNavbar";
 import LandingFooter from "@/components/layout/LandingFooter";
 import { SquigglyLine } from "@/components/ui/squiggly-line";
-import { GlowingBorder } from "@/components/ui/glowing-border";
+import { BorderBeam } from "@/components/ui/border-beam";
+import { AnimatedGridPattern } from "@/components/ui/animated-grid-pattern";
+import { BlurFade } from "@/components/ui/blur-fade";
+import { RetroGrid } from "@/components/ui/retro-grid";
+import { ShimmerButton } from "@/components/ui/shimmer-button";
+import { Marquee } from "@/components/ui/marquee";
+import { AnimatedList } from "@/components/ui/animated-list";
+import { IconCloud } from "@/components/ui/icon-cloud";
+import { OrbitingCircles } from "@/components/ui/orbiting-circles";
+import { SmoothCursor } from "@/components/ui/smooth-cursor";
 
 export default function LandingPage() {
-  const { scrollYProgress } = useScroll();
   const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
 
   const startCheckout = async (planId: "pro" | "unlimited" | "lifetime") => {
@@ -50,22 +48,24 @@ export default function LandingPage() {
     }
   };
 
-  // Subtle parallax for abstract background elements
-  const y1 = useTransform(scrollYProgress, [0, 1], [0, 300]);
-  const y2 = useTransform(scrollYProgress, [0, 1], [0, -200]);
-
   return (
     <div className="min-h-screen bg-[#FDFDFD] text-gray-900 font-sans selection:bg-[#3079FF]/20 overflow-x-hidden relative">
+      <SmoothCursor />
       <LandingNavbar />
 
-      {/* Abstract Grid Background */}
-      <div className="absolute inset-0 pointer-events-none overflow-hidden h-[120vh]">
-        <div className="absolute inset-0 bg-[linear-gradient(to_right,#f0f0f0_1px,transparent_1px),linear-gradient(to_bottom,#f0f0f0_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_60%_at_50%_40%,#000_70%,transparent_100%)] opacity-60" />
+      {/* Animated Grid Background */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden">
+        <AnimatedGridPattern
+          numSquares={30}
+          maxOpacity={0.15}
+          duration={3}
+          className="[mask-image:radial-gradient(ellipse_80%_80%_at_50%_20%,#000_40%,transparent_100%)]"
+        />
       </div>
 
       <main className="relative z-10">
         {/* ─── HERO SECTION ──────────────────────────────────────────────── */}
-        <section className="relative pt-48 pb-32 px-6 overflow-hidden min-h-[90vh] flex flex-col justify-center items-center text-center">
+        <section className="relative pt-48 pb-24 px-6 overflow-hidden min-h-[78vh] flex flex-col justify-center items-center text-center">
           <motion.h1
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -88,19 +88,19 @@ export default function LandingPage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.2 }}
-            className="text-xl md:text-2xl text-gray-600 max-w-3xl mx-auto mb-12 leading-relaxed font-light"
+            className="text-xl md:text-2xl text-gray-600 max-w-3xl mx-auto mb-10 leading-relaxed font-light"
             style={{ fontFamily: "var(--font-landing-body)" }}
           >
-            AI writes the code. You own the risk. Automatically scan
-            AI-generated Next.js & React apps for security flaws, performance
-            bottlenecks, and production-readiness.
+            AI writes the code. You own the risk. Automatically scan AI-generated
+            Next.js and React apps for security flaws, performance bottlenecks,
+            and production readiness.
           </motion.p>
 
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.3 }}
-            className="flex flex-col sm:flex-row items-center justify-center gap-4 w-full max-w-md mx-auto"
+            className="flex flex-col sm:flex-row items-center justify-center gap-4 w-full max-w-lg mx-auto"
           >
             <Link
               href="/auth/signup"
@@ -109,113 +109,77 @@ export default function LandingPage() {
               <Github className="w-5 h-5" />
               Scan GitHub Repo
             </Link>
+            <Link
+              href="/#pricing"
+              className="inline-flex h-14 items-center justify-center rounded-full border border-gray-300 bg-white px-8 text-lg font-semibold text-gray-800 transition-colors hover:bg-gray-50"
+            >
+              View pricing
+            </Link>
           </motion.div>
 
-          {/* Minimalist UI Preview / Graphic underneath Hero */}
           <motion.div
-            initial={{ opacity: 0, y: 40 }}
+            initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, delay: 0.5 }}
-            className="mt-24 w-full max-w-5xl mx-auto relative"
+            transition={{ duration: 0.5, delay: 0.35 }}
+            className="mt-10 flex flex-wrap items-center justify-center gap-3"
           >
-            <div className="absolute inset-0 bg-gradient-to-b from-transparent via-[#FDFDFD]/80 to-[#FDFDFD] z-10 pointer-events-none h-[120%]" />
-            <GlowingBorder>
-              <div className="rounded-2xl border border-gray-200/60 bg-white/50 backdrop-blur-xl shadow-2xl shadow-black/[0.03] p-2 relative overflow-hidden">
-                <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-[#3079FF]/50 to-transparent" />
-
-                {/* Mock UI Header */}
-                <div className="border-b border-gray-100 p-4 flex items-center justify-between bg-white/50 rounded-t-xl">
-                  <div className="flex items-center gap-3">
-                    <div className="flex gap-1.5">
-                      <div className="w-3 h-3 rounded-full bg-red-400" />
-                      <div className="w-3 h-3 rounded-full bg-yellow-400" />
-                      <div className="w-3 h-3 rounded-full bg-green-400" />
-                    </div>
-                    <div className="text-sm text-gray-500 font-mono ml-4 px-3 py-1 bg-gray-50 border border-gray-100 rounded-md">
-                      scan-report-main.json
-                    </div>
-                  </div>
-                </div>
-
-                {/* Mock UI Body */}
-                <div className="p-6 grid grid-cols-1 md:grid-cols-3 gap-6 text-left bg-white/30">
-                  <div className="col-span-2 space-y-4">
-                    <div className="flex items-start gap-4 p-4 rounded-xl border border-red-100 bg-red-50/50">
-                      <AlertTriangle className="w-6 h-6 text-red-500 mt-1 shrink-0" />
-                      <div>
-                        <h4 className="font-semibold text-red-900">
-                          Exposed Supabase Service Role Key
-                        </h4>
-                        <p className="text-sm text-red-700/80 mt-1">
-                          Found in app/api/admin/route.ts line 14. This key
-                          bypasses RLS policies.
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-start gap-4 p-4 rounded-xl border border-yellow-100 bg-yellow-50/50">
-                      <Zap className="w-6 h-6 text-yellow-600 mt-1 shrink-0" />
-                      <div>
-                        <h4 className="font-semibold text-yellow-900">
-                          Missing Rate Limiting
-                        </h4>
-                        <p className="text-sm text-yellow-700/80 mt-1">
-                          Authentication endpoints lack rate limiting,
-                          susceptible to brute force.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="col-span-1 border border-gray-100 rounded-xl p-6 flex flex-col items-center justify-center text-center bg-white shadow-sm">
-                    <div className="w-24 h-24 rounded-full border-8 border-red-50 flex items-center justify-center mb-4 relative">
-                      <svg
-                        className="absolute inset-0 w-full h-full -rotate-90"
-                        viewBox="0 0 100 100"
-                      >
-                        <circle
-                          cx="50"
-                          cy="50"
-                          r="46"
-                          fill="none"
-                          stroke="#ef4444"
-                          strokeWidth="8"
-                          strokeDasharray="289"
-                          strokeDashoffset="230"
-                          className="opacity-20"
-                        />
-                        <circle
-                          cx="50"
-                          cy="50"
-                          r="46"
-                          fill="none"
-                          stroke="#ef4444"
-                          strokeWidth="8"
-                          strokeDasharray="289"
-                          strokeDashoffset="180"
-                          strokeLinecap="round"
-                        />
-                      </svg>
-                      <span className="text-3xl font-bold text-gray-900 font-garamond italic">
-                        F
-                      </span>
-                    </div>
-                    <h4 className="font-semibold font-garamond text-xl">
-                      Security Score
-                    </h4>
-                    <p className="text-sm text-gray-500 mt-2">
-                      Critical issues require immediate attention.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </GlowingBorder>
+            {[
+              "3 critical issues caught before deploy",
+              "2.3s avg scan time",
+              "One-click fix prompts",
+            ].map((chip) => (
+              <span
+                key={chip}
+                className="rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700"
+              >
+                {chip}
+              </span>
+            ))}
           </motion.div>
         </section>
 
-        {/* ─── STORY SECTION: ALTERNATING LAYOUT ──────────────────────────────────────────────── */}
-        <section className="py-32 px-6 relative bg-white border-y border-gray-100">
-          <div className="max-w-6xl mx-auto space-y-32">
-            {/* Left Text, Right Image */}
+        {/* ─── MARQUEE: AI IDE PARTNERS ─────────────────────────────────────────── */}
+        <div className="py-6 bg-[#FAFAFA] border-b border-gray-100 overflow-hidden">
+          <p className="text-center text-xs font-medium mb-3" style={{ color: "#9CA3AF", fontFamily: "var(--font-landing-body)" }}>
+            Works with code generated by
+          </p>
+          <div className="relative">
+            <div className="absolute left-0 top-0 bottom-0 w-16 bg-gradient-to-r from-[#FAFAFA] to-transparent z-10 pointer-events-none" />
+            <div className="absolute right-0 top-0 bottom-0 w-16 bg-gradient-to-l from-[#FAFAFA] to-transparent z-10 pointer-events-none" />
+            <Marquee repeat={3} pauseOnHover className="[--duration:30s]">
+              {[
+                { name: "Cursor", src: "/ide-logos/cursor.svg" },
+                { name: "Windsurf", src: "/ide-logos/windsurf.svg" },
+                { name: "GitHub Copilot", src: "/ide-logos/github-copilot.svg" },
+                { name: "Claude", src: "/ide-logos/claude.svg" },
+                { name: "Tabnine", src: "/ide-logos/tabnine.svg" },
+                { name: "Replit", src: "/ide-logos/replit.svg" },
+              ].map((tool) => (
+                <div
+                  key={tool.name}
+                  className="mx-5 flex items-center gap-3 px-1 py-1"
+                >
+                  <img
+                    src={tool.src}
+                    alt={tool.name}
+                    width={32}
+                    height={32}
+                    className="h-8 w-8 object-contain"
+                  />
+                  <span className="text-sm font-medium text-gray-700 whitespace-nowrap">
+                    {tool.name}
+                  </span>
+                </div>
+              ))}
+            </Marquee>
+          </div>
+        </div>
+
+        {/* ─── STORY SECTION: PRODUCT SHOWCASE ─────────────────────────────────────────────── */}
+        <section className="py-20 px-6 relative bg-white">
+          <div className="max-w-6xl mx-auto space-y-20">
+            {/* ── OPTION A: Animated Vulnerability Detection ──────────────────────── */}
+            <BlurFade delay={0.1} direction="up">
             <div className="flex flex-col md:flex-row items-center gap-16">
               <div className="flex-1 space-y-6">
                 <h2
@@ -240,10 +204,7 @@ export default function LandingPage() {
                     "Spot unoptimized queries & N+1 issues",
                     "Verify error boundaries & configs",
                   ].map((item, i) => (
-                    <li
-                      key={i}
-                      className="flex items-center gap-3 text-gray-700"
-                    >
+                    <li key={i} className="flex items-center gap-3 text-gray-700">
                       <CheckCircle className="w-5 h-5 text-[#3079FF]" />
                       <span>{item}</span>
                     </li>
@@ -251,23 +212,36 @@ export default function LandingPage() {
                 </ul>
               </div>
               <div className="flex-1 w-full">
-                <GlowingBorder>
-                  <div className="bg-gray-50 rounded-2xl p-8 border border-gray-100 aspect-square flex items-center justify-center relative overflow-hidden">
-                    {/* Decorative code visualization */}
-                    <div className="absolute inset-0 bg-[linear-gradient(45deg,transparent_25%,rgba(68,64,60,0.05)_50%,transparent_75%,transparent_100%)] bg-[length:250px_250px] animate-[gradient_3s_linear_infinite]" />
-                    <div className="relative z-10 w-full max-w-sm space-y-4 font-mono text-sm opacity-80">
-                      <div className="h-4 bg-gray-200 rounded w-3/4"></div>
-                      <div className="h-4 bg-red-200 rounded w-full"></div>
-                      <div className="h-4 bg-gray-200 rounded w-5/6"></div>
-                      <div className="h-4 bg-gray-200 rounded w-2/3 ml-4"></div>
-                      <div className="h-4 bg-yellow-200 rounded w-full ml-4"></div>
+                <div className="h-[340px] overflow-hidden rounded-2xl border border-gray-200 bg-white p-4">
+                <AnimatedList delay={1300} maxItems={5} className="w-full max-w-xl">
+                  {[
+                    { level: "critical", text: "Exposed SUPABASE_SERVICE_ROLE_KEY", file: "app/api/admin/route.ts:14" },
+                    { level: "critical", text: "Hardcoded API key in production", file: "lib/config.ts:6" },
+                    { level: "high", text: "Missing rate limiting on auth endpoint", file: "app/api/auth/login/route.ts" },
+                    { level: "medium", text: "No RLS policy on profiles table", file: "supabase/migrations/001.sql" },
+                  ].map((item) => (
+                    <div key={item.text} className="rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm">
+                      <div className="flex items-start gap-3">
+                        {item.level === "critical" ? (
+                          <X className="mt-0.5 h-4 w-4 text-red-600" />
+                        ) : (
+                          <AlertTriangle className="mt-0.5 h-4 w-4 text-amber-600" />
+                        )}
+                        <div>
+                          <p className="text-sm font-semibold text-gray-900">{item.text}</p>
+                          <p className="mt-0.5 text-xs text-gray-500 font-mono">{item.file}</p>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </GlowingBorder>
+                  ))}
+                </AnimatedList>
+                </div>
               </div>
             </div>
+            </BlurFade>
 
-            {/* Right Text, Left Image */}
+            {/* ── OPTION B: Icon Cloud Deep Integration ─────────────────────────── */}
+            <BlurFade delay={0.15} direction="up">
             <div className="flex flex-col md:flex-row-reverse items-center gap-16">
               <div className="flex-1 space-y-6">
                 <h2
@@ -282,51 +256,86 @@ export default function LandingPage() {
                   .
                 </h2>
                 <p className="text-xl text-gray-600 leading-relaxed font-light">
-                  We don't just lint generic JavaScript. We analyze your Next.js
-                  architecture, Supabase RLS policies, and API endpoint
-                  configurations.
+                  We understand your framework, your database, your deployment
+                  platform, and your SaaS patterns — because we've seen them all.
                 </p>
-                <div className="flex gap-4 pt-4">
-                  <div className="p-3 bg-gray-50 rounded-xl border border-gray-100 shadow-sm flex items-center gap-2">
-                    <div className="w-6 h-6 bg-black rounded-full text-white flex items-center justify-center text-xs font-bold">
-                      N
-                    </div>
-                    <span className="font-semibold text-sm">Next.js</span>
-                  </div>
-                  <div className="p-3 bg-gray-50 rounded-xl border border-gray-100 shadow-sm flex items-center gap-2">
-                    <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center text-white text-xs">
-                      S
-                    </div>
-                    <span className="font-semibold text-sm">Supabase</span>
+              </div>
+              <div className="flex-1 w-full flex items-center justify-center">
+                <div className="relative flex items-center justify-center min-h-[620px] w-full">
+                  <div className="pointer-events-none absolute -z-10 h-[520px] w-[520px] rounded-full bg-gradient-to-br from-blue-100 via-cyan-50 to-indigo-100 blur-2xl" />
+                  <IconCloud
+                    images={[
+                      "/nextjs.svg",
+                      "/react.svg",
+                      "/supabase.svg",
+                      "/vercel.svg",
+                      "/postgresql.svg",
+                      "/nodedotjs.svg",
+                      "/typescript.svg",
+                      "/tailwindcss.svg",
+                      "/prisma.svg",
+                      "/next.svg",
+                      "/window.svg",
+                      "/file.svg",
+                      "/globe.svg",
+                    ]}
+                  />
+                </div>
+              </div>
+            </div>
+            </BlurFade>
+
+            {/* ── OPTION C: Modern Prompt Experience ─────────────────────────────── */}
+            <BlurFade delay={0.2} direction="up">
+            <div className="flex flex-col md:flex-row items-center gap-16">
+              <div className="flex-1 space-y-6">
+                <h2
+                  className="text-4xl md:text-5xl font-bold tracking-tight text-gray-900"
+                  style={{ fontFamily: "var(--font-landing-heading)" }}
+                >
+                  Fix faster with <br />
+                  <span className="font-garamond italic font-normal">
+                    instant guidance
+                  </span>
+                  .
+                </h2>
+                <p className="text-xl text-gray-600 leading-relaxed font-light">
+                  Graft turns scan findings into a clear remediation flow you can
+                  hand to your AI coding tool, reviewer, or team in seconds.
+                </p>
+                <ul className="space-y-4 pt-4">
+                  {[
+                    "Prioritized by severity and blast radius",
+                    "File-by-file remediation steps",
+                    "Shareable fix plan for your team",
+                  ].map((item) => (
+                    <li key={item} className="flex items-center gap-3 text-gray-700">
+                      <CheckCircle className="w-5 h-5 text-[#3079FF]" />
+                      <span>{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div className="flex-1 w-full">
+                <div className="relative flex h-[340px] w-full items-center justify-center overflow-hidden rounded-2xl border border-gray-200 bg-white">
+                  <OrbitingCircles radius={120} iconSize={44} speed={1.1} path className="bg-white border border-gray-200 shadow-sm">
+                    <img src="/ide-logos/cursor.svg" alt="Cursor" className="h-6 w-6 object-contain" />
+                    <img src="/ide-logos/windsurf.svg" alt="Windsurf" className="h-6 w-6 object-contain" />
+                    <img src="/ide-logos/github-copilot.svg" alt="GitHub Copilot" className="h-6 w-6 object-contain" />
+                    <img src="/ide-logos/claude.svg" alt="Claude" className="h-6 w-6 object-contain" />
+                    <img src="/ide-logos/tabnine.svg" alt="Tabnine" className="h-6 w-6 object-contain" />
+                    <img src="/ide-logos/replit.svg" alt="Replit" className="h-6 w-6 object-contain" />
+                  </OrbitingCircles>
+
+                  <div className="z-20 rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50 to-emerald-50 px-6 py-4 text-center shadow-lg">
+                    <img src="/graft.svg" alt="Graft" className="mx-auto mb-2 h-10 w-10" />
+                    <p className="text-sm font-semibold text-gray-900">Graft</p>
+                    <p className="text-xs text-gray-600">Finds, prioritizes, and explains fixes</p>
                   </div>
                 </div>
               </div>
-              <div className="flex-1 w-full">
-                <GlowingBorder>
-                  <div className="bg-gray-50 rounded-2xl p-8 border border-gray-100 aspect-square flex items-center justify-center relative overflow-hidden">
-                    {/* Decorative architecture visualization */}
-                    <div className="flex flex-col items-center gap-6 relative z-10 w-full">
-                      <div className="w-full p-4 bg-white rounded-lg border border-gray-200 shadow-sm text-center font-mono text-sm font-semibold text-gray-700">
-                        Frontend (App Router)
-                      </div>
-                      <div className="h-8 w-px bg-blue-300 relative">
-                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-2 h-2 bg-[#3079FF] rounded-full animate-ping" />
-                      </div>
-                      <div className="w-full p-4 bg-white rounded-lg border border-red-200 shadow-sm text-center font-mono text-sm font-semibold text-red-600 relative overflow-hidden">
-                        <div className="absolute inset-0 bg-red-50 opacity-50" />
-                        <span className="relative z-10">
-                          API Route (Missing RLS)
-                        </span>
-                      </div>
-                      <div className="h-8 w-px bg-blue-300" />
-                      <div className="w-full p-4 bg-white rounded-lg border border-gray-200 shadow-sm text-center font-mono text-sm font-semibold text-gray-700">
-                        PostgreSQL DB
-                      </div>
-                    </div>
-                  </div>
-                </GlowingBorder>
-              </div>
             </div>
+            </BlurFade>
           </div>
         </section>
 
@@ -336,6 +345,7 @@ export default function LandingPage() {
           className="py-32 px-6 relative bg-[#FAFAFA] border-y border-gray-100"
         >
           <div className="max-w-5xl mx-auto">
+            <BlurFade delay={0.05}>
             <div className="text-center mb-16">
               <h2
                 className="text-4xl md:text-5xl font-bold tracking-tight text-gray-900 mb-4"
@@ -350,10 +360,13 @@ export default function LandingPage() {
                 Secure your codebase, completely free to start.
               </p>
             </div>
+            </BlurFade>
 
             <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
               {/* Free Tier */}
-              <div className="p-6 rounded-2xl bg-white border border-gray-200 hover:shadow-lg transition-shadow flex flex-col">
+              <BlurFade delay={0.1}>
+              <div className="p-6 rounded-2xl bg-white border border-gray-200 hover:shadow-lg transition-shadow flex flex-col relative overflow-hidden">
+                <BorderBeam colorFrom="#94A3B8" colorTo="#94A3B8" size={40} duration={8} />
                 <div className="mb-6">
                   <h3 className="text-xl font-bold text-gray-900 mb-2">Free</h3>
                   <div className="flex items-baseline gap-2">
@@ -385,9 +398,12 @@ export default function LandingPage() {
                   Start for free
                 </Link>
               </div>
+              </BlurFade>
 
               {/* Pro Tier */}
+              <BlurFade delay={0.2}>
               <div className="p-6 rounded-2xl bg-gray-900 text-white shadow-2xl shadow-gray-900/20 relative overflow-hidden flex flex-col">
+                <BorderBeam colorFrom="#3079FF" colorTo="#8B5CF6" size={60} duration={10} delay={2} />
                 <div className="absolute top-0 right-0 p-3">
                   <span className="px-2.5 py-1 bg-white/10 rounded-full text-xs font-medium text-white/90 backdrop-blur-sm">
                     Most Popular
@@ -429,9 +445,12 @@ export default function LandingPage() {
                   </button>
                 </div>
               </div>
+              </BlurFade>
 
               {/* Unlimited Tier */}
-              <div className="p-6 rounded-2xl bg-white border-2 border-[#3079FF] hover:shadow-lg transition-shadow flex flex-col relative">
+              <BlurFade delay={0.3}>
+              <div className="p-6 rounded-2xl bg-white border-2 border-[#3079FF] hover:shadow-lg transition-shadow flex flex-col relative overflow-hidden">
+                <BorderBeam colorFrom="#3079FF" colorTo="#06B6D4" size={50} duration={8} delay={1} />
                 <div className="absolute top-0 right-0 p-3">
                   <span className="px-2.5 py-1 bg-[#3079FF]/10 rounded-full text-xs font-medium text-[#3079FF]">
                     Best Value
@@ -469,12 +488,22 @@ export default function LandingPage() {
                   Upgrade to Unlimited
                 </button>
               </div>
+              </BlurFade>
             </div>
           </div>
         </section>
 
         {/* ─── CTA SECTION ──────────────────────────────────────────────── */}
         <section className="py-32 px-6 relative bg-[#111827] text-white overflow-hidden">
+          <div className="absolute inset-0 overflow-hidden">
+            <RetroGrid
+              angle={70}
+              cellSize={80}
+              opacity={0.3}
+              lightLineColor="rgba(255,255,255,0.15)"
+              darkLineColor="rgba(255,255,255,0.15)"
+            />
+          </div>
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(48,121,255,0.15)_0%,transparent_70%)]" />
           <div className="max-w-4xl mx-auto text-center relative z-10">
             <h2
@@ -491,13 +520,18 @@ export default function LandingPage() {
               Join forward-thinking developers securing their AI-generated apps.
               Prevent the nightmare scenario before it happens.
             </p>
-            <Link
-              href="/auth/signup"
-              className="landing-btn-primary px-10 py-5 text-xl gap-2 shadow-2xl hover:shadow-white/20 transition-all border-0 text-black bg-white"
-            >
-              Start Scanning Now
-              <ArrowRight className="w-6 h-6" />
-            </Link>
+            <div className="flex justify-center">
+              <ShimmerButton
+                shimmerColor="rgba(48,121,255,0.3)"
+                background="rgba(255,255,255,0.95)"
+                className="px-10 py-5 text-xl gap-2 shadow-2xl hover:shadow-white/20 transition-all text-black"
+              >
+                <Link href="/auth/signup" className="flex items-center gap-2">
+                  Start Scanning Now
+                  <ArrowRight className="w-6 h-6" />
+                </Link>
+              </ShimmerButton>
+            </div>
           </div>
         </section>
       </main>

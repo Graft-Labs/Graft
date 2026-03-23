@@ -1,7 +1,7 @@
-# ShipGuard AI - Implementation Plan
+# Graft - Implementation Plan
 
 ## Project Overview
-- **Name**: ShipGuard AI
+- **Name**: Graft
 - **Goal**: Production-readiness scanner for AI-built indie apps
 - **Stack**: Next.js 15 + Supabase + OpenRouter + Stripe alternatives + Vercel
 - **Target**: MVP launch in 7-14 days
@@ -23,7 +23,7 @@
 
 ## Guards & Checks
 
-### 1. Security Guard (~90% Tool-Covered)
+### 1. Security (~90% Tool-Covered)
 
 | Check | Tool | Output |
 |-------|------|--------|
@@ -36,7 +36,7 @@
 | Auth missing | Semgrep | `{rule, location, message}` |
 | Insecure headers | Semgrep | `{rule, location, message}` |
 
-### 2. Scalability & Reliability Guard (~80% Tool-Covered)
+### 2. Scalability & Reliability (~80% Tool-Covered)
 
 | Check | Tool | Output |
 |-------|------|--------|
@@ -49,7 +49,7 @@
 | Graceful shutdown | react-doctor | `{diagnostics: process handlers}` |
 | Environment config | Custom | File existence check |
 
-### 3. Monetization Guard (~40% Tool-Covered)
+### 3. Monetization (~40% Tool-Covered)
 
 | Check | Tool | Output |
 |-------|------|--------|
@@ -63,7 +63,7 @@
 | Customer portal | Custom Semgrep rules | `{rule, location}` |
 | Multiple price tiers | Custom (AST parse) | ts-morph for 2+ Price |
 
-### 4. Distribution & Launch Guard (~70% Tool-Covered)
+### 4. Distribution & Launch (~70% Tool-Covered)
 
 | Check | Tool | Output |
 |-------|------|--------|
@@ -109,7 +109,7 @@ async function callAI(prompt: string, retries = 3) {
 
 **Prompt Structure**:
 ```
-You are ShipGuard AI. Analyze these tool outputs and provide:
+You are Graft. Analyze these tool outputs and provide:
 1. Plain-English explanation of each finding
 2. Severity assessment (critical/high/medium/low)
 3. Fix code snippets
@@ -142,7 +142,7 @@ Tool Outputs:
 1. GitHub OAuth + repo selection
 2. Zip upload / code paste
 3. Tool execution pipeline (TruffleHog, OSV-Scanner, Semgrep, react-doctor)
-4. 4-Guard AI Report with scores (0-100)
+4. 4-Section AI Report with scores (0-100)
 5. Fix suggestions with copy-paste code
 6. Scan history dashboard
 7. Freemium gate (1 scan/month free)

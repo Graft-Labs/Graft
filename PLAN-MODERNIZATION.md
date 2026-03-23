@@ -1,12 +1,12 @@
-# ShipGuard AI - UI Modernization & Feature Updates
+# Graft - UI Modernization & Feature Updates
 
 ## Overview
-Modernize ShipGuard AI to match the aesthetic of jace.ai with improved UX, new color scheme, and enhanced analytics.
+Modernize Graft to match the aesthetic of jace.ai with improved UX, new color scheme, and enhanced analytics.
 
 ---
 
 ## 1. Scan Issues Review
-- [ ] Check issues found on ShipGuard AI repo scan
+- [ ] Check issues found on Graft repo scan
 - [ ] Verify correctness of detected issues
 - [ ] No code changes needed - just review
 

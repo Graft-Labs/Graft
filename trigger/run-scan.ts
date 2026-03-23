@@ -306,7 +306,7 @@ export const runScanTask = task({
 
     try {
       // ── Step 1: Clone ─────────────────────────────────────────────────────────
-      cloneDir = await mkdtemp(join(tmpdir(), 'shipguard-'))
+      cloneDir = await mkdtemp(join(tmpdir(), 'graft-'))
       logger.log('cloning_repo', { cloneDir, repo: `${repoOwner}/${repoName}` })
 
       const cloneUrl = githubToken

@@ -5,41 +5,16 @@ export default function LandingFooter() {
   return (
     <footer className="border-t border-gray-200 bg-gray-50 mt-auto">
       <div className="max-w-7xl mx-auto px-6 py-16">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-12">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-12 mb-12">
           {/* Brand */}
           <div className="md:col-span-1">
             <Link href="/" className="flex items-center gap-3 mb-6">
-              <Image src="/ShipGuard.svg" alt="ShipGuard AI" width={140} height={32} className="h-8 w-auto" />
+              <Image src="/graft.svg" alt="Graft" width={140} height={32} className="h-8 w-auto" />
             </Link>
             <p className="text-sm leading-relaxed text-gray-600" style={{ fontFamily: "var(--font-landing-body)" }}>
               Turn your AI prototype into a production-grade business. <br />
               Ship with confidence.
             </p>
-          </div>
-
-          {/* Product */}
-          <div>
-            <h4 className="text-sm font-semibold text-gray-900 mb-6" style={{ fontFamily: "var(--font-landing-body)" }}>
-              Product
-            </h4>
-            <ul className="flex flex-col gap-4">
-              {[
-                { href: "/", label: "Home" },
-                { href: "/#pricing", label: "Pricing" },
-                { href: "/auth/signup", label: "Start Free" },
-                { href: "/dashboard", label: "Dashboard" },
-              ].map((link) => (
-                <li key={link.label}>
-                  <Link
-                    href={link.href}
-                    className="text-sm text-gray-600 hover:text-[#0000EE] transition-colors"
-                    style={{ fontFamily: "var(--font-landing-body)" }}
-                  >
-                    {link.label}
-                  </Link>
-                </li>
-              ))}
-            </ul>
           </div>
 
           {/* Guards */}
@@ -49,10 +24,10 @@ export default function LandingFooter() {
             </h4>
             <ul className="flex flex-col gap-4">
               {[
-                "Security Guard",
-                "Scalability Guard",
-                "Monetization Guard",
-                "Distribution Guard",
+                "Security",
+                "Scalability",
+                "Monetization",
+                "Distribution",
               ].map((guard) => (
                 <li key={guard}>
                   <span
@@ -88,36 +63,11 @@ export default function LandingFooter() {
               ))}
             </ul>
           </div>
-
-          {/* Support */}
-          <div>
-            <h4 className="text-sm font-semibold text-gray-900 mb-6" style={{ fontFamily: "var(--font-landing-body)" }}>
-              Support
-            </h4>
-            <ul className="flex flex-col gap-4">
-              {[
-                { href: process.env.NEXT_PUBLIC_SUPPORT_FORM_URL || "#", label: "Contact Support" },
-                { href: process.env.NEXT_PUBLIC_FEATURE_REQUEST_FORM_URL || "#", label: "Feature Requests" },
-              ].map((link) => (
-                <li key={link.label}>
-                  <a
-                    href={link.href}
-                    target={link.href.startsWith("http") ? "_blank" : undefined}
-                    rel={link.href.startsWith("http") ? "noopener noreferrer" : undefined}
-                    className="text-sm text-gray-600 hover:text-[#0000EE] transition-colors"
-                    style={{ fontFamily: "var(--font-landing-body)" }}
-                  >
-                    {link.label}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </div>
         </div>
 
         <div className="pt-8 border-t border-gray-200 flex flex-col sm:flex-row items-center justify-between gap-4">
           <p className="text-sm text-gray-500" style={{ fontFamily: "var(--font-landing-body)" }}>
-            © {new Date().getFullYear()} ShipGuard AI. All rights reserved.
+            © {new Date().getFullYear()} Graft. All rights reserved.
           </p>
           <p className="text-sm text-gray-500" style={{ fontFamily: "var(--font-landing-body)" }}>
             Built for indie hackers shipping with AI
