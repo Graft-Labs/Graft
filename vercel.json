@@ -1,9 +1,1 @@
-{
-  "redirects": [
-    {
-      "source": "/(.*)",
-      "destination": "https://graft.vercel.app/$1",
-      "permanent": false
-    }
-  ]
-}
+{}
