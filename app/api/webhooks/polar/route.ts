@@ -202,7 +202,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No user mapping found' }, { status: 400 })
     }
 
-    console.log(`Webhook ${event} - resolved user: ${userId}, email: ${resolvedCustomerEmail}, planId: ${planId}, subscriptionId: ${subscriptionId}, status: ${status}, detectedProductIds: ${JSON.stringify(Array.from(detectedProductIds))}, envProId: ${proProductId}, envUnlimitedId: ${unlimitedProductId}`)
+    const hasSubscription = subscriptionId && subscriptionId.trim().length > 0
+    console.log(`Webhook ${event} - resolved user: ${userId}, email: ${resolvedCustomerEmail}, planId: ${planId}, subscriptionId: "${subscriptionId}", hasSubscription: ${hasSubscription}, status: ${status}, detectedProductIds: ${JSON.stringify(Array.from(detectedProductIds))}, envProId: ${proProductId}, envUnlimitedId: ${unlimitedProductId}`)
 
     // Basic idempotency guard: if event already applied, skip duplicate side effects.
     const { data: existingUser } = await supabase
@@ -251,9 +252,10 @@ export async function POST(req: NextRequest) {
           }
         }
 
-        // IMPORTANT: Only default to existing plan if we're sure this is NOT a new subscription
-        // If planId couldn't be resolved, we should NOT overwrite with existing (potentially free) plan
-        const resolvedPlan = planId || (subscriptionId ? 'pro' : existingUser?.plan) || 'pro'
+        // If planId couldn't be resolved but we have a subscription event, assume 'pro'
+        // subscriptionId could be empty string '', so we check for truthy non-empty value
+        const hasSubscription = subscriptionId && subscriptionId.trim().length > 0
+        const resolvedPlan = planId || (hasSubscription ? 'pro' : existingUser?.plan) || 'pro'
         const scansLimit = PLAN_SCANS_LIMITS[resolvedPlan] ?? 50
         
         const { error } = await supabase
@@ -350,8 +352,9 @@ export async function POST(req: NextRequest) {
           event.startsWith('order.') ||
           event.startsWith('checkout.')
         ) {
-          // Same fix: only default to existing plan if we have a subscriptionId
-          const resolvedPlan = planId || (subscriptionId ? 'pro' : existingUser?.plan) || 'pro'
+          // If planId couldn't be resolved but we have a subscription event, assume 'pro'
+          const hasSubscription = subscriptionId && subscriptionId.trim().length > 0
+          const resolvedPlan = planId || (hasSubscription ? 'pro' : existingUser?.plan) || 'pro'
           const scansLimit = PLAN_SCANS_LIMITS[resolvedPlan] ?? 50
 
           const { error } = await supabase
