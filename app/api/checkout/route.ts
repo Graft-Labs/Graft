@@ -7,7 +7,6 @@ const POLAR_ORGANIZATION = process.env.NEXT_PUBLIC_POLAR_ORGANIZATION
 const PLAN_PRICES: Record<string, { productId: string; priceId: string; scansLimit: number }> = {
   pro: { productId: process.env.POLAR_PRO_PRODUCT_ID || '', priceId: process.env.POLAR_PRO_PRICE_ID || '', scansLimit: 50 },
   unlimited: { productId: process.env.POLAR_UNLIMITED_PRODUCT_ID || '', priceId: process.env.POLAR_UNLIMITED_PRICE_ID || '', scansLimit: 999999 },
-  lifetime: { productId: process.env.POLAR_LIFETIME_PRODUCT_ID || '', priceId: process.env.POLAR_LIFETIME_PRICE_ID || '', scansLimit: 999999 },
 }
 
 export async function POST(req: NextRequest) {
