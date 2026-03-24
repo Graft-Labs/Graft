@@ -530,6 +530,35 @@ export default function SettingsPage() {
                         )}
                     </div>
                   </div>
+
+                  {/* Cancel Subscription */}
+                  {(userData?.plan === "pro" || userData?.plan === "unlimited") && (
+                    <div className="border border-gray-200 rounded-2xl p-6">
+                      <h3
+                        className="text-base font-bold text-gray-900 mb-2"
+                        style={{ fontFamily: "var(--font-landing-heading)" }}
+                      >
+                        Cancel Subscription
+                      </h3>
+                      <p
+                        className="text-sm text-gray-500 mb-4"
+                        style={{ fontFamily: "var(--font-landing-body)" }}
+                      >
+                        Need to take a break? You can cancel your subscription
+                        anytime. You'll lose access to premium features at the end
+                        of your billing period.
+                      </p>
+                      <button
+                        className="inline-flex px-5 py-2.5 border border-gray-200 text-gray-700 rounded-full text-sm font-semibold hover:bg-gray-50 transition-colors"
+                        style={{ fontFamily: "var(--font-landing-body)" }}
+                        onClick={() => {
+                          window.location.href = "mailto:support@graft.sh?subject=Cancel%20Subscription%20Request";
+                        }}
+                      >
+                        Contact to Cancel
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -652,7 +681,7 @@ export default function SettingsPage() {
               disabled={deletingAccount}
               placeholder="Type DELETE"
               className="mt-4 w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
-              style={{ fontFamily: "var(--font-landing-body)" }}
+              style={{ fontFamily: "var(--font(--landing-body)" }}
             />
 
             {deleteAccountError && (

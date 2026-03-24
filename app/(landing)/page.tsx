@@ -541,20 +541,7 @@ export default function LandingPage() {
               </BlurFade>
             </div>
           </div>
-          
-          {/* Manage Subscription Button */}
-          {(userPlan === "pro" || userPlan === "unlimited") && (
-            <div className="mt-12 text-center">
-              <button
-                onClick={startPortal}
-                disabled={portalLoading}
-                className="text-sm text-gray-500 hover:text-[#3079FF] transition-colors inline-flex items-center gap-2"
-              >
-                {portalLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                {portalLoading ? "Opening..." : "Manage Subscription"}
-              </button>
-            </div>
-          )}
+
         </section>
 
         {/* ─── CTA SECTION ──────────────────────────────────────────────── */}
