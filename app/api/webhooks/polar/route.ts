@@ -13,7 +13,8 @@ const POLAR_WEBHOOK_SECRET = process.env.POLAR_WEBHOOK_SECRET
 const POLAR_IS_SANDBOX = process.env.POLAR_IS_SANDBOX === 'true'
 
 interface PolarWebhookPayload {
-  event: string
+  event?: string
+  type?: string
   data: Record<string, unknown>
 }
 
@@ -103,8 +104,15 @@ export async function POST(req: NextRequest) {
     }
 
     const payload: PolarWebhookPayload = JSON.parse(rawBody)
-    const { event } = payload
+    const event = (payload.event || payload.type || '').toLowerCase().trim()
     const data = (payload.data ?? {}) as Record<string, unknown>
+
+    if (!event) {
+      console.error('Webhook missing event/type field', {
+        topLevelKeys: Object.keys(payload || {}),
+      })
+      return NextResponse.json({ error: 'Invalid webhook payload: missing event type' }, { status: 400 })
+    }
 
     const metadata = (
       (data.metadata as Record<string, unknown> | undefined) ||
@@ -209,8 +217,10 @@ export async function POST(req: NextRequest) {
     switch (event) {
       case 'subscription.created':
       case 'subscription.updated':
+      case 'subscription.active':
       case 'order.created':
       case 'order.paid':
+      case 'order.updated':
       case 'checkout.created':
       case 'checkout.updated': {
         const resolvedPlan = planId || existingUser?.plan || 'pro'
@@ -259,6 +269,34 @@ export async function POST(req: NextRequest) {
       }
 
       default:
+        if (
+          event.startsWith('subscription.') ||
+          event.startsWith('order.') ||
+          event.startsWith('checkout.')
+        ) {
+          const resolvedPlan = planId || existingUser?.plan || 'pro'
+          const scansLimit = PLAN_SCANS_LIMITS[resolvedPlan] ?? 50
+
+          const { error } = await supabase
+            .from('users')
+            .update({
+              plan: resolvedPlan,
+              scans_limit: scansLimit,
+              subscription_id: subscriptionId || existingUser?.subscription_id,
+              subscription_status: status,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', userId)
+
+          if (error) {
+            console.error('Failed to update user plan in generic webhook handler:', error)
+            return NextResponse.json({ error: 'Failed to update user' }, { status: 500 })
+          }
+
+          console.log(`User ${userId} updated from generic handler for event ${event} to ${resolvedPlan}`)
+          break
+        }
+
         console.log(`Unhandled webhook event: ${event}`)
     }
 
