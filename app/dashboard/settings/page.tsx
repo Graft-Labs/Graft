@@ -29,6 +29,7 @@ type UserData = {
   github_user_id: string | null;
   subscription_id: string | null;
   subscription_status: string | null;
+  customer_id: string | null;
 };
 
 type CachedData = {
@@ -706,6 +707,30 @@ export default function SettingsPage() {
                           </p>
                         )}
                     </div>
+
+                    {userData?.customer_id && (
+                      <div className="mt-6 pt-6 border-t border-gray-200">
+                        <div className="flex items-start justify-between gap-4">
+                          <div>
+                            <h3
+                              className="text-sm font-bold text-gray-900 mb-1"
+                              style={{ fontFamily: "var(--font-landing-heading)" }}
+                            >
+                              Account ID
+                            </h3>
+                            <p
+                              className="text-xs text-gray-500"
+                              style={{ fontFamily: "var(--font-landing-body)" }}
+                            >
+                              Use this ID when contacting support
+                            </p>
+                          </div>
+                          <code className="text-xs bg-gray-100 px-2 py-1 rounded font-mono text-gray-700 break-all">
+                            {userData.customer_id}
+                          </code>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* Cancel Subscription */}

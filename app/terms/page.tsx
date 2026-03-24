@@ -32,7 +32,7 @@ const sections = [
   },
   {
     title: "Contact",
-    body: "For legal questions, contact support@usegraft.com.",
+    body: "For legal questions, contact us through our support form: https://tally.so/r/lbRzX5",
   },
 ];
 
