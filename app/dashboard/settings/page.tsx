@@ -75,6 +75,13 @@ export default function SettingsPage() {
   );
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [cancelingSubscription, setCancelingSubscription] = useState(false);
+  const [cancelSubscriptionError, setCancelSubscriptionError] = useState<
+    string | null
+  >(null);
+  const [cancelSubscriptionSuccess, setCancelSubscriptionSuccess] = useState<
+    string | null
+  >(null);
 
   useEffect(() => {
     const tab = searchParams.get("tab");
@@ -199,6 +206,56 @@ export default function SettingsPage() {
       window.location.assign("/");
     } finally {
       setDeletingAccount(false);
+    }
+  };
+
+  const handleCancelSubscription = async () => {
+    setCancelingSubscription(true);
+    setCancelSubscriptionError(null);
+    setCancelSubscriptionSuccess(null);
+
+    try {
+      const res = await fetch("/api/subscription/cancel", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      const body = await res.json().catch(() => null);
+
+      if (!res.ok) {
+        setCancelSubscriptionError(
+          body?.message ||
+            "Could not cancel your subscription right now. Please try again.",
+        );
+        return;
+      }
+
+      const periodEnd = body?.subscription?.current_period_end as
+        | string
+        | undefined;
+      const formattedPeriodEnd = periodEnd
+        ? new Date(periodEnd).toLocaleDateString(undefined, {
+            year: "numeric",
+            month: "long",
+            day: "numeric",
+          })
+        : null;
+
+      setCancelSubscriptionSuccess(
+        formattedPeriodEnd
+          ? `Your subscription is set to cancel on ${formattedPeriodEnd}.`
+          : "Your subscription is set to cancel at the end of the billing period.",
+      );
+
+      setUserData((prev) =>
+        prev
+          ? {
+              ...prev,
+              subscription_status: "cancelled",
+            }
+          : prev,
+      );
+    } finally {
+      setCancelingSubscription(false);
     }
   };
 
@@ -545,18 +602,49 @@ export default function SettingsPage() {
                         style={{ fontFamily: "var(--font-landing-body)" }}
                       >
                         Need to take a break? You can cancel your subscription
-                        anytime. You'll lose access to premium features at the end
-                        of your billing period.
+                        anytime. You will keep premium access until the end of your
+                        current billing period.
                       </p>
-                      <button
-                        className="inline-flex px-5 py-2.5 border border-gray-200 text-gray-700 rounded-full text-sm font-semibold hover:bg-gray-50 transition-colors"
-                        style={{ fontFamily: "var(--font-landing-body)" }}
-                        onClick={() => {
-                          window.location.href = "mailto:support@graft.sh?subject=Cancel%20Subscription%20Request";
-                        }}
-                      >
-                        Contact to Cancel
-                      </button>
+
+                      {cancelSubscriptionError && (
+                        <p
+                          className="text-sm text-red-600 mb-3"
+                          style={{ fontFamily: "var(--font-landing-body)" }}
+                        >
+                          {cancelSubscriptionError}
+                        </p>
+                      )}
+
+                      {cancelSubscriptionSuccess && (
+                        <p
+                          className="text-sm text-green-700 mb-3"
+                          style={{ fontFamily: "var(--font-landing-body)" }}
+                        >
+                          {cancelSubscriptionSuccess}
+                        </p>
+                      )}
+
+                      {userData?.subscription_status === "cancelled" ||
+                      userData?.subscription_status === "canceled" ? (
+                        <span
+                          className="inline-flex px-5 py-2.5 border border-green-200 text-green-700 bg-green-50 rounded-full text-sm font-semibold"
+                          style={{ fontFamily: "var(--font-landing-body)" }}
+                        >
+                          Cancellation Scheduled
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          className="inline-flex px-5 py-2.5 border border-gray-200 text-gray-700 rounded-full text-sm font-semibold hover:bg-gray-50 transition-colors disabled:opacity-60"
+                          style={{ fontFamily: "var(--font-landing-body)" }}
+                          onClick={handleCancelSubscription}
+                          disabled={cancelingSubscription}
+                        >
+                          {cancelingSubscription
+                            ? "Cancelling..."
+                            : "Cancel Subscription"}
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
@@ -681,7 +769,7 @@ export default function SettingsPage() {
               disabled={deletingAccount}
               placeholder="Type DELETE"
               className="mt-4 w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
-              style={{ fontFamily: "var(--font(--landing-body)" }}
+              style={{ fontFamily: "var(--font-landing-body)" }}
             />
 
             {deleteAccountError && (
