@@ -21,6 +21,7 @@ import { SmoothCursor } from "@/components/ui/smooth-cursor";
 
 export default function LandingPage() {
   const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
+  const [portalLoading, setPortalLoading] = useState(false);
   const [userPlan, setUserPlan] = useState<string | null>(null);
 
   useEffect(() => {
@@ -63,6 +64,37 @@ export default function LandingPage() {
     } catch (error: any) {
       alert(error?.message || "Unable to start checkout right now.");
       setCheckoutLoading(null);
+    }
+  };
+
+  const startPortal = async () => {
+    try {
+      setPortalLoading(true);
+      const response = await fetch("/api/portal", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          window.location.href = "/auth/login";
+          return;
+        }
+        if (response.status === 404) {
+          alert("No active subscription found.");
+          return;
+        }
+        throw new Error(data?.message || data?.error || "Failed to open billing portal");
+      }
+
+      if (!data?.url) throw new Error("No portal URL returned.");
+      window.location.href = data.url;
+    } catch (error: any) {
+      alert(error?.message || "Unable to open billing portal right now.");
+    } finally {
+      setPortalLoading(false);
     }
   };
 
@@ -509,6 +541,20 @@ export default function LandingPage() {
               </BlurFade>
             </div>
           </div>
+          
+          {/* Manage Subscription Button */}
+          {(userPlan === "pro" || userPlan === "unlimited") && (
+            <div className="mt-12 text-center">
+              <button
+                onClick={startPortal}
+                disabled={portalLoading}
+                className="text-sm text-gray-500 hover:text-[#3079FF] transition-colors inline-flex items-center gap-2"
+              >
+                {portalLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                {portalLoading ? "Opening..." : "Manage Subscription"}
+              </button>
+            </div>
+          )}
         </section>
 
         {/* ─── CTA SECTION ──────────────────────────────────────────────── */}
