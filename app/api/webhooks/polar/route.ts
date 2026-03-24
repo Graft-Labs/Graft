@@ -8,6 +8,7 @@ const supabase = createClient(
 )
 
 const POLAR_WEBHOOK_SECRET = process.env.POLAR_WEBHOOK_SECRET
+const POLAR_IS_SANDBOX = process.env.POLAR_IS_SANDBOX === 'true'
 
 interface PolarWebhookPayload {
   event: string
@@ -67,8 +68,8 @@ export async function POST(req: NextRequest) {
     const rawBody = await req.text()
     const signature = req.headers.get('polar-signature')
 
-    // Verify webhook signature
-    if (POLAR_WEBHOOK_SECRET && POLAR_WEBHOOK_SECRET !== 'your_polar_webhook_secret_here') {
+    // Skip signature verification in sandbox mode (for testing)
+    if (!POLAR_IS_SANDBOX && POLAR_WEBHOOK_SECRET && POLAR_WEBHOOK_SECRET !== 'your_polar_webhook_secret_here') {
       if (!signature) {
         return NextResponse.json({ error: 'No signature' }, { status: 401 })
       }
