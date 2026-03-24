@@ -138,6 +138,11 @@ export async function POST(req: NextRequest) {
       ((data.customer as Record<string, unknown> | undefined)?.email as string | undefined) ||
       (data.email as string | undefined)
 
+    const customerId =
+      (data.customer_id as string | undefined) ||
+      ((data.customer as Record<string, unknown> | undefined)?.id as string | undefined) ||
+      ((data.subscription as Record<string, unknown> | undefined)?.customer_id as string | undefined)
+
     const deepEmails = findStringsByKeys(data, new Set(['customer_email', 'email']))
     const resolvedCustomerEmail = (customerEmail || deepEmails[0] || '').trim().toLowerCase() || undefined
 
@@ -265,6 +270,7 @@ export async function POST(req: NextRequest) {
             scans_limit: scansLimit,
             subscription_id: subscriptionId || existingUser?.subscription_id,
             subscription_status: status,
+            customer_id: customerId || existingUser?.customer_id,
             updated_at: new Date().toISOString(),
           })
           .eq('id', userId)
@@ -364,6 +370,7 @@ export async function POST(req: NextRequest) {
               scans_limit: scansLimit,
               subscription_id: subscriptionId || existingUser?.subscription_id,
               subscription_status: status,
+              customer_id: customerId || existingUser?.customer_id,
               updated_at: new Date().toISOString(),
             })
             .eq('id', userId)

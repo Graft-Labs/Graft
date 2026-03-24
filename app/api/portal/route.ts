@@ -24,26 +24,15 @@ export async function POST(req: NextRequest) {
       }, { status: 500 })
     }
 
-    // Get customer by email from Polar
-    const customerResponse = await fetch(
-      `${POLAR_API_URL}/customers?email=${encodeURIComponent(user.email || '')}`,
-      {
-        headers: {
-          'Authorization': `Bearer ${POLAR_ACCESS_TOKEN}`,
-        },
-      }
-    )
+    // Get customer_id from users table
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('customer_id, subscription_id')
+      .eq('id', user.id)
+      .single()
 
-    if (!customerResponse.ok) {
-      const error = await customerResponse.text()
-      console.error('Polar customer lookup error:', error)
-      return NextResponse.json({ error: 'Failed to find subscription' }, { status: 500 })
-    }
-
-    const customers = await customerResponse.json()
-    const customer = customers?.items?.[0]
-
-    if (!customer) {
+    if (userError || !userData?.customer_id) {
+      console.error('User subscription lookup error:', userError)
       return NextResponse.json({ error: 'No subscription found' }, { status: 404 })
     }
 
@@ -55,7 +44,7 @@ export async function POST(req: NextRequest) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        customer_id: customer.id,
+        customer_id: userData.customer_id,
         return_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard`,
       }),
     })
