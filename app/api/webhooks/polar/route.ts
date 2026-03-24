@@ -223,6 +223,26 @@ export async function POST(req: NextRequest) {
       case 'order.updated':
       case 'checkout.created':
       case 'checkout.updated': {
+        if (
+          subscriptionId &&
+          existingUser?.subscription_id &&
+          existingUser.subscription_id !== subscriptionId
+        ) {
+          const downStatus = status.toLowerCase()
+          if (
+            downStatus.includes('cancel') ||
+            downStatus.includes('expired') ||
+            downStatus.includes('revoke') ||
+            downStatus.includes('refund') ||
+            downStatus.includes('past_due')
+          ) {
+            console.log(
+              `Ignoring status ${status} for non-current subscription ${subscriptionId} (current: ${existingUser.subscription_id})`
+            )
+            break
+          }
+        }
+
         const resolvedPlan = planId || existingUser?.plan || 'pro'
         const scansLimit = PLAN_SCANS_LIMITS[resolvedPlan] ?? 50
         
@@ -247,14 +267,60 @@ export async function POST(req: NextRequest) {
       }
 
       case 'subscription.cancelled':
-      case 'subscription.canceled':
-      case 'subscription.expired': {
+      case 'subscription.canceled': {
+        // Important: canceled usually means "cancel at period end", not immediate loss of access.
+        // Keep current plan/limits and only update subscription status.
+        if (
+          subscriptionId &&
+          existingUser?.subscription_id &&
+          existingUser.subscription_id !== subscriptionId
+        ) {
+          console.log(
+            `Ignoring cancellation for non-current subscription ${subscriptionId} (current: ${existingUser.subscription_id})`
+          )
+          break
+        }
+
+        const { error } = await supabase
+          .from('users')
+          .update({
+            subscription_status: 'cancelled',
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', userId)
+
+        if (error) {
+          console.error('Failed to mark subscription as cancelled:', error)
+          return NextResponse.json({ error: 'Failed to update user' }, { status: 500 })
+        }
+
+        console.log(`User ${userId} marked cancelled (plan retained)`)
+        break
+      }
+
+      case 'subscription.expired':
+      case 'subscription.revoked':
+      case 'order.refunded':
+      case 'refund.created':
+      case 'refund.updated': {
+        // Only downgrade if this event applies to the user's active subscription.
+        if (
+          subscriptionId &&
+          existingUser?.subscription_id &&
+          existingUser.subscription_id !== subscriptionId
+        ) {
+          console.log(
+            `Ignoring downgrade for non-current subscription ${subscriptionId} (current: ${existingUser.subscription_id})`
+          )
+          break
+        }
+
         const { error } = await supabase
           .from('users')
           .update({
             plan: 'free',
             scans_limit: 3,
-            subscription_status: 'cancelled',
+            subscription_status: event.includes('refund') ? 'refunded' : 'cancelled',
             updated_at: new Date().toISOString(),
           })
           .eq('id', userId)
