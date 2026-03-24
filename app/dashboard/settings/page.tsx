@@ -306,11 +306,7 @@ export default function SettingsPage() {
           })
         : null;
 
-      setCancelSubscriptionSuccess(
-        formattedPeriodEnd
-          ? `Your subscription is set to cancel on ${formattedPeriodEnd}.`
-          : "Your subscription is set to cancel at the end of the billing period.",
-      );
+      setCancelSubscriptionSuccess(null);
       setCurrentPeriodEnd(periodEnd ?? null);
 
       setUserData((prev) =>
@@ -750,7 +746,7 @@ export default function SettingsPage() {
                         </p>
                       )}
 
-                      {cancelSubscriptionSuccess && (
+                      {cancelSubscriptionSuccess && !cancellationScheduled && (
                         <p
                           className="text-sm text-green-700 mb-3"
                           style={{ fontFamily: "var(--font-landing-body)" }}
