@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { createClient } from "@/lib/supabase";
 import { ArrowRight, Github, CheckCircle, Loader2, X, AlertTriangle } from "lucide-react";
 import { motion } from "framer-motion";
 import LandingNavbar from "@/components/layout/LandingNavbar";
@@ -20,6 +21,23 @@ import { SmoothCursor } from "@/components/ui/smooth-cursor";
 
 export default function LandingPage() {
   const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
+  const [userPlan, setUserPlan] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function fetchUserPlan() {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data } = await supabase
+          .from("users")
+          .select("plan")
+          .eq("id", user.id)
+          .single();
+        setUserPlan(data?.plan || "free");
+      }
+    }
+    fetchUserPlan();
+  }, []);
 
   const startCheckout = async (planId: "pro" | "unlimited" | "lifetime") => {
     try {
@@ -437,11 +455,11 @@ export default function LandingPage() {
                   </ul>
                   <button
                     onClick={() => startCheckout("pro")}
-                    disabled={checkoutLoading === "pro"}
+                    disabled={checkoutLoading === "pro" || userPlan === "pro"}
                     className="w-full py-3 rounded-full bg-white text-black text-center font-medium hover:bg-gray-100 transition-colors shadow-[0_0_20px_rgba(255,255,255,0.3)] inline-flex items-center justify-center gap-2 disabled:opacity-70 text-sm"
                   >
                     {checkoutLoading === "pro" ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                    Upgrade to Pro
+                    {userPlan === "pro" ? "Current Plan" : userPlan === "unlimited" ? "Downgrade to Pro" : "Upgrade to Pro"}
                   </button>
                 </div>
               </div>
@@ -481,11 +499,11 @@ export default function LandingPage() {
                 </ul>
                 <button
                   onClick={() => startCheckout("unlimited")}
-                  disabled={checkoutLoading === "unlimited"}
+                  disabled={checkoutLoading === "unlimited" || userPlan === "unlimited"}
                   className="w-full py-3 rounded-full border-2 border-[#3079FF] text-[#3079FF] text-center font-medium hover:bg-[#3079FF]/5 transition-colors inline-flex items-center justify-center gap-2 disabled:opacity-70 text-sm"
                 >
                   {checkoutLoading === "unlimited" ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                  Upgrade to Unlimited
+                  {userPlan === "unlimited" ? "Current Plan" : "Upgrade to Unlimited"}
                 </button>
               </div>
               </BlurFade>
