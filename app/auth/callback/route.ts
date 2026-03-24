@@ -174,23 +174,24 @@ export async function GET(request: Request) {
           (metadata.picture as string | undefined) ??
           null
 
-        await supabase
-          .from('users')
-          .upsert(
-            {
-              id: userId,
-              name: resolvedName,
-              email: resolvedEmail,
-              avatar_url: resolvedAvatar,
-              plan: existingUser?.plan ?? 'free',
-              scans_used: existingUser?.scans_used ?? 0,
-              scans_limit: existingUser?.scans_limit ?? 3,
-              github_token: existingUser?.github_token ?? null,
-              github_user_id: existingUser?.github_user_id ?? null,
-              updated_at: new Date().toISOString(),
-            },
-            { onConflict: 'id' }
-          )
+        const isNewUser = !existingUser
+        const userData: Record<string, unknown> = {
+          id: userId,
+          name: resolvedName,
+          email: resolvedEmail,
+          avatar_url: resolvedAvatar,
+          github_token: existingUser?.github_token ?? null,
+          github_user_id: existingUser?.github_user_id ?? null,
+          updated_at: new Date().toISOString(),
+        }
+
+        if (isNewUser) {
+          userData.plan = 'free'
+          userData.scans_used = 0
+          userData.scans_limit = 3
+        }
+
+        await supabase.from('users').upsert(userData, { onConflict: 'id' })
       }
 
       const redirect = NextResponse.redirect(new URL(next, requestUrl.origin))

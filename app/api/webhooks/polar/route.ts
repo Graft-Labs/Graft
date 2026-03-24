@@ -194,10 +194,15 @@ export async function POST(req: NextRequest) {
         event,
         customerEmail: resolvedCustomerEmail,
         hasMetadata: Boolean(metadata),
+        metadataKeys: metadata ? Object.keys(metadata) : [],
         detectedProductIds: Array.from(detectedProductIds),
+        rawEmail: customerEmail,
+        deepEmails,
       })
       return NextResponse.json({ error: 'No user mapping found' }, { status: 400 })
     }
+
+    console.log(`Webhook ${event} - resolved user: ${userId}, email: ${resolvedCustomerEmail}, planId: ${planId}, subscriptionId: ${subscriptionId}, status: ${status}, detectedProductIds: ${JSON.stringify(Array.from(detectedProductIds))}, envProId: ${proProductId}, envUnlimitedId: ${unlimitedProductId}`)
 
     // Basic idempotency guard: if event already applied, skip duplicate side effects.
     const { data: existingUser } = await supabase
@@ -206,10 +211,13 @@ export async function POST(req: NextRequest) {
       .eq('id', userId)
       .single()
 
+    console.log(`Existing user state: plan=${existingUser?.plan}, subId=${existingUser?.subscription_id}, subStatus=${existingUser?.subscription_status}`)
+
     if (
       existingUser?.subscription_id === subscriptionId &&
       existingUser?.subscription_status === status
     ) {
+      console.log(`⏭️ Skipping duplicate webhook for user ${userId}`)
       return NextResponse.json({ received: true, duplicate: true })
     }
 
@@ -243,7 +251,9 @@ export async function POST(req: NextRequest) {
           }
         }
 
-        const resolvedPlan = planId || existingUser?.plan || 'pro'
+        // IMPORTANT: Only default to existing plan if we're sure this is NOT a new subscription
+        // If planId couldn't be resolved, we should NOT overwrite with existing (potentially free) plan
+        const resolvedPlan = planId || (subscriptionId ? 'pro' : existingUser?.plan) || 'pro'
         const scansLimit = PLAN_SCANS_LIMITS[resolvedPlan] ?? 50
         
         const { error } = await supabase
@@ -262,7 +272,7 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ error: 'Failed to update user' }, { status: 500 })
         }
 
-        console.log(`User ${userId} upgraded to ${resolvedPlan}`)
+        console.log(`✅ User ${userId} upgraded to ${resolvedPlan} (scans_limit: ${scansLimit})`)
         break
       }
 
@@ -340,7 +350,8 @@ export async function POST(req: NextRequest) {
           event.startsWith('order.') ||
           event.startsWith('checkout.')
         ) {
-          const resolvedPlan = planId || existingUser?.plan || 'pro'
+          // Same fix: only default to existing plan if we have a subscriptionId
+          const resolvedPlan = planId || (subscriptionId ? 'pro' : existingUser?.plan) || 'pro'
           const scansLimit = PLAN_SCANS_LIMITS[resolvedPlan] ?? 50
 
           const { error } = await supabase
