@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import {
   User,
@@ -155,43 +155,64 @@ export default function SettingsPage() {
     loadData();
   }, []);
 
-  useEffect(() => {
-    async function loadSubscriptionStatus() {
-      try {
-        const res = await fetch("/api/subscription/status", {
-          method: "GET",
-          headers: { "Content-Type": "application/json" },
-        });
+  const loadSubscriptionStatus = useCallback(async () => {
+    try {
+      const res = await fetch("/api/subscription/status", {
+        method: "GET",
+        headers: { "Content-Type": "application/json" },
+      });
 
-        const body = await res.json().catch(() => null);
-        if (!res.ok || !body) return;
+      const body = await res.json().catch(() => null);
+      if (!res.ok || !body) return;
 
-        const nextStatus =
-          typeof body.subscriptionStatus === "string"
-            ? body.subscriptionStatus
-            : null;
-        const periodEnd =
-          typeof body.currentPeriodEnd === "string" ? body.currentPeriodEnd : null;
+      const nextStatus =
+        typeof body.subscriptionStatus === "string"
+          ? body.subscriptionStatus
+          : null;
+      const periodEnd =
+        typeof body.currentPeriodEnd === "string" ? body.currentPeriodEnd : null;
 
-        if (nextStatus) {
-          setUserData((prev) =>
-            prev
-              ? {
-                  ...prev,
-                  subscription_status: nextStatus,
-                }
-              : prev,
-          );
-        }
-
-        setCurrentPeriodEnd(periodEnd);
-      } catch (error) {
-        console.error("Failed to load subscription status", error);
+      if (nextStatus) {
+        setUserData((prev) =>
+          prev
+            ? {
+                ...prev,
+                subscription_status: nextStatus,
+              }
+            : prev,
+        );
       }
+
+      setCurrentPeriodEnd(periodEnd);
+    } catch (error) {
+      console.error("Failed to load subscription status", error);
     }
+  }, []);
+
+  useEffect(() => {
+    loadSubscriptionStatus();
+  }, [loadSubscriptionStatus]);
+
+  useEffect(() => {
+    if (activeTab !== "billing") return;
 
     loadSubscriptionStatus();
-  }, []);
+
+    const intervalId = window.setInterval(() => {
+      loadSubscriptionStatus();
+    }, 10000);
+
+    const handleFocus = () => {
+      loadSubscriptionStatus();
+    };
+
+    window.addEventListener("focus", handleFocus);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", handleFocus);
+    };
+  }, [activeTab, loadSubscriptionStatus]);
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -300,6 +321,8 @@ export default function SettingsPage() {
             }
           : prev,
       );
+
+      loadSubscriptionStatus();
     } finally {
       setCancelingSubscription(false);
     }
@@ -341,6 +364,8 @@ export default function SettingsPage() {
             }
           : prev,
       );
+
+      loadSubscriptionStatus();
     } finally {
       setUncancelingSubscription(false);
     }
