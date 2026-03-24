@@ -10,6 +10,7 @@ const POLAR_API_URL = POLAR_IS_SANDBOX
 
 function getCancellationScheduled(subscription: Record<string, unknown>) {
   if (subscription.cancel_at_period_end === true) return true;
+  if (subscription.cancelAtPeriodEnd === true) return true;
 
   const status =
     typeof subscription.status === "string"
@@ -95,13 +96,25 @@ export async function GET() {
     }
 
     const subscription = (await response.json()) as Record<string, unknown>;
-    const cancellationScheduled = getCancellationScheduled(subscription);
-    const subscriptionStatus =
+    const cancellationScheduledFromPolar = getCancellationScheduled(subscription);
+    const subscriptionStatusFromPolar =
       typeof subscription.status === "string"
         ? subscription.status
-        : cancellationScheduled
+        : cancellationScheduledFromPolar
           ? "cancelled"
           : "active";
+
+    const wasCancelledInDb =
+      userData.subscription_status === "cancelled" ||
+      userData.subscription_status === "canceled";
+
+    const cancellationScheduled =
+      cancellationScheduledFromPolar ||
+      (wasCancelledInDb && subscriptionStatusFromPolar === "active");
+
+    const subscriptionStatus = cancellationScheduled
+      ? "cancelled"
+      : subscriptionStatusFromPolar;
 
     if (subscriptionStatus !== userData.subscription_status) {
       await supabase
