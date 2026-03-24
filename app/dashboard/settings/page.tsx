@@ -83,6 +83,7 @@ export default function SettingsPage() {
   const [cancelSubscriptionSuccess, setCancelSubscriptionSuccess] = useState<
     string | null
   >(null);
+  const [currentPeriodEnd, setCurrentPeriodEnd] = useState<string | null>(null);
 
   useEffect(() => {
     const tab = searchParams.get("tab");
@@ -152,6 +153,44 @@ export default function SettingsPage() {
       setLoading(false);
     }
     loadData();
+  }, []);
+
+  useEffect(() => {
+    async function loadSubscriptionStatus() {
+      try {
+        const res = await fetch("/api/subscription/status", {
+          method: "GET",
+          headers: { "Content-Type": "application/json" },
+        });
+
+        const body = await res.json().catch(() => null);
+        if (!res.ok || !body) return;
+
+        const nextStatus =
+          typeof body.subscriptionStatus === "string"
+            ? body.subscriptionStatus
+            : null;
+        const periodEnd =
+          typeof body.currentPeriodEnd === "string" ? body.currentPeriodEnd : null;
+
+        if (nextStatus) {
+          setUserData((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  subscription_status: nextStatus,
+                }
+              : prev,
+          );
+        }
+
+        setCurrentPeriodEnd(periodEnd);
+      } catch (error) {
+        console.error("Failed to load subscription status", error);
+      }
+    }
+
+    loadSubscriptionStatus();
   }, []);
 
   const handleSaveProfile = async (e: React.FormEvent) => {
@@ -251,6 +290,7 @@ export default function SettingsPage() {
           ? `Your subscription is set to cancel on ${formattedPeriodEnd}.`
           : "Your subscription is set to cancel at the end of the billing period.",
       );
+      setCurrentPeriodEnd(periodEnd ?? null);
 
       setUserData((prev) =>
         prev
@@ -291,6 +331,7 @@ export default function SettingsPage() {
           : "active";
 
       setCancelSubscriptionSuccess("Cancellation removed. Your plan stays active.");
+      setCurrentPeriodEnd(null);
 
       setUserData((prev) =>
         prev
@@ -329,6 +370,14 @@ export default function SettingsPage() {
   const cancellationScheduled =
     userData?.subscription_status === "cancelled" ||
     userData?.subscription_status === "canceled";
+
+  const formattedCurrentPeriodEnd = currentPeriodEnd
+    ? new Date(currentPeriodEnd).toLocaleDateString(undefined, {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      })
+    : null;
 
   return (
     <div className="flex-1 p-4 sm:p-6 lg:p-10 max-w-5xl mx-auto w-full">
@@ -655,6 +704,17 @@ export default function SettingsPage() {
                         anytime. You will keep premium access until the end of your
                         current billing period.
                       </p>
+
+                      {cancellationScheduled && (
+                        <p
+                          className="text-sm text-amber-700 mb-3"
+                          style={{ fontFamily: "var(--font-landing-body)" }}
+                        >
+                          {formattedCurrentPeriodEnd
+                            ? `Cancellation scheduled. Your subscription will end on ${formattedCurrentPeriodEnd}.`
+                            : "Cancellation scheduled. Your subscription will end at the close of the current billing period."}
+                        </p>
+                      )}
 
                       {cancelSubscriptionError && (
                         <p
