@@ -51,8 +51,15 @@ export async function POST(req: NextRequest) {
 
     if (!response.ok) {
       const error = await response.text()
-      console.error('Polar portal error:', error)
-      return NextResponse.json({ error: 'Failed to create portal session' }, { status: 500 })
+      console.error('Polar portal error:', error, 'Status:', response.status)
+      // Provide more specific error messages
+      if (response.status === 404) {
+        return NextResponse.json({ error: 'Customer not found in Polar', details: 'Your subscription may have expired' }, { status: 500 })
+      }
+      if (response.status === 403) {
+        return NextResponse.json({ error: 'Polar API access denied', details: 'Check Polar API key permissions' }, { status: 500 })
+      }
+      return NextResponse.json({ error: 'Failed to create portal session', details: error }, { status: 500 })
     }
 
     const portal = await response.json()
