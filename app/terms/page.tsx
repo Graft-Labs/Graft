@@ -32,7 +32,9 @@ const sections = [
   },
   {
     title: "Contact",
-    body: "For legal questions, contact us through our support form: https://tally.so/r/lbRzX5",
+    body: "For legal questions, contact us through our support ",
+    link: "form",
+    url: "https://tally.so/r/lbRzX5",
   },
 ];
 
@@ -98,6 +100,16 @@ export default function TermsPage() {
                   }}
                 >
                   {section.body}
+                  {section.link && section.url && (
+                    <a
+                      href={section.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ color: "var(--landing-primary)", textDecoration: "underline" }}
+                    >
+                      {section.link}
+                    </a>
+                  )}
                 </p>
               </section>
             ))}
