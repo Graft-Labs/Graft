@@ -2,10 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import crypto from 'crypto'
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SECRET_KEY!
-)
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
+const SUPABASE_SECRET_KEY = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY
+
+const supabase = SUPABASE_URL && SUPABASE_SECRET_KEY
+  ? createClient(SUPABASE_URL, SUPABASE_SECRET_KEY)
+  : null
 
 const POLAR_WEBHOOK_SECRET = process.env.POLAR_WEBHOOK_SECRET
 const POLAR_IS_SANDBOX = process.env.POLAR_IS_SANDBOX === 'true'
@@ -23,6 +25,26 @@ const PLAN_SCANS_LIMITS: Record<string, number> = {
 type HitWindow = { count: number; resetAt: number }
 const webhookHits = new Map<string, HitWindow>()
 const WEBHOOK_LIMIT_PER_MINUTE = 120
+
+function findStringsByKeys(input: unknown, keys: Set<string>, out: string[] = []): string[] {
+  if (!input) return out
+  if (Array.isArray(input)) {
+    for (const item of input) findStringsByKeys(item, keys, out)
+    return out
+  }
+  if (typeof input !== 'object') return out
+
+  const obj = input as Record<string, unknown>
+  for (const [k, v] of Object.entries(obj)) {
+    if (keys.has(k) && typeof v === 'string' && v.trim()) {
+      out.push(v.trim())
+    }
+    if (v && typeof v === 'object') {
+      findStringsByKeys(v, keys, out)
+    }
+  }
+  return out
+}
 
 function allowWebhookRequest(ip: string): boolean {
   const now = Date.now()
@@ -51,6 +73,11 @@ function timingSafeEqual(a: string, b: string): boolean {
 
 export async function POST(req: NextRequest) {
   try {
+    if (!supabase) {
+      console.error('Webhook misconfigured: missing Supabase env vars')
+      return NextResponse.json({ error: 'Server misconfiguration' }, { status: 500 })
+    }
+
     const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
     if (!allowWebhookRequest(ip)) {
       return NextResponse.json({ error: 'Too many webhook requests' }, { status: 429 })
@@ -103,6 +130,9 @@ export async function POST(req: NextRequest) {
       ((data.customer as Record<string, unknown> | undefined)?.email as string | undefined) ||
       (data.email as string | undefined)
 
+    const deepEmails = findStringsByKeys(data, new Set(['customer_email', 'email']))
+    const resolvedCustomerEmail = (customerEmail || deepEmails[0] || '').trim().toLowerCase() || undefined
+
     const detectedProductIds = new Set<string>()
     const productIdFromData = data.product_id as string | undefined
     const productIdFromProduct = ((data.product as Record<string, unknown> | undefined)?.id as string | undefined)
@@ -127,6 +157,12 @@ export async function POST(req: NextRequest) {
     const unlimitedProductId = process.env.POLAR_UNLIMITED_PRODUCT_ID
 
     let planId = (metadata?.plan as string | undefined) || undefined
+    if (!planId && proProductId && rawBody.includes(proProductId)) {
+      planId = 'pro'
+    }
+    if (!planId && unlimitedProductId && rawBody.includes(unlimitedProductId)) {
+      planId = 'unlimited'
+    }
     if (!planId) {
       if (proProductId && detectedProductIds.has(proProductId)) {
         planId = 'pro'
@@ -136,17 +172,22 @@ export async function POST(req: NextRequest) {
     }
 
     let userId = (metadata?.user_id as string | undefined) || undefined
-    if (!userId && customerEmail) {
+    if (!userId && resolvedCustomerEmail) {
       const { data: userByEmail } = await supabase
         .from('users')
         .select('id')
-        .eq('email', customerEmail)
+        .ilike('email', resolvedCustomerEmail)
         .maybeSingle()
       userId = userByEmail?.id
     }
 
     if (!userId) {
-      console.error('Webhook user resolution failed', { event, customerEmail })
+      console.error('Webhook user resolution failed', {
+        event,
+        customerEmail: resolvedCustomerEmail,
+        hasMetadata: Boolean(metadata),
+        detectedProductIds: Array.from(detectedProductIds),
+      })
       return NextResponse.json({ error: 'No user mapping found' }, { status: 400 })
     }
 
