@@ -27,6 +27,10 @@ export const metadata: Metadata = {
     description: "Production-readiness scanner for AI-built indie apps",
     type: "website",
   },
+  icons: {
+    icon: "/graft.svg",
+    apple: "/graft.svg",
+  },
 };
 
 export default function RootLayout({

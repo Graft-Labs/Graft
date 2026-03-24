@@ -11,6 +11,8 @@ import {
   Settings,
   LogOut,
   ChevronRight,
+  Menu,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase";
@@ -44,6 +46,7 @@ export default function DashboardSidebar() {
     avatar_url?: string | null;
   } | null>(null);
   const [loadingUser, setLoadingUser] = useState(true);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Fetch user on load
   useEffect(() => {
@@ -114,14 +117,9 @@ export default function DashboardSidebar() {
       ? "Unlimited scans"
       : `${scansUsed}/${scansLimit} scans used`;
 
-  return (
-    <aside
-      className="hidden lg:flex flex-col w-64 h-[calc(100vh-3rem)] sticky top-6 rounded-2xl border shadow-sm z-10 overflow-hidden"
-      style={{
-        background: "#FFFFFF",
-        borderColor: "var(--landing-border)",
-      }}
-    >
+  // Sidebar content (reusable for both desktop and mobile)
+  const sidebarContent = (
+    <>
       {/* Logo */}
       <div
         className="h-16 flex items-center px-6 border-b"
@@ -159,6 +157,7 @@ export default function DashboardSidebar() {
             <Link
               key={item.href}
               href={item.href}
+              onClick={() => setMobileMenuOpen(false)}
               className={cn(
                 "flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all duration-200",
                 isActive
@@ -186,41 +185,52 @@ export default function DashboardSidebar() {
         style={{ borderColor: "var(--landing-border)" }}
       >
         {/* Plan badge */}
-        <div
-          className="flex items-center justify-between p-3 rounded-xl mb-3 shadow-sm"
-          style={{
-            background: "#F9FAFB",
-            border: "1px solid var(--landing-border)",
-          }}
-        >
-          <div>
-            <p
-              className="text-sm font-semibold text-gray-900"
-              style={{ fontFamily: "var(--font-landing-body)" }}
-            >
-              {planDisplay}
-            </p>
-            <p
-              className="text-xs text-gray-500 font-medium mt-0.5"
-              style={{ fontFamily: "var(--font-landing-body)" }}
-            >
-              {scansDisplay}
-            </p>
+        {loadingUser ? (
+          <div className="flex items-center justify-between p-3 rounded-xl mb-3 animate-pulse" style={{ background: "#F9FAFB", border: "1px solid var(--landing-border)" }}>
+            <div className="space-y-1.5">
+              <div className="h-4 w-20 bg-gray-200 rounded" />
+              <div className="h-3 w-24 bg-gray-200 rounded" />
+            </div>
+            <div className="h-6 w-14 bg-gray-200 rounded-full" />
           </div>
-          {scansLimit < 999999 && (
-            <Link
-              href="/#pricing"
-              className="text-xs font-semibold px-3 py-1.5 rounded-full shadow-sm hover:-translate-y-0.5 transition-transform"
-              style={{
-                background: "var(--landing-primary)",
-                color: "#FFFFFF",
-                fontFamily: "var(--font-landing-body)",
-              }}
-            >
-              Upgrade
-            </Link>
-          )}
-        </div>
+        ) : (
+          <div
+            className="flex items-center justify-between p-3 rounded-xl mb-3 shadow-sm"
+            style={{
+              background: "#F9FAFB",
+              border: "1px solid var(--landing-border)",
+            }}
+          >
+            <div>
+              <p
+                className="text-sm font-semibold text-gray-900"
+                style={{ fontFamily: "var(--font-landing-body)" }}
+              >
+                {planDisplay}
+              </p>
+              <p
+                className="text-xs text-gray-500 font-medium mt-0.5"
+                style={{ fontFamily: "var(--font-landing-body)" }}
+              >
+                {scansDisplay}
+              </p>
+            </div>
+            {scansLimit < 999999 && (
+              <Link
+                href="/#pricing"
+                onClick={() => setMobileMenuOpen(false)}
+                className="text-xs font-semibold px-3 py-1.5 rounded-full shadow-sm hover:-translate-y-0.5 transition-transform"
+                style={{
+                  background: "var(--landing-primary)",
+                  color: "#FFFFFF",
+                  fontFamily: "var(--font-landing-body)",
+                }}
+              >
+                Upgrade
+              </Link>
+            )}
+          </div>
+        )}
 
         {/* User */}
         <div className="flex items-center gap-3 px-2 py-1.5">
@@ -262,6 +272,58 @@ export default function DashboardSidebar() {
           </button>
         </div>
       </div>
-    </aside>
+    </>
+  );
+
+  return (
+    <>
+      {/* Mobile hamburger button */}
+      <button
+        onClick={() => setMobileMenuOpen(true)}
+        className="lg:hidden fixed top-3 left-3 z-50 p-2 rounded-lg bg-white border shadow-sm"
+        aria-label="Open menu"
+      >
+        <Menu size={24} className="text-gray-700" />
+      </button>
+
+      {/* Mobile drawer overlay */}
+      {mobileMenuOpen && (
+        <div
+          className="lg:hidden fixed inset-0 z-40 bg-black/50"
+          onClick={() => setMobileMenuOpen(false)}
+        />
+      )}
+
+      {/* Mobile drawer */}
+      <aside
+        className={cn(
+          "lg:hidden fixed inset-y-0 left-0 z-50 w-64 transform transition-transform duration-300 ease-in-out",
+          mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
+        )}
+        style={{ background: "#FFFFFF" }}
+      >
+        <div className="flex flex-col h-full">
+          <button
+            onClick={() => setMobileMenuOpen(false)}
+            className="absolute top-4 right-4 p-2 rounded-lg hover:bg-gray-100"
+            aria-label="Close menu"
+          >
+            <X size={20} className="text-gray-500" />
+          </button>
+          {sidebarContent}
+        </div>
+      </aside>
+
+      {/* Desktop sidebar */}
+      <aside
+        className="hidden lg:flex flex-col w-64 h-[calc(100vh-3rem)] sticky top-6 rounded-2xl border shadow-sm z-10 overflow-hidden"
+        style={{
+          background: "#FFFFFF",
+          borderColor: "var(--landing-border)",
+        }}
+      >
+        {sidebarContent}
+      </aside>
+    </>
   );
 }
