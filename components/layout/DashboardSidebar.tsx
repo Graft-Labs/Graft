@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase";
-import { getCached, setCached } from "@/lib/client-cache";
+import { getCached, setCached, clearCacheByPrefix } from "@/lib/client-cache";
 
 const navItems = [
   { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
@@ -48,15 +48,8 @@ export default function DashboardSidebar() {
   // Fetch user on load
   useEffect(() => {
     async function fetchUser() {
-      const cached = getCached<{
-        user: typeof user;
-        userData: typeof userData;
-      }>("sidebar:user");
-      if (cached) {
-        setUser(cached.user);
-        setUserData(cached.userData);
-        setLoadingUser(false);
-      }
+      // Clear stale cache before fetching to ensure fresh plan data
+      clearCacheByPrefix("sidebar:");
 
       const supabase = createClient();
       const {
