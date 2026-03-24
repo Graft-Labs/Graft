@@ -3,6 +3,11 @@ import { createServerClient } from '@/lib/supabase-server'
 
 const POLAR_ACCESS_TOKEN = process.env.POLAR_ACCESS_TOKEN
 const POLAR_ORGANIZATION = process.env.NEXT_PUBLIC_POLAR_ORGANIZATION
+const POLAR_IS_SANDBOX = process.env.POLAR_IS_SANDBOX === 'true'
+
+const POLAR_API_URL = POLAR_IS_SANDBOX 
+  ? 'https://sandbox-api.polar.sh/v1' 
+  : 'https://api.polar.sh/v1'
 
 const PLAN_PRICES: Record<string, { productId: string; priceId: string; scansLimit: number }> = {
   pro: { productId: process.env.POLAR_PRO_PRODUCT_ID || '', priceId: process.env.POLAR_PRO_PRICE_ID || '', scansLimit: 50 },
@@ -33,24 +38,28 @@ export async function POST(req: NextRequest) {
     }
 
     // Create Polar checkout session
-    const response = await fetch('https://api.polar.sh/v1/checkouts', {
+    const checkoutBody: Record<string, unknown> = {
+      products: [plan.productId],
+      customer_email: user.email,
+      metadata: {
+        user_id: user.id,
+        plan: planId,
+      },
+      success_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard?upgrade=success`,
+      cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/#pricing`,
+    }
+
+    // Add product_id and product_price_id only if priceId is provided (sandbox may not have price IDs)
+    if (plan.productId) checkoutBody.product_id = plan.productId
+    if (plan.priceId) checkoutBody.product_price_id = plan.priceId
+
+    const response = await fetch(`${POLAR_API_URL}/checkouts`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${POLAR_ACCESS_TOKEN}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        products: [plan.productId],
-        product_id: plan.productId,
-        product_price_id: plan.priceId,
-        customer_email: user.email,
-        metadata: {
-          user_id: user.id,
-          plan: planId,
-        },
-        success_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard?upgrade=success`,
-        cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/#pricing`,
-      }),
+      body: JSON.stringify(checkoutBody),
     })
 
     if (!response.ok) {
