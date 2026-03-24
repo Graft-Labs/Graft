@@ -76,6 +76,7 @@ export default function SettingsPage() {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [cancelingSubscription, setCancelingSubscription] = useState(false);
+  const [uncancelingSubscription, setUncancelingSubscription] = useState(false);
   const [cancelSubscriptionError, setCancelSubscriptionError] = useState<
     string | null
   >(null);
@@ -229,9 +230,14 @@ export default function SettingsPage() {
         return;
       }
 
-      const periodEnd = body?.subscription?.current_period_end as
+      const periodEnd = (body?.currentPeriodEnd ||
+        body?.subscription?.current_period_end) as
         | string
         | undefined;
+      const nextStatus =
+        typeof body?.subscriptionStatus === "string"
+          ? body.subscriptionStatus
+          : "cancelled";
       const formattedPeriodEnd = periodEnd
         ? new Date(periodEnd).toLocaleDateString(undefined, {
             year: "numeric",
@@ -250,12 +256,52 @@ export default function SettingsPage() {
         prev
           ? {
               ...prev,
-              subscription_status: "cancelled",
+              subscription_status: nextStatus,
             }
           : prev,
       );
     } finally {
       setCancelingSubscription(false);
+    }
+  };
+
+  const handleUncancelSubscription = async () => {
+    setUncancelingSubscription(true);
+    setCancelSubscriptionError(null);
+    setCancelSubscriptionSuccess(null);
+
+    try {
+      const res = await fetch("/api/subscription/uncancel", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      const body = await res.json().catch(() => null);
+
+      if (!res.ok) {
+        setCancelSubscriptionError(
+          body?.message ||
+            "Could not keep your subscription active right now. Please try again.",
+        );
+        return;
+      }
+
+      const nextStatus =
+        typeof body?.subscriptionStatus === "string"
+          ? body.subscriptionStatus
+          : "active";
+
+      setCancelSubscriptionSuccess("Cancellation removed. Your plan stays active.");
+
+      setUserData((prev) =>
+        prev
+          ? {
+              ...prev,
+              subscription_status: nextStatus,
+            }
+          : prev,
+      );
+    } finally {
+      setUncancelingSubscription(false);
     }
   };
 
@@ -279,6 +325,10 @@ export default function SettingsPage() {
     user?.app_metadata?.provider === "google" ||
     user?.identities?.some((identity) => identity.provider === "google"),
   );
+
+  const cancellationScheduled =
+    userData?.subscription_status === "cancelled" ||
+    userData?.subscription_status === "canceled";
 
   return (
     <div className="flex-1 p-4 sm:p-6 lg:p-10 max-w-5xl mx-auto w-full">
@@ -624,21 +674,33 @@ export default function SettingsPage() {
                         </p>
                       )}
 
-                      {userData?.subscription_status === "cancelled" ||
-                      userData?.subscription_status === "canceled" ? (
-                        <span
-                          className="inline-flex px-5 py-2.5 border border-green-200 text-green-700 bg-green-50 rounded-full text-sm font-semibold"
-                          style={{ fontFamily: "var(--font-landing-body)" }}
-                        >
-                          Cancellation Scheduled
-                        </span>
+                      {cancellationScheduled ? (
+                        <div className="flex flex-wrap items-center gap-3">
+                          <span
+                            className="inline-flex px-5 py-2.5 border border-green-200 text-green-700 bg-green-50 rounded-full text-sm font-semibold"
+                            style={{ fontFamily: "var(--font-landing-body)" }}
+                          >
+                            Cancellation Scheduled
+                          </span>
+                          <button
+                            type="button"
+                            className="inline-flex px-5 py-2.5 border border-gray-200 text-gray-700 rounded-full text-sm font-semibold hover:bg-gray-50 transition-colors disabled:opacity-60"
+                            style={{ fontFamily: "var(--font-landing-body)" }}
+                            onClick={handleUncancelSubscription}
+                            disabled={uncancelingSubscription}
+                          >
+                            {uncancelingSubscription
+                              ? "Keeping Active..."
+                              : "Keep Subscription Active"}
+                          </button>
+                        </div>
                       ) : (
                         <button
                           type="button"
                           className="inline-flex px-5 py-2.5 border border-gray-200 text-gray-700 rounded-full text-sm font-semibold hover:bg-gray-50 transition-colors disabled:opacity-60"
                           style={{ fontFamily: "var(--font-landing-body)" }}
                           onClick={handleCancelSubscription}
-                          disabled={cancelingSubscription}
+                          disabled={cancelingSubscription || uncancelingSubscription}
                         >
                           {cancelingSubscription
                             ? "Cancelling..."

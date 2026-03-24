@@ -45,7 +45,7 @@ export async function POST() {
 
     const { data: userData, error: userError } = await supabase
       .from("users")
-      .select("subscription_id, plan")
+      .select("subscription_id")
       .eq("id", user.id)
       .single();
 
@@ -65,30 +65,20 @@ export async function POST() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          cancel_at_period_end: true,
+          cancel_at_period_end: false,
         }),
       },
     );
 
     if (!response.ok) {
       const details = await response.text();
-      console.error("Failed to cancel Polar subscription", {
+      console.error("Failed to uncancel Polar subscription", {
         status: response.status,
         details,
       });
 
-      if (response.status === 403) {
-        return NextResponse.json(
-          {
-            message:
-              "Your subscription is already canceled for the current period.",
-          },
-          { status: 400 },
-        );
-      }
-
       return NextResponse.json(
-        { message: "Failed to cancel subscription. Please try again." },
+        { message: "Failed to keep subscription active. Please try again." },
         { status: 500 },
       );
     }
@@ -113,7 +103,7 @@ export async function POST() {
       .eq("id", user.id);
 
     if (updateError) {
-      console.error("Failed to persist subscription status after cancel", {
+      console.error("Failed to persist subscription status after uncancel", {
         userId: user.id,
         updateError,
       });
@@ -121,7 +111,7 @@ export async function POST() {
       return NextResponse.json(
         {
           message:
-            "Cancellation was sent but we could not update account status. Please refresh and try again.",
+            "Update was sent but we could not refresh account status. Please refresh and try again.",
         },
         { status: 500 },
       );
@@ -136,10 +126,10 @@ export async function POST() {
         typeof subscription.current_period_end === "string"
           ? subscription.current_period_end
           : null,
-      message: "Subscription cancellation scheduled.",
+      message: "Subscription will remain active.",
     });
   } catch (error) {
-    console.error("Subscription cancel API error", error);
+    console.error("Subscription uncancel API error", error);
     return NextResponse.json(
       { message: "Internal server error" },
       { status: 500 },

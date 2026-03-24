@@ -27,6 +27,25 @@ type HitWindow = { count: number; resetAt: number }
 const webhookHits = new Map<string, HitWindow>()
 const WEBHOOK_LIMIT_PER_MINUTE = 120
 
+function hasScheduledCancellation(data: Record<string, unknown>): boolean {
+  const direct = data.cancel_at_period_end
+  const nested =
+    (data.subscription as Record<string, unknown> | undefined)
+      ?.cancel_at_period_end
+
+  if (direct === true || nested === true) return true
+
+  const status =
+    (typeof data.status === 'string' ? data.status : '') ||
+    (typeof (data.subscription as Record<string, unknown> | undefined)?.status ===
+    'string'
+      ? ((data.subscription as Record<string, unknown>).status as string)
+      : '')
+
+  const normalizedStatus = status.toLowerCase()
+  return normalizedStatus === 'cancelled' || normalizedStatus === 'canceled'
+}
+
 function findStringsByKeys(input: unknown, keys: Set<string>, out: string[] = []): string[] {
   if (!input) return out
   if (Array.isArray(input)) {
@@ -132,6 +151,7 @@ export async function POST(req: NextRequest) {
       ((data.subscription as Record<string, unknown> | undefined)?.status as string | undefined) ||
       ((data.subscription as Record<string, unknown> | undefined)?.state as string | undefined) ||
       'active'
+    const cancellationScheduled = hasScheduledCancellation(data)
 
     const customerEmail =
       (data.customer_email as string | undefined) ||
@@ -269,7 +289,7 @@ export async function POST(req: NextRequest) {
             plan: resolvedPlan,
             scans_limit: scansLimit,
             subscription_id: subscriptionId || existingUser?.subscription_id,
-            subscription_status: status,
+            subscription_status: cancellationScheduled ? 'cancelled' : status,
             customer_id: customerId || existingUser?.customer_id,
             updated_at: new Date().toISOString(),
           })
@@ -369,7 +389,7 @@ export async function POST(req: NextRequest) {
               plan: resolvedPlan,
               scans_limit: scansLimit,
               subscription_id: subscriptionId || existingUser?.subscription_id,
-              subscription_status: status,
+              subscription_status: cancellationScheduled ? 'cancelled' : status,
               customer_id: customerId || existingUser?.customer_id,
               updated_at: new Date().toISOString(),
             })
