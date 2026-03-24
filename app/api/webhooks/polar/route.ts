@@ -213,7 +213,7 @@ export async function POST(req: NextRequest) {
     // Basic idempotency guard: if event already applied, skip duplicate side effects.
     const { data: existingUser } = await supabase
       .from('users')
-      .select('plan, subscription_id, subscription_status')
+      .select('plan, subscription_id, subscription_status, customer_id')
       .eq('id', userId)
       .single()
 
