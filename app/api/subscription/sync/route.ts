@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase-server";
+import { createClient } from "@supabase/supabase-js";
 
 const POLAR_ACCESS_TOKEN = process.env.POLAR_ACCESS_TOKEN;
 const POLAR_IS_SANDBOX = process.env.POLAR_IS_SANDBOX === "true";
@@ -7,6 +8,10 @@ const POLAR_IS_SANDBOX = process.env.POLAR_IS_SANDBOX === "true";
 const POLAR_API_URL = POLAR_IS_SANDBOX
   ? "https://sandbox-api.polar.sh/v1"
   : "https://api.polar.sh/v1";
+
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const SUPABASE_SERVICE_KEY =
+  process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 const PLAN_SCANS_LIMITS: Record<string, number> = {
   pro: 50,
@@ -138,6 +143,10 @@ export async function POST(req: NextRequest) {
     }
 
     const supabase = await createServerClient();
+    const adminSupabase =
+      SUPABASE_URL && SUPABASE_SERVICE_KEY
+        ? createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+        : null;
     const {
       data: { user },
     } = await supabase.auth.getUser();
@@ -223,7 +232,8 @@ export async function POST(req: NextRequest) {
             : null;
 
         if (completedStatuses.has(checkoutStatus) && planFromCheckout) {
-          await supabase
+          const updater = adminSupabase ?? supabase;
+          const { error: checkoutUpdateError } = await updater
             .from("users")
             .update({
               plan: planFromCheckout,
@@ -234,6 +244,17 @@ export async function POST(req: NextRequest) {
               updated_at: new Date().toISOString(),
             })
             .eq("id", user.id);
+
+          if (checkoutUpdateError) {
+            console.error("Failed to update user from checkout sync", {
+              userId: user.id,
+              error: checkoutUpdateError,
+            });
+            return NextResponse.json(
+              { message: "Failed to persist checkout subscription state." },
+              { status: 500 },
+            );
+          }
 
           // If checkout already includes subscription details, we can stop here.
           if (checkoutSubscriptionId) {
@@ -320,6 +341,7 @@ export async function POST(req: NextRequest) {
       if (listResponse.ok) {
         const listPayload = (await listResponse.json()) as Record<string, unknown>;
         const list =
+          (listPayload.data as Array<Record<string, unknown>> | undefined) ||
           (listPayload.items as Array<Record<string, unknown>> | undefined) ||
           (listPayload.result as Array<Record<string, unknown>> | undefined) ||
           (listPayload.subscriptions as Array<Record<string, unknown>> | undefined) ||
@@ -376,7 +398,8 @@ export async function POST(req: NextRequest) {
       subscription.cancelAtPeriodEnd === true;
 
     // Update DB
-    await supabase
+    const updater = adminSupabase ?? supabase;
+    const { error: finalUpdateError } = await updater
       .from("users")
       .update({
         plan: effectivePlan,
@@ -387,6 +410,21 @@ export async function POST(req: NextRequest) {
         updated_at: new Date().toISOString(),
       })
       .eq("id", user.id);
+
+    if (finalUpdateError) {
+      console.error("Failed to persist subscription sync", {
+        userId: user.id,
+        error: finalUpdateError,
+        effectivePlan,
+        effectiveStatus,
+        resolvedSubscriptionId,
+        resolvedCustomerId,
+      });
+      return NextResponse.json(
+        { message: "Failed to persist subscription state." },
+        { status: 500 },
+      );
+    }
 
     return NextResponse.json({
       success: true,

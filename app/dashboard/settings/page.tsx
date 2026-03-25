@@ -277,6 +277,21 @@ export default function SettingsPage() {
       const body = await res.json().catch(() => null);
       if (!res.ok || !body) return;
 
+      if (body.plan && typeof body.plan === "string") {
+        setUserData((prev) =>
+          prev
+            ? {
+                ...prev,
+                plan: body.plan,
+                scans_limit:
+                  typeof body.scansLimit === "number"
+                    ? body.scansLimit
+                    : prev.scans_limit,
+              }
+            : prev,
+        );
+      }
+
       const nextStatus =
         typeof body.subscriptionStatus === "string"
           ? body.subscriptionStatus
