@@ -32,10 +32,16 @@ export default function IntegrationsTab({ hasGithubConnected, hasGoogleConnected
 
   useEffect(() => {
     const supabase = createClient();
-    void supabase.auth.getUserIdentities().then(({ data }) => {
+    void supabase.auth.getUserIdentities().then(({ data, error }) => {
+      if (error) {
+        console.error("Failed to fetch identities:", error);
+        return;
+      }
       const identities = data?.identities ?? [];
-      setGithubConnected(identities.some((identity) => identity.provider === "github") || hasGithubConnected);
-      setGoogleConnected(identities.some((identity) => identity.provider === "google") || hasGoogleConnected);
+      const hasGithub = identities.some((identity) => identity.provider === "github");
+      const hasGoogle = identities.some((identity) => identity.provider === "google");
+      setGithubConnected(hasGithub || hasGithubConnected);
+      setGoogleConnected(hasGoogle || hasGoogleConnected);
     });
   }, [hasGithubConnected, hasGoogleConnected]);
 

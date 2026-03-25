@@ -509,6 +509,21 @@ export default function SettingsPage() {
                     </div>
                   </div>
 
+                  {/* Account ID - under avatar, above name */}
+                  {userData?.customer_id && (
+                    <div className="mb-8 max-w-md">
+                      <p
+                        className="text-xs text-gray-500 mb-1"
+                        style={{ fontFamily: "var(--font-landing-body)" }}
+                      >
+                        Account ID
+                      </p>
+                      <code className="text-xs bg-gray-100 px-2 py-1 rounded font-mono text-gray-700 break-all">
+                        {userData.customer_id}
+                      </code>
+                    </div>
+                  )}
+
                   {/* Form */}
                   <form
                     onSubmit={handleSaveProfile}
@@ -552,27 +567,6 @@ export default function SettingsPage() {
                       </button>
                     </div>
                   </form>
-
-                  {/* Account ID */}
-                  {userData?.customer_id && (
-                    <div className="mt-10 pt-8 border-t border-gray-100 max-w-md">
-                      <h3
-                        className="text-sm font-bold text-gray-900 mb-1"
-                        style={{ fontFamily: "var(--font-landing-heading)" }}
-                      >
-                        Account ID
-                      </h3>
-                      <p
-                        className="text-xs text-gray-500 mb-3"
-                        style={{ fontFamily: "var(--font-landing-body)" }}
-                      >
-                        Use this ID when contacting support
-                      </p>
-                      <code className="text-xs bg-gray-100 px-2 py-1 rounded font-mono text-gray-700 break-all">
-                        {userData.customer_id}
-                      </code>
-                    </div>
-                  )}
 
                   <div className="mt-10 pt-8 border-t border-red-100 max-w-md">
                     <h3
