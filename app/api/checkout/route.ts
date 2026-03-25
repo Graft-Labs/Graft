@@ -37,7 +37,48 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid plan' }, { status: 400 })
     }
 
-    // Create Polar checkout session
+    // Check if user already has an active subscription - redirect to customer portal for upgrades
+    const { data: userData } = await supabase
+      .from('users')
+      .select('subscription_id, subscription_status, customer_id')
+      .eq('id', user.id)
+      .single()
+
+    const hasActiveSubscription = userData?.subscription_id && 
+      userData?.subscription_status === 'active'
+
+    // If user has active subscription, create a customer portal session for them to manage/upgrade
+    if (hasActiveSubscription && userData?.customer_id) {
+      console.log('User has active subscription, creating portal session for upgrade')
+
+      const portalResponse = await fetch(`${POLAR_API_URL}/customers/${userData.customer_id}/portal-session`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${POLAR_ACCESS_TOKEN}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          return_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard?upgrade=success`,
+        }),
+      })
+
+      if (!portalResponse.ok) {
+        const error = await portalResponse.text()
+        console.error('Polar portal error:', error)
+        return NextResponse.json({ 
+          error: 'Failed to create portal session',
+          message: 'Please try again or contact support.'
+        }, { status: 500 })
+      }
+
+      const portal = await portalResponse.json()
+      return NextResponse.json({ 
+        url: portal.url,
+        isPortal: true
+      })
+    }
+
+    // No active subscription - create a new checkout session
     const checkoutBody: Record<string, unknown> = {
       products: [plan.productId],
       customer_email: user.email,
