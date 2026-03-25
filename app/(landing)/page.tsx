@@ -127,7 +127,11 @@ export default function LandingPage() {
     }
 
     if (planId === "free") {
-      window.location.href = "/dashboard";
+      if (userPlan === "free") {
+        window.location.href = "/dashboard";
+      } else {
+        window.location.href = "/dashboard/settings?tab=billing";
+      }
       return;
     }
 
@@ -154,7 +158,7 @@ export default function LandingPage() {
 
     if (planId === "free") {
       if (userPlan === "free") return "Current plan";
-      return "Switch to Free";
+      return "Manage in Billing";
     }
 
     if (planId === "pro") {
