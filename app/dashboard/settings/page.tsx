@@ -147,7 +147,16 @@ export default function SettingsPage() {
     const upgradeSuccess = searchParams.get("upgrade");
     if (upgradeSuccess === "success") {
       setActiveTab("billing");
-      setShowUpgradeSuccess(true);
+      async function syncAndShowSuccess() {
+        try {
+          await fetch("/api/subscription/sync", { method: "POST" });
+          await loadSubscriptionStatus();
+        } catch (err) {
+          console.error("Failed to sync subscription:", err);
+        }
+        setShowUpgradeSuccess(true);
+      }
+      syncAndShowSuccess();
       const url = new URL(window.location.href);
       url.searchParams.delete("upgrade");
       window.history.replaceState({}, "", url.pathname + url.search);
