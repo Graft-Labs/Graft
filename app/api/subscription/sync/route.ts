@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase-server";
 
 const POLAR_ACCESS_TOKEN = process.env.POLAR_ACCESS_TOKEN;
@@ -127,8 +127,16 @@ function pickBestSubscription(
   return subscriptions[0] || null;
 }
 
-export async function POST() {
+export async function POST(req: NextRequest) {
   try {
+    let checkoutId: string | null = null;
+    const body = (await req.json().catch(() => null)) as
+      | { checkoutId?: string }
+      | null;
+    if (typeof body?.checkoutId === "string" && body.checkoutId.trim()) {
+      checkoutId = body.checkoutId.trim();
+    }
+
     const supabase = await createServerClient();
     const {
       data: { user },
@@ -167,6 +175,80 @@ export async function POST() {
     }
 
     let subscription: Record<string, unknown> | null = null;
+
+    // 0) If we have a checkout ID from success redirect, resolve from checkout first
+    if (checkoutId) {
+      const checkoutResponse = await fetch(
+        `${POLAR_API_URL}/checkouts/${encodeURIComponent(checkoutId)}`,
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${POLAR_ACCESS_TOKEN}`,
+            "Content-Type": "application/json",
+          },
+        },
+      );
+
+      if (checkoutResponse.ok) {
+        const checkout = (await checkoutResponse.json()) as Record<string, unknown>;
+
+        const checkoutStatus =
+          typeof checkout.status === "string" ? checkout.status.toLowerCase() : "";
+        const checkoutProductId =
+          (checkout.product_id as string | undefined) ||
+          ((checkout.product as Record<string, unknown> | undefined)?.id as
+            | string
+            | undefined) ||
+          (((checkout.products as Array<Record<string, unknown>> | undefined)?.[0]?.id as
+            | string
+            | undefined) ??
+            ((checkout.products as Array<Record<string, unknown>> | undefined)?.[0]
+              ?.product_id as string | undefined));
+
+        const checkoutCustomerId =
+          (checkout.customer_id as string | undefined) ||
+          ((checkout.customer as Record<string, unknown> | undefined)?.id as
+            | string
+            | undefined);
+        const checkoutSubscriptionId =
+          (checkout.subscription_id as string | undefined) ||
+          ((checkout.subscription as Record<string, unknown> | undefined)?.id as
+            | string
+            | undefined);
+
+        const completedStatuses = new Set(["succeeded", "paid", "completed", "active"]);
+        const planFromCheckout =
+          checkoutProductId && PLAN_PRODUCT_MAP[checkoutProductId]
+            ? PLAN_PRODUCT_MAP[checkoutProductId]
+            : null;
+
+        if (completedStatuses.has(checkoutStatus) && planFromCheckout) {
+          await supabase
+            .from("users")
+            .update({
+              plan: planFromCheckout,
+              scans_limit: PLAN_SCANS_LIMITS[planFromCheckout] ?? 3,
+              subscription_status: "active",
+              customer_id: checkoutCustomerId || userData.customer_id,
+              subscription_id: checkoutSubscriptionId || userData.subscription_id,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", user.id);
+
+          // If checkout already includes subscription details, we can stop here.
+          if (checkoutSubscriptionId) {
+            return NextResponse.json({
+              success: true,
+              plan: planFromCheckout,
+              subscriptionStatus: "active",
+              cancelAtPeriodEnd: false,
+              currentPeriodEnd: null,
+              message: `Synced from checkout ${checkoutId}.`,
+            });
+          }
+        }
+      }
+    }
 
     // 1) Prefer known subscription_id
     if (userData.subscription_id) {

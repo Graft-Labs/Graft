@@ -170,7 +170,7 @@ export async function POST(req: NextRequest) {
         user_id: user.id,
         plan: planId,
       },
-      success_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/settings?tab=billing&upgrade=success`,
+      success_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/settings?tab=billing&upgrade=success&checkout_id={CHECKOUT_ID}`,
       cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/#pricing`,
     }
 

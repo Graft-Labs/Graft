@@ -144,6 +144,7 @@ export default function SettingsPage() {
     const tab = searchParams.get("tab");
     const integrationError = searchParams.get("integration_error");
     const upgradeSuccess = searchParams.get("upgrade");
+    const checkoutId = searchParams.get("checkout_id");
     if (upgradeSuccess === "success") {
       setActiveTab("billing");
       async function syncAndShowSuccess() {
@@ -154,7 +155,11 @@ export default function SettingsPage() {
           const supabase = createClient();
 
           for (let attempt = 0; attempt < 6; attempt += 1) {
-            await fetch("/api/subscription/sync", { method: "POST" });
+            await fetch("/api/subscription/sync", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ checkoutId }),
+            });
 
             const {
               data: { user: currentUser },
@@ -195,6 +200,7 @@ export default function SettingsPage() {
       syncAndShowSuccess();
       const url = new URL(window.location.href);
       url.searchParams.delete("upgrade");
+      url.searchParams.delete("checkout_id");
       window.history.replaceState({}, "", url.pathname + url.search);
     } else if (
       tab &&
