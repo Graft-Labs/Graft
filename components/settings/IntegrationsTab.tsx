@@ -137,6 +137,9 @@ export default function IntegrationsTab({ hasGithubConnected: _hasGithubConnecte
       provider,
       options: {
         redirectTo: getAuthRedirectUrl(),
+        queryParams: {
+          prompt: "select_account",
+        },
         ...(provider === "github" ? { scopes: "repo read:org user:email" } : {}),
       },
     });
