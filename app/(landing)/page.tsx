@@ -20,24 +20,43 @@ import { IconCloud } from "@/components/ui/icon-cloud";
 import { OrbitingCircles } from "@/components/ui/orbiting-circles";
 import { SmoothCursor } from "@/components/ui/smooth-cursor";
 
+type PlanTier = "free" | "pro" | "unlimited";
+
 export default function LandingPage() {
   const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
   const [_portalLoading, setPortalLoading] = useState(false);
-  const [userPlan, setUserPlan] = useState<string | null>(null);
+  const [userPlan, setUserPlan] = useState<PlanTier | null>(null);
+  const [isAuthResolved, setIsAuthResolved] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   useEffect(() => {
     async function fetchUserPlan() {
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
+
       if (user) {
+        setIsLoggedIn(true);
+
         const { data } = await supabase
           .from("users")
           .select("plan")
           .eq("id", user.id)
           .single();
-        setUserPlan(data?.plan || "free");
+
+        const normalizedPlan = data?.plan;
+        if (normalizedPlan === "pro" || normalizedPlan === "unlimited") {
+          setUserPlan(normalizedPlan);
+        } else {
+          setUserPlan("free");
+        }
+      } else {
+        setIsLoggedIn(false);
+        setUserPlan(null);
       }
+
+      setIsAuthResolved(true);
     }
+
     fetchUserPlan();
   }, []);
 
@@ -97,6 +116,68 @@ export default function LandingPage() {
     } finally {
       setPortalLoading(false);
     }
+  };
+
+  const handlePricingAction = (planId: PlanTier) => {
+    if (!isAuthResolved) return;
+
+    if (!isLoggedIn) {
+      window.location.href = "/auth/signup";
+      return;
+    }
+
+    if (planId === "free") {
+      window.location.href = "/dashboard";
+      return;
+    }
+
+    if (userPlan === planId) {
+      window.location.href = "/dashboard/settings?tab=billing";
+      return;
+    }
+
+    if (userPlan === "unlimited" && planId === "pro") {
+      window.location.href = "/dashboard/settings?tab=billing";
+      return;
+    }
+
+    void startCheckout(planId);
+  };
+
+  const getPricingButtonText = (planId: PlanTier) => {
+    if (!isAuthResolved) return "Checking plan...";
+
+    if (!isLoggedIn) {
+      if (planId === "free") return "Start for free";
+      return "Get Started";
+    }
+
+    if (planId === "free") {
+      if (userPlan === "free") return "Current plan";
+      return "Switch to Free";
+    }
+
+    if (planId === "pro") {
+      if (userPlan === "pro") return "Current plan";
+      if (userPlan === "unlimited") return "Manage in Billing";
+      return "Upgrade to Pro";
+    }
+
+    if (userPlan === "unlimited") return "Current plan";
+    return "Upgrade to Unlimited";
+  };
+
+  const isPricingButtonDisabled = (planId: PlanTier) => {
+    if (!isAuthResolved) return true;
+    if (!isLoggedIn) return false;
+
+    if (checkoutLoading === planId) return true;
+
+    if (planId === "free") return userPlan === "free";
+    if (planId === "pro") return userPlan === "pro";
+    if (planId === "unlimited") return userPlan === "unlimited";
+
+    return false;
   };
 
   return (
@@ -442,12 +523,14 @@ export default function LandingPage() {
                     </li>
                   ))}
                 </ul>
-                <Link
-                  href="/auth/signup"
-                  className="w-full py-3 rounded-full border border-gray-300 text-center font-medium text-gray-700 hover:bg-gray-50 transition-colors text-sm"
+                <button
+                  type="button"
+                  onClick={() => handlePricingAction("free")}
+                  disabled={isPricingButtonDisabled("free")}
+                  className="w-full py-3 rounded-full border border-gray-300 text-center font-medium text-gray-700 hover:bg-gray-50 transition-colors text-sm disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  Start for free
-                </Link>
+                  {getPricingButtonText("free")}
+                </button>
               </div>
               </BlurFade>
 
@@ -486,12 +569,15 @@ export default function LandingPage() {
                       </li>
                     ))}
                   </ul>
-                  <Link
-                    href="/auth/signup"
-                    className="w-full py-3 rounded-full bg-[#3079FF] text-white text-center font-medium hover:bg-blue-600 transition-colors text-sm"
+                  <button
+                    type="button"
+                    onClick={() => handlePricingAction("pro")}
+                    disabled={isPricingButtonDisabled("pro")}
+                    className="w-full py-3 rounded-full bg-[#3079FF] text-white text-center font-medium hover:bg-blue-600 transition-colors text-sm disabled:opacity-60 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
                   >
-                    Get Started
-                  </Link>
+                    {checkoutLoading === "pro" ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                    {getPricingButtonText("pro")}
+                  </button>
                 </div>
               </div>
               </BlurFade>
@@ -528,12 +614,15 @@ export default function LandingPage() {
                     </li>
                   ))}
                 </ul>
-                <Link
-                  href="/auth/signup"
-                  className="w-full py-3 rounded-full border-2 border-[#3079FF] text-[#3079FF] text-center font-medium hover:bg-[#3079FF] hover:text-white transition-colors text-sm"
+                <button
+                  type="button"
+                  onClick={() => handlePricingAction("unlimited")}
+                  disabled={isPricingButtonDisabled("unlimited")}
+                  className="w-full py-3 rounded-full border-2 border-[#3079FF] text-[#3079FF] text-center font-medium hover:bg-[#3079FF] hover:text-white transition-colors text-sm disabled:opacity-60 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
                 >
-                  Get Started
-                </Link>
+                  {checkoutLoading === "unlimited" ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                  {getPricingButtonText("unlimited")}
+                </button>
               </div>
               </BlurFade>
             </div>
