@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase";
 import { ArrowRight, Github, CheckCircle, Loader2, X, AlertTriangle } from "lucide-react";
@@ -21,7 +22,7 @@ import { SmoothCursor } from "@/components/ui/smooth-cursor";
 
 export default function LandingPage() {
   const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
-  const [portalLoading, setPortalLoading] = useState(false);
+  const [_portalLoading, setPortalLoading] = useState(false);
   const [userPlan, setUserPlan] = useState<string | null>(null);
 
   useEffect(() => {
@@ -61,13 +62,13 @@ export default function LandingPage() {
 
       if (!data?.url) throw new Error("No checkout URL returned.");
       window.location.href = data.url;
-    } catch (error: any) {
-      alert(error?.message || "Unable to start checkout right now.");
+    } catch (error: unknown) {
+      alert(error instanceof Error ? error.message : "Unable to start checkout right now.");
       setCheckoutLoading(null);
     }
   };
 
-  const startPortal = async () => {
+  const _startPortal = async () => {
     try {
       setPortalLoading(true);
       const response = await fetch("/api/portal", {
@@ -91,8 +92,8 @@ export default function LandingPage() {
 
       if (!data?.url) throw new Error("No portal URL returned.");
       window.location.href = data.url;
-    } catch (error: any) {
-      alert(error?.message || "Unable to open billing portal right now.");
+    } catch (error: unknown) {
+      alert(error instanceof Error ? error.message : "Unable to open billing portal right now.");
     } finally {
       setPortalLoading(false);
     }
@@ -209,7 +210,7 @@ export default function LandingPage() {
                   key={tool.name}
                   className="mx-5 flex items-center gap-3 px-1 py-1"
                 >
-                  <img
+                  <Image
                     src={tool.src}
                     alt={tool.name}
                     width={32}
@@ -236,7 +237,7 @@ export default function LandingPage() {
                   className="text-4xl md:text-5xl font-bold tracking-tight text-gray-900"
                   style={{ fontFamily: "var(--font-landing-heading)" }}
                 >
-                  Speed shouldn't <br />
+                  Speed shouldn{`'`}t <br />
                   mean{" "}
                   <span className="font-garamond italic font-normal">
                     vulnerability
@@ -307,7 +308,7 @@ export default function LandingPage() {
                 </h2>
                 <p className="text-xl text-gray-600 leading-relaxed font-light">
                   We understand your framework, your database, your deployment
-                  platform, and your SaaS patterns — because we've seen them all.
+                  platform, and your SaaS patterns — because we{`'`}ve seen them all.
                 </p>
               </div>
               <div className="flex-1 w-full flex items-center justify-center">
@@ -369,16 +370,16 @@ export default function LandingPage() {
               <div className="flex-1 w-full">
                 <div className="relative flex h-[340px] w-full items-center justify-center overflow-hidden rounded-2xl border border-gray-200 bg-white">
                   <OrbitingCircles radius={120} iconSize={44} speed={1.1} path className="bg-white border border-gray-200 shadow-sm">
-                    <img src="/ide-logos/cursor.svg" alt="Cursor" className="h-6 w-6 object-contain" />
-                    <img src="/ide-logos/windsurf.svg" alt="Windsurf" className="h-6 w-6 object-contain" />
-                    <img src="/ide-logos/github-copilot.svg" alt="GitHub Copilot" className="h-6 w-6 object-contain" />
-                    <img src="/ide-logos/claude.svg" alt="Claude" className="h-6 w-6 object-contain" />
-                    <img src="/ide-logos/tabnine.svg" alt="Tabnine" className="h-6 w-6 object-contain" />
-                    <img src="/ide-logos/replit.svg" alt="Replit" className="h-6 w-6 object-contain" />
+                    <Image src="/ide-logos/cursor.svg" alt="Cursor" className="h-6 w-6 object-contain" />
+                    <Image src="/ide-logos/windsurf.svg" alt="Windsurf" className="h-6 w-6 object-contain" />
+                    <Image src="/ide-logos/github-copilot.svg" alt="GitHub Copilot" className="h-6 w-6 object-contain" />
+                    <Image src="/ide-logos/claude.svg" alt="Claude" className="h-6 w-6 object-contain" />
+                    <Image src="/ide-logos/tabnine.svg" alt="Tabnine" className="h-6 w-6 object-contain" />
+                    <Image src="/ide-logos/replit.svg" alt="Replit" className="h-6 w-6 object-contain" />
                   </OrbitingCircles>
 
                   <div className="z-20 rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50 to-emerald-50 px-6 py-4 text-center shadow-lg">
-                    <img src="/graft.svg" alt="Graft" className="mx-auto mb-2 h-10 w-10" />
+                    <Image src="/graft.svg" alt="Graft" className="mx-auto mb-2 h-10 w-10" />
                     <p className="text-sm font-semibold text-gray-900">Graft</p>
                     <p className="text-xs text-gray-600">Finds, prioritizes, and explains fixes</p>
                   </div>
