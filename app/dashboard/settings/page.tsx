@@ -145,7 +145,9 @@ export default function SettingsPage() {
     const integrationError = searchParams.get("integration_error");
     const upgradeSuccess = searchParams.get("upgrade");
     const checkoutId = searchParams.get("checkout_id");
-    if (upgradeSuccess === "success") {
+    const customerSessionToken = searchParams.get("customer_session_token");
+
+    if (upgradeSuccess === "success" || customerSessionToken) {
       setActiveTab("billing");
       async function syncAndShowSuccess() {
         const sleep = (ms: number) =>
@@ -170,7 +172,7 @@ export default function SettingsPage() {
                 .from("users")
                 .select("*")
                 .eq("id", currentUser.id)
-                .single();
+              .single();
 
               if (data) {
                 setUserData(data);
@@ -195,12 +197,15 @@ export default function SettingsPage() {
         } catch (err) {
           console.error("Failed to sync subscription:", err);
         }
-        setShowUpgradeSuccess(true);
+        if (upgradeSuccess === "success") {
+          setShowUpgradeSuccess(true);
+        }
       }
       syncAndShowSuccess();
       const url = new URL(window.location.href);
       url.searchParams.delete("upgrade");
       url.searchParams.delete("checkout_id");
+      url.searchParams.delete("customer_session_token");
       window.history.replaceState({}, "", url.pathname + url.search);
     } else if (
       tab &&

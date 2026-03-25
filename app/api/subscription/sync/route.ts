@@ -329,6 +329,26 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    if (!subscription && userData.customer_id) {
+      const stateByCustomerResponse = await fetch(
+        `${POLAR_API_URL}/customers/${encodeURIComponent(userData.customer_id)}/state`,
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${POLAR_ACCESS_TOKEN}`,
+            "Content-Type": "application/json",
+          },
+        },
+      );
+
+      if (stateByCustomerResponse.ok) {
+        const statePayload =
+          (await stateByCustomerResponse.json()) as Record<string, unknown>;
+        const subscriptions = getSubscriptionsFromStatePayload(statePayload);
+        subscription = pickBestSubscription(subscriptions);
+      }
+    }
+
     if (!subscription) {
       return NextResponse.json({
         success: true,
