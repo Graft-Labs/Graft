@@ -486,7 +486,11 @@ export default function LandingPage() {
                       </li>
                     ))}
                   </ul>
-                  {userPlan && userPlan !== "free" ? (
+                  {userPlan === null ? (
+                    <button disabled className="w-full py-3 rounded-full bg-gray-200 text-gray-400 text-center font-medium inline-flex items-center justify-center gap-2 text-sm cursor-not-allowed">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    </button>
+                  ) : userPlan !== "free" ? (
                     <Link
                       href="/dashboard/settings?tab=billing"
                       className="w-full py-3 rounded-full bg-white text-black text-center font-medium hover:bg-gray-100 transition-colors shadow-[0_0_20px_rgba(255,255,255,0.3)] inline-flex items-center justify-center gap-2 text-sm"
@@ -538,11 +542,11 @@ export default function LandingPage() {
                   ))}
                 </ul>
                 <button
-                  disabled={checkoutLoading === "unlimited" || userPlan === "unlimited"}
+                  disabled={checkoutLoading === "unlimited" || userPlan === "unlimited" || userPlan === null}
                   className="w-full py-3 rounded-full border-2 border-[#3079FF] text-[#3079FF] text-center font-medium hover:bg-[#3079FF]/5 transition-colors inline-flex items-center justify-center gap-2 disabled:opacity-70 text-sm"
                 >
                   {checkoutLoading === "unlimited" ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                  {userPlan && userPlan !== "free" ? "View Plans" : "Get Started"}
+                  {userPlan === null ? "Loading..." : userPlan !== "free" ? "View Plans" : "Get Started"}
                 </button>
               </div>
               </BlurFade>
