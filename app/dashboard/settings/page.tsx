@@ -764,11 +764,11 @@ export default function SettingsPage() {
                         </p>
                       </div>
                       {effectivePlan === "free" ? (
-                        <div className="flex gap-2">
+                        <div className="w-full md:w-auto grid grid-cols-1 sm:grid-cols-2 gap-2">
                           <button
                             onClick={() => startCheckout("pro")}
                             disabled={checkoutLoading === "pro"}
-                            className="inline-flex px-5 py-2.5 bg-black text-white rounded-full text-sm font-semibold hover:bg-gray-800 transition-colors shadow-sm disabled:opacity-70"
+                            className="inline-flex w-full items-center justify-center px-5 py-2.5 bg-black text-white rounded-full text-sm font-semibold hover:bg-gray-800 transition-colors shadow-sm disabled:opacity-70"
                             style={{ fontFamily: "var(--font-landing-body)" }}
                           >
                             {checkoutLoading === "pro" ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
@@ -777,7 +777,7 @@ export default function SettingsPage() {
                           <button
                             onClick={() => startCheckout("unlimited")}
                             disabled={checkoutLoading === "unlimited"}
-                            className="inline-flex px-5 py-2.5 border-2 border-[#3079FF] text-[#3079FF] rounded-full text-sm font-semibold hover:bg-[#3079FF]/5 transition-colors shadow-sm disabled:opacity-70"
+                            className="inline-flex w-full items-center justify-center px-5 py-2.5 border-2 border-[#3079FF] text-[#3079FF] rounded-full text-sm font-semibold hover:bg-[#3079FF]/5 transition-colors shadow-sm disabled:opacity-70"
                             style={{ fontFamily: "var(--font-landing-body)" }}
                           >
                             {checkoutLoading === "unlimited" ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
