@@ -198,23 +198,35 @@ export default function IntegrationsTab({ hasGithubConnected: _hasGithubConnecte
         </div>
       )}
 
-      <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-        <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl border border-gray-200 bg-gray-50 flex items-center justify-center">
-              <Github className="text-gray-800" size={22} />
+      {checkingConnection ? (
+        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm animate-pulse">
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 rounded-xl border border-gray-200 bg-gray-100" />
+              <div>
+                <div className="h-4 w-24 bg-gray-100 rounded mb-2" />
+                <div className="h-3 w-40 bg-gray-100 rounded" />
+              </div>
             </div>
-            <div>
-              <p className="font-bold text-gray-900" style={{ fontFamily: "var(--font-landing-heading)" }}>GitHub</p>
-              <p className="text-sm text-gray-500 font-medium" style={{ fontFamily: "var(--font-landing-body)" }}>
-                {checkingConnection ? "Checking connection..." : (githubConnected ? "Connected. Repo picker is enabled." : "Connect GitHub to scan repositories.")}
-              </p>
-            </div>
+            <div className="h-8 w-24 bg-gray-100 rounded-full" />
           </div>
+        </div>
+      ) : (
+        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 rounded-xl border border-gray-200 bg-gray-50 flex items-center justify-center">
+                <Github className="text-gray-800" size={22} />
+              </div>
+              <div>
+                <p className="font-bold text-gray-900" style={{ fontFamily: "var(--font-landing-heading)" }}>GitHub</p>
+                <p className="text-sm text-gray-500 font-medium" style={{ fontFamily: "var(--font-landing-body)" }}>
+                  {githubConnected ? "Connected. Repo picker is enabled." : "Connect GitHub to scan repositories."}
+                </p>
+              </div>
+            </div>
 
-          {checkingConnection ? (
-            <div className="w-4 h-4 rounded-full border-2 border-gray-200 border-t-gray-400 animate-spin" />
-          ) : githubConnected ? (
+            {githubConnected ? (
               <button
                 onClick={() => disconnectProvider("github")}
                 disabled={busy}
@@ -235,8 +247,9 @@ export default function IntegrationsTab({ hasGithubConnected: _hasGithubConnecte
                 Connect GitHub
               </button>
             )}
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm mt-4">
         <div className="flex items-start justify-between gap-4 flex-wrap">
