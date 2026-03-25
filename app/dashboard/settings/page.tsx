@@ -111,6 +111,10 @@ export default function SettingsPage() {
         throw new Error(data?.message || data?.error || "Failed to start checkout");
       }
 
+      if (data?.isPortal !== true && userData?.subscription_status === "active") {
+        throw new Error("Could not open billing portal for your active subscription.");
+      }
+
       if (!data?.url) throw new Error("No checkout URL returned.");
       window.location.href = data.url;
     } catch (error: unknown) {

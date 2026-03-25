@@ -50,46 +50,6 @@ export async function POST(req: NextRequest) {
     // If user has active subscription, always send them to the billing portal for upgrades
     if (hasActiveSubscription) {
       console.log('User has active subscription, attempting portal session for upgrade')
-
-      // Try direct subscription update first (best UX for upgrades).
-      // If this fails for any reason, we'll fall back to opening billing portal.
-      if (userData?.subscription_id && plan?.productId) {
-        const updateBody: Record<string, unknown> = {
-          product_id: plan.productId,
-          proration_behavior: 'invoice',
-        }
-        if (plan.priceId) {
-          updateBody.product_price_id = plan.priceId
-        }
-
-        const updateResponse = await fetch(`${POLAR_API_URL}/subscriptions/${userData.subscription_id}`, {
-          method: 'PATCH',
-          headers: {
-            'Authorization': `Bearer ${POLAR_ACCESS_TOKEN}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(updateBody),
-        })
-
-        if (updateResponse.ok) {
-          // Update local plan eagerly; webhook will keep source of truth in sync.
-          await supabase
-            .from('users')
-            .update({
-              plan: planId,
-              updated_at: new Date().toISOString(),
-            })
-            .eq('id', user.id)
-
-          return NextResponse.json({
-            url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard?upgrade=success`,
-            isDirectUpdate: true,
-          })
-        }
-
-        const updateErrorText = await updateResponse.text()
-        console.error('Polar direct subscription update failed:', updateResponse.status, updateErrorText)
-      }
       
       let customerId = userData?.customer_id
 
@@ -141,8 +101,16 @@ export async function POST(req: NextRequest) {
             body: { customer_id: customerId, return_url: returnUrl },
           },
           {
+            url: `${POLAR_API_URL}/customer/sessions`,
+            body: { customer_id: customerId, redirect_url: returnUrl },
+          },
+          {
             url: `${POLAR_API_URL}/customer-sessions`,
             body: { customer_id: customerId, return_url: returnUrl },
+          },
+          {
+            url: `${POLAR_API_URL}/customer-sessions`,
+            body: { customer_id: customerId, redirect_url: returnUrl },
           },
           {
             url: `${POLAR_API_URL}/portals`,
