@@ -104,6 +104,10 @@ export default function SettingsPage() {
           window.location.href = "/auth/login";
           return;
         }
+        if (response.status === 409) {
+          window.location.href = "/dashboard/settings?tab=billing";
+          return;
+        }
         throw new Error(data?.message || data?.error || "Failed to start checkout");
       }
 

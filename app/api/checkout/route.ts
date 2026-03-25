@@ -47,7 +47,7 @@ export async function POST(req: NextRequest) {
     const hasActiveSubscription = userData?.subscription_id && 
       userData?.subscription_status === 'active'
 
-    // If user has active subscription, create a customer portal session for them to manage/upgrade
+    // If user has active subscription, always send them to the billing portal for upgrades
     if (hasActiveSubscription) {
       console.log('User has active subscription, attempting portal session for upgrade')
       
@@ -81,17 +81,26 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // If we still don't have customer_id, fall back to checkout (Polar will handle upgrade)
+      // If we still don't have customer_id, do not create a new checkout.
+      // Polar will reject it with "already have an active subscription".
       if (!customerId) {
-        console.log('No customer_id available, falling back to checkout for upgrade')
+        console.error('No customer_id available for active subscription user')
+        return NextResponse.json(
+          {
+            error: 'Active subscription found',
+            message: 'You already have an active subscription. Please manage upgrades in billing.'
+          },
+          { status: 409 }
+        )
       } else {
-        const portalResponse = await fetch(`${POLAR_API_URL}/customers/${customerId}/portal-session`, {
+        const portalResponse = await fetch(`${POLAR_API_URL}/portals`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${POLAR_ACCESS_TOKEN}`,
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
+            customer_id: customerId,
             return_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard?upgrade=success`,
           }),
         })
@@ -99,8 +108,13 @@ export async function POST(req: NextRequest) {
         if (!portalResponse.ok) {
           const error = await portalResponse.text()
           console.error('Polar portal error:', error)
-          // Fall back to checkout instead of returning error
-          console.log('Portal failed, falling back to checkout for upgrade')
+          return NextResponse.json(
+            {
+              error: 'Failed to open billing portal',
+              message: 'Could not open billing portal for your active subscription.'
+            },
+            { status: 500 }
+          )
         } else {
           const portal = await portalResponse.json()
           return NextResponse.json({ 
