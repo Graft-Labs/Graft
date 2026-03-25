@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase";
-import { ArrowRight, Github, CheckCircle, Loader2, X, AlertTriangle } from "lucide-react";
+import { ArrowRight, Github, CheckCircle, X, AlertTriangle } from "lucide-react";
 import { motion } from "framer-motion";
 import LandingNavbar from "@/components/layout/LandingNavbar";
 import LandingFooter from "@/components/layout/LandingFooter";
@@ -23,7 +23,6 @@ import { SmoothCursor } from "@/components/ui/smooth-cursor";
 type PlanTier = "free" | "pro" | "unlimited";
 
 export default function LandingPage() {
-  const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
   const [_portalLoading, setPortalLoading] = useState(false);
   const [userPlan, setUserPlan] = useState<PlanTier | null>(null);
   const [isAuthResolved, setIsAuthResolved] = useState(false);
@@ -59,33 +58,6 @@ export default function LandingPage() {
 
     fetchUserPlan();
   }, []);
-
-  const startCheckout = async (planId: "pro" | "unlimited" | "lifetime") => {
-    try {
-      setCheckoutLoading(planId);
-      const response = await fetch("/api/checkout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ planId }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        if (response.status === 401) {
-          window.location.href = "/auth/login";
-          return;
-        }
-        throw new Error(data?.message || data?.error || "Failed to start checkout");
-      }
-
-      if (!data?.url) throw new Error("No checkout URL returned.");
-      window.location.href = data.url;
-    } catch (error: unknown) {
-      alert(error instanceof Error ? error.message : "Unable to start checkout right now.");
-      setCheckoutLoading(null);
-    }
-  };
 
   const _startPortal = async () => {
     try {
@@ -126,26 +98,12 @@ export default function LandingPage() {
       return;
     }
 
-    if (planId === "free") {
-      if (userPlan === "free") {
-        window.location.href = "/dashboard";
-      } else {
-        window.location.href = "/dashboard/settings?tab=billing";
-      }
+    if (planId === "free" && userPlan === "free") {
+      window.location.href = "/dashboard";
       return;
     }
 
-    if (userPlan === planId) {
-      window.location.href = "/dashboard/settings?tab=billing";
-      return;
-    }
-
-    if (userPlan === "unlimited" && planId === "pro") {
-      window.location.href = "/dashboard/settings?tab=billing";
-      return;
-    }
-
-    void startCheckout(planId);
+    window.location.href = "/dashboard/settings?tab=billing";
   };
 
   const getPricingButtonText = (planId: PlanTier) => {
@@ -163,19 +121,16 @@ export default function LandingPage() {
 
     if (planId === "pro") {
       if (userPlan === "pro") return "Current plan";
-      if (userPlan === "unlimited") return "Manage in Billing";
-      return "Upgrade to Pro";
+      return "Manage in Billing";
     }
 
     if (userPlan === "unlimited") return "Current plan";
-    return "Upgrade to Unlimited";
+    return "Manage in Billing";
   };
 
   const isPricingButtonDisabled = (planId: PlanTier) => {
     if (!isAuthResolved) return true;
     if (!isLoggedIn) return false;
-
-    if (checkoutLoading === planId) return true;
 
     if (planId === "free") return userPlan === "free";
     if (planId === "pro") return userPlan === "pro";
@@ -577,9 +532,8 @@ export default function LandingPage() {
                     type="button"
                     onClick={() => handlePricingAction("pro")}
                     disabled={isPricingButtonDisabled("pro")}
-                    className="w-full py-3 rounded-full bg-[#3079FF] text-white text-center font-medium hover:bg-blue-600 transition-colors text-sm disabled:opacity-60 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
+                    className="w-full py-3 rounded-full bg-[#3079FF] text-white text-center font-medium hover:bg-blue-600 transition-colors text-sm disabled:opacity-60 disabled:cursor-not-allowed"
                   >
-                    {checkoutLoading === "pro" ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
                     {getPricingButtonText("pro")}
                   </button>
                 </div>
@@ -622,9 +576,8 @@ export default function LandingPage() {
                   type="button"
                   onClick={() => handlePricingAction("unlimited")}
                   disabled={isPricingButtonDisabled("unlimited")}
-                  className="w-full py-3 rounded-full border-2 border-[#3079FF] text-[#3079FF] text-center font-medium hover:bg-[#3079FF] hover:text-white transition-colors text-sm disabled:opacity-60 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
+                  className="w-full py-3 rounded-full border-2 border-[#3079FF] text-[#3079FF] text-center font-medium hover:bg-[#3079FF] hover:text-white transition-colors text-sm disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  {checkoutLoading === "unlimited" ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
                   {getPricingButtonText("unlimited")}
                 </button>
               </div>

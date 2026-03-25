@@ -217,7 +217,7 @@ export default function DashboardSidebar() {
             </div>
             {scansLimit < 999999 && (
               <Link
-                href="/#pricing"
+                href="/dashboard/settings?tab=billing"
                 onClick={() => setMobileMenuOpen(false)}
                 className="text-xs font-semibold px-3 py-1.5 rounded-full shadow-sm hover:-translate-y-0.5 transition-transform"
                 style={{
