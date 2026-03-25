@@ -93,35 +93,63 @@ export async function POST(req: NextRequest) {
           { status: 409 }
         )
       } else {
-        const portalResponse = await fetch(`${POLAR_API_URL}/portals`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${POLAR_ACCESS_TOKEN}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            customer_id: customerId,
-            return_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard?upgrade=success`,
-          }),
-        })
+        const returnUrl = `${process.env.NEXT_PUBLIC_APP_URL}/dashboard?upgrade=success`
 
-        if (!portalResponse.ok) {
-          const error = await portalResponse.text()
-          console.error('Polar portal error:', error)
-          return NextResponse.json(
-            {
-              error: 'Failed to open billing portal',
-              message: 'Could not open billing portal for your active subscription.'
+        const attempts: Array<{ url: string; body: Record<string, unknown> }> = [
+          {
+            url: `${POLAR_API_URL}/customer/sessions`,
+            body: { customer_id: customerId, return_url: returnUrl },
+          },
+          {
+            url: `${POLAR_API_URL}/customer-sessions`,
+            body: { customer_id: customerId, return_url: returnUrl },
+          },
+          {
+            url: `${POLAR_API_URL}/portals`,
+            body: { customer_id: customerId, return_url: returnUrl },
+          },
+          {
+            url: `${POLAR_API_URL}/customers/${customerId}/portal-session`,
+            body: { return_url: returnUrl },
+          },
+        ]
+
+        for (const attempt of attempts) {
+          const portalResponse = await fetch(attempt.url, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${POLAR_ACCESS_TOKEN}`,
+              'Content-Type': 'application/json',
             },
-            { status: 500 }
-          )
-        } else {
-          const portal = await portalResponse.json()
-          return NextResponse.json({ 
-            url: portal.url,
-            isPortal: true
+            body: JSON.stringify(attempt.body),
           })
+
+          if (!portalResponse.ok) {
+            const errorText = await portalResponse.text()
+            console.error('Polar portal attempt failed:', attempt.url, portalResponse.status, errorText)
+            continue
+          }
+
+          const portal = await portalResponse.json()
+          const portalUrl = portal?.url || portal?.customer_portal_url || portal?.portal_url || portal?.session_url
+
+          if (portalUrl) {
+            return NextResponse.json({
+              url: portalUrl,
+              isPortal: true,
+            })
+          }
+
+          console.error('Polar portal attempt succeeded without URL:', attempt.url, portal)
         }
+
+        return NextResponse.json(
+          {
+            error: 'Failed to open billing portal',
+            message: 'Could not open billing portal for your active subscription.'
+          },
+          { status: 500 }
+        )
       }
     }
 
