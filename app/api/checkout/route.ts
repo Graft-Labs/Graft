@@ -48,34 +48,67 @@ export async function POST(req: NextRequest) {
       userData?.subscription_status === 'active'
 
     // If user has active subscription, create a customer portal session for them to manage/upgrade
-    if (hasActiveSubscription && userData?.customer_id) {
-      console.log('User has active subscription, creating portal session for upgrade')
+    if (hasActiveSubscription) {
+      console.log('User has active subscription, attempting portal session for upgrade')
+      
+      let customerId = userData?.customer_id
 
-      const portalResponse = await fetch(`${POLAR_API_URL}/customers/${userData.customer_id}/portal-session`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${POLAR_ACCESS_TOKEN}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          return_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard?upgrade=success`,
-        }),
-      })
+      // If customer_id is missing from database, try to fetch it from Polar using subscription_id
+      if (!customerId && userData?.subscription_id) {
+        console.log('customer_id missing, fetching from Polar using subscription_id:', userData.subscription_id)
+        
+        const subResponse = await fetch(`${POLAR_API_URL}/subscriptions/${userData.subscription_id}`, {
+          headers: {
+            'Authorization': `Bearer ${POLAR_ACCESS_TOKEN}`,
+            'Content-Type': 'application/json',
+          },
+        })
 
-      if (!portalResponse.ok) {
-        const error = await portalResponse.text()
-        console.error('Polar portal error:', error)
-        return NextResponse.json({ 
-          error: 'Failed to create portal session',
-          message: 'Please try again or contact support.'
-        }, { status: 500 })
+        if (subResponse.ok) {
+          const subData = await subResponse.json()
+          customerId = subData.customer_id
+          console.log('Fetched customer_id from Polar:', customerId)
+
+          // Optionally update the database with the fetched customer_id
+          if (customerId) {
+            await supabase
+              .from('users')
+              .update({ customer_id: customerId })
+              .eq('id', user.id)
+          }
+        } else {
+          console.error('Failed to fetch subscription from Polar:', await subResponse.text())
+        }
       }
 
-      const portal = await portalResponse.json()
-      return NextResponse.json({ 
-        url: portal.url,
-        isPortal: true
-      })
+      // If we still don't have customer_id, fall back to checkout (Polar will handle upgrade)
+      if (!customerId) {
+        console.log('No customer_id available, falling back to checkout for upgrade')
+      } else {
+        const portalResponse = await fetch(`${POLAR_API_URL}/customers/${customerId}/portal-session`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${POLAR_ACCESS_TOKEN}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            return_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard?upgrade=success`,
+          }),
+        })
+
+        if (!portalResponse.ok) {
+          const error = await portalResponse.text()
+          console.error('Polar portal error:', error)
+          // Fall back to checkout instead of returning error
+          console.log('Portal failed, falling back to checkout for upgrade')
+        } else {
+          const portal = await portalResponse.json()
+          return NextResponse.json({ 
+            url: portal.url,
+            isPortal: true
+          })
+        }
+      }
     }
 
     // No active subscription - create a new checkout session

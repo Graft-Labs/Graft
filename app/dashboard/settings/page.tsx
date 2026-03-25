@@ -10,6 +10,7 @@ import {
   AlertTriangle,
   LifeBuoy,
   ExternalLink,
+  Loader2,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase";
 import IntegrationsTab from "@/components/settings/IntegrationsTab";
@@ -85,6 +86,34 @@ export default function SettingsPage() {
     string | null
   >(null);
   const [currentPeriodEnd, setCurrentPeriodEnd] = useState<string | null>(null);
+  const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
+
+  const startCheckout = async (planId: "pro" | "unlimited") => {
+    try {
+      setCheckoutLoading(planId);
+      const response = await fetch("/api/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ planId }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          window.location.href = "/auth/login";
+          return;
+        }
+        throw new Error(data?.message || data?.error || "Failed to start checkout");
+      }
+
+      if (!data?.url) throw new Error("No checkout URL returned.");
+      window.location.href = data.url;
+    } catch (error: unknown) {
+      alert(error instanceof Error ? error.message : "Unable to start checkout right now.");
+      setCheckoutLoading(null);
+    }
+  };
 
   useEffect(() => {
     const tab = searchParams.get("tab");
@@ -694,13 +723,42 @@ export default function SettingsPage() {
                           plan.
                         </p>
                       </div>
-                      <Link
-                        href="/#pricing"
-                        className="inline-flex px-5 py-2.5 bg-black text-white rounded-full text-sm font-semibold hover:bg-gray-800 transition-colors shadow-sm"
-                        style={{ fontFamily: "var(--font-landing-body)" }}
-                      >
-                        Upgrade Plan
-                      </Link>
+                      {userData?.plan === "free" ? (
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => startCheckout("pro")}
+                            disabled={checkoutLoading === "pro"}
+                            className="inline-flex px-5 py-2.5 bg-black text-white rounded-full text-sm font-semibold hover:bg-gray-800 transition-colors shadow-sm disabled:opacity-70"
+                            style={{ fontFamily: "var(--font-landing-body)" }}
+                          >
+                            {checkoutLoading === "pro" ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                            Upgrade to Pro
+                          </button>
+                          <button
+                            onClick={() => startCheckout("unlimited")}
+                            disabled={checkoutLoading === "unlimited"}
+                            className="inline-flex px-5 py-2.5 border-2 border-[#3079FF] text-[#3079FF] rounded-full text-sm font-semibold hover:bg-[#3079FF]/5 transition-colors shadow-sm disabled:opacity-70"
+                            style={{ fontFamily: "var(--font-landing-body)" }}
+                          >
+                            {checkoutLoading === "unlimited" ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                            Upgrade to Unlimited
+                          </button>
+                        </div>
+                      ) : userData?.plan === "pro" ? (
+                        <button
+                          onClick={() => startCheckout("unlimited")}
+                          disabled={checkoutLoading === "unlimited"}
+                          className="inline-flex px-5 py-2.5 bg-black text-white rounded-full text-sm font-semibold hover:bg-gray-800 transition-colors shadow-sm disabled:opacity-70"
+                          style={{ fontFamily: "var(--font-landing-body)" }}
+                        >
+                          {checkoutLoading === "unlimited" ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                          Upgrade to Unlimited
+                        </button>
+                      ) : (
+                        <span className="inline-flex px-5 py-2.5 text-gray-500 text-sm font-medium">
+                          You are on the highest plan
+                        </span>
+                      )}
                     </div>
 
                     <div className="space-y-3">
