@@ -485,8 +485,7 @@ export default function LandingPage() {
                         <span>{feature}</span>
                       </li>
                     ))}
-                </ul>
-                <div className="mt-auto">
+                  </ul>
                   <Link
                     href="/auth/login"
                     className="block w-full py-3 rounded-full bg-white text-black text-center font-medium hover:bg-gray-100 transition-colors shadow-[0_0_20px_rgba(255,255,255,0.3)] text-sm"
@@ -529,14 +528,12 @@ export default function LandingPage() {
                     </li>
                   ))}
                 </ul>
-                <div className="mt-auto">
-                  <Link
-                    href="/auth/login"
-                    className="block w-full py-3 rounded-full border-2 border-[#3079FF] text-[#3079FF] text-center font-medium hover:bg-[#3079FF]/5 transition-colors text-sm"
-                  >
-                    Sign up to get started
-                  </Link>
-                </div>
+                <Link
+                  href="/auth/login"
+                  className="block w-full py-3 rounded-full border-2 border-[#3079FF] text-[#3079FF] text-center font-medium hover:bg-[#3079FF]/5 transition-colors text-sm"
+                >
+                  Sign up to get started
+                </Link>
               </div>
               </BlurFade>
             </div>
