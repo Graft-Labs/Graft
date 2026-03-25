@@ -31,18 +31,30 @@ export default function IntegrationsTab({ hasGithubConnected, hasGoogleConnected
   }, [hasGithubConnected, hasGoogleConnected]);
 
   useEffect(() => {
-    const supabase = createClient();
-    void supabase.auth.getUserIdentities().then(({ data, error }) => {
-      if (error) {
-        console.error("Failed to fetch identities:", error);
-        return;
-      }
-      const identities = data?.identities ?? [];
-      const hasGithub = identities.some((identity) => identity.provider === "github");
-      const hasGoogle = identities.some((identity) => identity.provider === "google");
-      setGithubConnected(hasGithub || hasGithubConnected);
-      setGoogleConnected(hasGoogle || hasGoogleConnected);
-    });
+    async function checkGitHubConnection() {
+      const supabase = createClient();
+      
+      // Get user from DB to check stored token
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      
+      const { data: userData } = await supabase
+        .from("users")
+        .select("github_token, github_user_id")
+        .eq("id", user.id)
+        .single();
+      
+      // Also check identities
+      const { data: identityData } = await supabase.auth.getUserIdentities();
+      const identities = identityData?.identities ?? [];
+      const hasGithubIdentity = identities.some((i) => i.provider === "github");
+      
+      // Consider connected if either DB has token OR current session has identity
+      const hasGithub = (userData?.github_token || userData?.github_user_id) || hasGithubIdentity;
+      setGithubConnected(hasGithub);
+    }
+    
+    checkGitHubConnection();
   }, [hasGithubConnected, hasGoogleConnected]);
 
   useEffect(() => {
