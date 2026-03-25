@@ -38,21 +38,22 @@ export default function IntegrationsTab({ hasGithubConnected: _hasGithubConnecte
         return;
       }
       
-      // Check DB for stored tokens
-      const { data: userData } = await supabase
-        .from("users")
-        .select("github_token, github_user_id")
-        .eq("id", user.id)
-        .single();
-      
-      // Check current session identities
+      // Check current session identities (most reliable)
       const { data: identityData } = await supabase.auth.getUserIdentities();
       const identities = identityData?.identities ?? [];
       const hasGithubIdentity = identities.some((i) => i.provider === "github");
       const hasGoogleIdentity = identities.some((i) => i.provider === "google");
       
-      // Connected if DB has token OR current session has identity
-      setGithubConnected(!!(userData?.github_token || userData?.github_user_id || hasGithubIdentity));
+      // Check DB for github_user_id only (github_token can be polluted with other OAuth tokens)
+      const { data: userData } = await supabase
+        .from("users")
+        .select("github_user_id")
+        .eq("id", user.id)
+        .single();
+      
+      // Connected if: has GitHub identity in session OR github_user_id is set in DB
+      // Don't use github_token as it may contain other OAuth providers' tokens
+      setGithubConnected(!!(hasGithubIdentity || userData?.github_user_id));
       setGoogleConnected(!!hasGoogleIdentity);
       setCheckingConnection(false);
     }
