@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
     // Check if user already has an active subscription - redirect to customer portal for upgrades
     const { data: userData } = await supabase
       .from('users')
-      .select('subscription_id, subscription_status, customer_id')
+      .select('plan, subscription_id, subscription_status, customer_id')
       .eq('id', user.id)
       .single()
 
@@ -50,6 +50,46 @@ export async function POST(req: NextRequest) {
     // If user has active subscription, always send them to the billing portal for upgrades
     if (hasActiveSubscription) {
       console.log('User has active subscription, attempting portal session for upgrade')
+
+      // Try direct subscription update first (best UX for upgrades).
+      // If this fails for any reason, we'll fall back to opening billing portal.
+      if (userData?.subscription_id && plan?.productId) {
+        const updateBody: Record<string, unknown> = {
+          product_id: plan.productId,
+          proration_behavior: 'invoice',
+        }
+        if (plan.priceId) {
+          updateBody.product_price_id = plan.priceId
+        }
+
+        const updateResponse = await fetch(`${POLAR_API_URL}/subscriptions/${userData.subscription_id}`, {
+          method: 'PATCH',
+          headers: {
+            'Authorization': `Bearer ${POLAR_ACCESS_TOKEN}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(updateBody),
+        })
+
+        if (updateResponse.ok) {
+          // Update local plan eagerly; webhook will keep source of truth in sync.
+          await supabase
+            .from('users')
+            .update({
+              plan: planId,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', user.id)
+
+          return NextResponse.json({
+            url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard?upgrade=success`,
+            isDirectUpdate: true,
+          })
+        }
+
+        const updateErrorText = await updateResponse.text()
+        console.error('Polar direct subscription update failed:', updateResponse.status, updateErrorText)
+      }
       
       let customerId = userData?.customer_id
 
