@@ -88,6 +88,24 @@ export default function SettingsPage() {
   const [currentPeriodEnd, setCurrentPeriodEnd] = useState<string | null>(null);
   const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
 
+  const openBillingPortal = async () => {
+    const response = await fetch("/api/portal", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+    });
+
+    const data = await response.json().catch(() => null);
+
+    if (!response.ok) {
+      throw new Error(
+        data?.message || data?.error || "Failed to open billing portal",
+      );
+    }
+
+    if (!data?.url) throw new Error("No portal URL returned.");
+    window.location.href = data.url;
+  };
+
   const startCheckout = async (planId: "pro" | "unlimited") => {
     try {
       setCheckoutLoading(planId);
@@ -375,6 +393,15 @@ export default function SettingsPage() {
       const body = await res.json().catch(() => null);
 
       if (!res.ok) {
+        if (res.status === 500) {
+          try {
+            await openBillingPortal();
+            return;
+          } catch {
+            // fall through to error message below
+          }
+        }
+
         setCancelSubscriptionError(
           body?.message ||
             "Could not keep your subscription active right now. Please try again.",

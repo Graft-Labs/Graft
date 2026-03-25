@@ -10,6 +10,7 @@ const POLAR_API_URL = POLAR_IS_SANDBOX
 
 function getCancellationScheduled(subscription: Record<string, unknown>) {
   if (subscription.cancel_at_period_end === true) return true;
+  if (subscription.cancelAtPeriodEnd === true) return true;
 
   const status =
     typeof subscription.status === "string"
@@ -66,6 +67,7 @@ export async function POST() {
         },
         body: JSON.stringify({
           cancel_at_period_end: false,
+          cancelAtPeriodEnd: false,
         }),
       },
     );
@@ -78,7 +80,11 @@ export async function POST() {
       });
 
       return NextResponse.json(
-        { message: "Failed to keep subscription active. Please try again." },
+        {
+          message:
+            "Failed to keep subscription active. Please open Billing Portal to manage your subscription.",
+          details,
+        },
         { status: 500 },
       );
     }

@@ -104,13 +104,7 @@ export async function GET() {
           ? "cancelled"
           : "active";
 
-    const wasCancelledInDb =
-      userData.subscription_status === "cancelled" ||
-      userData.subscription_status === "canceled";
-
-    const cancellationScheduled =
-      cancellationScheduledFromPolar ||
-      (wasCancelledInDb && subscriptionStatusFromPolar === "active");
+    const cancellationScheduled = cancellationScheduledFromPolar;
 
     const subscriptionStatus = cancellationScheduled
       ? "cancelled"
