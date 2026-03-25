@@ -457,6 +457,11 @@ export default function SettingsPage() {
     userData?.subscription_status === "cancelled" ||
     userData?.subscription_status === "canceled";
 
+  const effectivePlan =
+    userData?.plan === "pro" || userData?.plan === "unlimited"
+      ? userData.plan
+      : "free";
+
   const formattedCurrentPeriodEnd = currentPeriodEnd
     ? new Date(currentPeriodEnd).toLocaleDateString(undefined, {
         year: "numeric",
@@ -740,9 +745,9 @@ export default function SettingsPage() {
                               fontFamily: "var(--font-landing-heading)",
                             }}
                           >
-                            {userData?.plan === "pro"
+                            {effectivePlan === "pro"
                               ? "Pro Plan"
-                              : userData?.plan === "unlimited"
+                              : effectivePlan === "unlimited"
                                 ? "Unlimited Plan"
                                 : "Free Plan"}
                           </h3>
@@ -754,11 +759,11 @@ export default function SettingsPage() {
                           className="text-sm text-gray-500 font-medium"
                           style={{ fontFamily: "var(--font-landing-body)" }}
                         >
-                          You are currently on the {userData?.plan || "free"}{" "}
+                          You are currently on the {effectivePlan}{" "}
                           plan.
                         </p>
                       </div>
-                      {userData?.plan === "free" ? (
+                      {effectivePlan === "free" ? (
                         <div className="flex gap-2">
                           <button
                             onClick={() => startCheckout("pro")}
@@ -779,7 +784,7 @@ export default function SettingsPage() {
                             Upgrade to Unlimited
                           </button>
                         </div>
-                      ) : userData?.plan === "pro" ? (
+                      ) : effectivePlan === "pro" ? (
                         <button
                           onClick={() => startCheckout("unlimited")}
                           disabled={checkoutLoading === "unlimited"}
@@ -835,7 +840,7 @@ export default function SettingsPage() {
                   </div>
 
                   {/* Cancel Subscription */}
-                  {(userData?.plan === "pro" || userData?.plan === "unlimited") && (
+                  {(effectivePlan === "pro" || effectivePlan === "unlimited") && (
                     <div className="border border-gray-200 rounded-2xl p-6">
                       <h3
                         className="text-base font-bold text-gray-900 mb-2"
