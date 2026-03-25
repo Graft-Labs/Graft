@@ -486,6 +486,12 @@ export default function LandingPage() {
                       </li>
                     ))}
                   </ul>
+                  <Link
+                    href="/auth/signup"
+                    className="w-full py-3 rounded-full bg-[#3079FF] text-white text-center font-medium hover:bg-blue-600 transition-colors text-sm"
+                  >
+                    Get Started
+                  </Link>
                 </div>
               </div>
               </BlurFade>
@@ -522,6 +528,12 @@ export default function LandingPage() {
                     </li>
                   ))}
                 </ul>
+                <Link
+                  href="/auth/signup"
+                  className="w-full py-3 rounded-full border-2 border-[#3079FF] text-[#3079FF] text-center font-medium hover:bg-[#3079FF] hover:text-white transition-colors text-sm"
+                >
+                  Get Started
+                </Link>
               </div>
               </BlurFade>
             </div>
