@@ -262,6 +262,14 @@ export default function DashboardSidebar() {
             >
               {loadingUser ? "Loading..." : userName || "Account"}
             </p>
+            {userEmail && (
+              <p
+                className="text-xs text-gray-500 truncate"
+                style={{ fontFamily: "var(--font-landing-body)" }}
+              >
+                {userEmail}
+              </p>
+            )}
           </div>
           <button
             className="p-2 rounded-full hover:bg-gray-100 text-gray-400 hover:text-gray-900 transition-colors"

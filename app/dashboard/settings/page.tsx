@@ -511,7 +511,7 @@ export default function SettingsPage() {
 
                   {/* Account ID - under avatar, above name */}
                   {userData?.customer_id && (
-                    <div className="mb-8 max-w-md">
+                    <div className="mb-6 max-w-md">
                       <p
                         className="text-xs text-gray-500 mb-1"
                         style={{ fontFamily: "var(--font-landing-body)" }}
@@ -521,6 +521,21 @@ export default function SettingsPage() {
                       <code className="text-xs bg-gray-100 px-2 py-1 rounded font-mono text-gray-700 break-all">
                         {userData.customer_id}
                       </code>
+                    </div>
+                  )}
+
+                  {/* Email */}
+                  {(userData?.email || user?.email) && (
+                    <div className="mb-8 max-w-md">
+                      <p
+                        className="text-xs text-gray-500 mb-1"
+                        style={{ fontFamily: "var(--font-landing-body)" }}
+                      >
+                        Email
+                      </p>
+                      <p className="text-sm text-gray-700 font-medium">
+                        {userData?.email || user?.email}
+                      </p>
                     </div>
                   )}
 
