@@ -18,44 +18,47 @@ type IntegrationsTabProps = {
   hasGoogleConnected: boolean;
 };
 
-export default function IntegrationsTab({ hasGithubConnected, hasGoogleConnected }: IntegrationsTabProps) {
+export default function IntegrationsTab({ hasGithubConnected: _hasGithubConnected, hasGoogleConnected: _hasGoogleConnected }: IntegrationsTabProps) {
   const [busy, setBusy] = useState(false);
   const [conflictError, setConflictError] = useState<string | null>(null);
-  const [githubConnected, setGithubConnected] = useState(hasGithubConnected);
-  const [googleConnected, setGoogleConnected] = useState(hasGoogleConnected);
+  const [githubConnected, setGithubConnected] = useState(false);
+  const [googleConnected, setGoogleConnected] = useState(false);
+  const [checkingConnection, setCheckingConnection] = useState(true);
   const router = useRouter();
 
+  // Always fetch fresh from DB - don't rely on props (they may be cached/stale)
   useEffect(() => {
-    setGithubConnected(hasGithubConnected);
-    setGoogleConnected(hasGoogleConnected);
-  }, [hasGithubConnected, hasGoogleConnected]);
-
-  useEffect(() => {
-    async function checkGitHubConnection() {
+    async function checkConnections() {
+      setCheckingConnection(true);
       const supabase = createClient();
       
-      // Get user from DB to check stored token
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user) {
+        setCheckingConnection(false);
+        return;
+      }
       
+      // Check DB for stored tokens
       const { data: userData } = await supabase
         .from("users")
         .select("github_token, github_user_id")
         .eq("id", user.id)
         .single();
       
-      // Also check identities
+      // Check current session identities
       const { data: identityData } = await supabase.auth.getUserIdentities();
       const identities = identityData?.identities ?? [];
       const hasGithubIdentity = identities.some((i) => i.provider === "github");
+      const hasGoogleIdentity = identities.some((i) => i.provider === "google");
       
-      // Consider connected if either DB has token OR current session has identity
-      const hasGithub = (userData?.github_token || userData?.github_user_id) || hasGithubIdentity;
-      setGithubConnected(hasGithub);
+      // Connected if DB has token OR current session has identity
+      setGithubConnected(!!(userData?.github_token || userData?.github_user_id || hasGithubIdentity));
+      setGoogleConnected(!!hasGoogleIdentity);
+      setCheckingConnection(false);
     }
     
-    checkGitHubConnection();
-  }, [hasGithubConnected, hasGoogleConnected]);
+    checkConnections();
+  }, []);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -194,43 +197,59 @@ export default function IntegrationsTab({ hasGithubConnected, hasGoogleConnected
         </div>
       )}
 
-      <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-        <div className="flex items-start justify-between gap-4 flex-wrap">
+      {checkingConnection ? (
+        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
           <div className="flex items-center gap-3">
             <div className="w-11 h-11 rounded-xl border border-gray-200 bg-gray-50 flex items-center justify-center">
               <Github className="text-gray-800" size={22} />
             </div>
             <div>
               <p className="font-bold text-gray-900" style={{ fontFamily: "var(--font-landing-heading)" }}>GitHub</p>
-              <p className="text-sm text-gray-500 font-medium" style={{ fontFamily: "var(--font-landing-body)" }}>
-                {githubConnected ? "Connected. Repo picker is enabled." : "Connect GitHub to scan repositories."}
+              <p className="text-sm text-gray-400 font-medium" style={{ fontFamily: "var(--font-landing-body)" }}>
+                Checking connection...
               </p>
             </div>
           </div>
-
-          {githubConnected ? (
-            <button
-              onClick={() => disconnectProvider("github")}
-              disabled={busy}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-gray-200 bg-white text-gray-700 text-sm font-semibold hover:bg-gray-50 transition-colors disabled:opacity-50"
-              style={{ fontFamily: "var(--font-landing-body)" }}
-            >
-              <Unlink size={16} />
-              Disconnect
-            </button>
-          ) : (
-            <button
-              onClick={() => connectProvider("github")}
-              disabled={busy}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-black text-white text-sm font-semibold hover:bg-gray-800 transition-colors disabled:opacity-50"
-              style={{ fontFamily: "var(--font-landing-body)" }}
-            >
-              {busy ? <div className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" /> : <Link2 size={16} />}
-              Connect GitHub
-            </button>
-          )}
         </div>
-      </div>
+      ) : (
+        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 rounded-xl border border-gray-200 bg-gray-50 flex items-center justify-center">
+                <Github className="text-gray-800" size={22} />
+              </div>
+              <div>
+                <p className="font-bold text-gray-900" style={{ fontFamily: "var(--font-landing-heading)" }}>GitHub</p>
+                <p className="text-sm text-gray-500 font-medium" style={{ fontFamily: "var(--font-landing-body)" }}>
+                  {githubConnected ? "Connected. Repo picker is enabled." : "Connect GitHub to scan repositories."}
+                </p>
+              </div>
+            </div>
+
+            {githubConnected ? (
+              <button
+                onClick={() => disconnectProvider("github")}
+                disabled={busy}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-gray-200 bg-white text-gray-700 text-sm font-semibold hover:bg-gray-50 transition-colors disabled:opacity-50"
+                style={{ fontFamily: "var(--font-landing-body)" }}
+              >
+                <Unlink size={16} />
+                Disconnect
+              </button>
+            ) : (
+              <button
+                onClick={() => connectProvider("github")}
+                disabled={busy}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-black text-white text-sm font-semibold hover:bg-gray-800 transition-colors disabled:opacity-50"
+                style={{ fontFamily: "var(--font-landing-body)" }}
+              >
+                {busy ? <div className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" /> : <Link2 size={16} />}
+                Connect GitHub
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm mt-4">
         <div className="flex items-start justify-between gap-4 flex-wrap">
