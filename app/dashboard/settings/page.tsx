@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
 import {
   User,
   CreditCard,
@@ -148,9 +147,46 @@ export default function SettingsPage() {
     if (upgradeSuccess === "success") {
       setActiveTab("billing");
       async function syncAndShowSuccess() {
+        const sleep = (ms: number) =>
+          new Promise((resolve) => window.setTimeout(resolve, ms));
+
         try {
-          await fetch("/api/subscription/sync", { method: "POST" });
-          await loadSubscriptionStatus();
+          const supabase = createClient();
+
+          for (let attempt = 0; attempt < 6; attempt += 1) {
+            await fetch("/api/subscription/sync", { method: "POST" });
+
+            const {
+              data: { user: currentUser },
+            } = await supabase.auth.getUser();
+
+            if (currentUser) {
+              const { data } = await supabase
+                .from("users")
+                .select("*")
+                .eq("id", currentUser.id)
+                .single();
+
+              if (data) {
+                setUserData(data);
+                setCached(
+                  "settings:data",
+                  {
+                    user: currentUser,
+                    userData: data,
+                    fullName: data?.name || currentUser?.user_metadata?.full_name || "",
+                  },
+                  60_000,
+                );
+
+                if (data.subscription_id || (data.plan && data.plan !== "free")) {
+                  break;
+                }
+              }
+            }
+
+            await sleep(1500);
+          }
         } catch (err) {
           console.error("Failed to sync subscription:", err);
         }
@@ -246,6 +282,32 @@ export default function SettingsPage() {
               }
             : prev,
         );
+      }
+
+      const supabase = createClient();
+      const {
+        data: { user: currentUser },
+      } = await supabase.auth.getUser();
+
+      if (currentUser) {
+        const { data } = await supabase
+          .from("users")
+          .select("*")
+          .eq("id", currentUser.id)
+          .single();
+
+        if (data) {
+          setUserData(data);
+          setCached(
+            "settings:data",
+            {
+              user: currentUser,
+              userData: data,
+              fullName: data?.name || currentUser?.user_metadata?.full_name || "",
+            },
+            60_000,
+          );
+        }
       }
 
       setCurrentPeriodEnd(periodEnd);
@@ -773,11 +835,11 @@ export default function SettingsPage() {
                         </p>
                       </div>
                       {effectivePlan === "free" ? (
-                        <div className="w-full md:w-auto grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <div className="w-full md:w-auto grid grid-cols-1 sm:grid-cols-2 gap-2 md:max-w-[26rem]">
                           <button
                             onClick={() => startCheckout("pro")}
                             disabled={checkoutLoading === "pro"}
-                            className="inline-flex w-full items-center justify-center px-5 py-2.5 bg-black text-white rounded-full text-sm font-semibold hover:bg-gray-800 transition-colors shadow-sm disabled:opacity-70"
+                            className="inline-flex h-9 w-full items-center justify-center px-4 py-2 bg-black text-white rounded-full text-xs font-semibold hover:bg-gray-800 transition-colors shadow-sm disabled:opacity-70"
                             style={{ fontFamily: "var(--font-landing-body)" }}
                           >
                             {checkoutLoading === "pro" ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
@@ -786,7 +848,7 @@ export default function SettingsPage() {
                           <button
                             onClick={() => startCheckout("unlimited")}
                             disabled={checkoutLoading === "unlimited"}
-                            className="inline-flex w-full items-center justify-center px-5 py-2.5 border-2 border-[#3079FF] text-[#3079FF] rounded-full text-sm font-semibold hover:bg-[#3079FF]/5 transition-colors shadow-sm disabled:opacity-70"
+                            className="inline-flex h-9 w-full items-center justify-center px-4 py-2 border border-[#3079FF] text-[#3079FF] rounded-full text-xs font-semibold hover:bg-[#3079FF]/5 transition-colors shadow-sm disabled:opacity-70"
                             style={{ fontFamily: "var(--font-landing-body)" }}
                           >
                             {checkoutLoading === "unlimited" ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
@@ -797,7 +859,7 @@ export default function SettingsPage() {
                         <button
                           onClick={() => startCheckout("unlimited")}
                           disabled={checkoutLoading === "unlimited"}
-                          className="inline-flex px-5 py-2.5 bg-black text-white rounded-full text-sm font-semibold hover:bg-gray-800 transition-colors shadow-sm disabled:opacity-70"
+                          className="inline-flex h-9 px-4 py-2 bg-black text-white rounded-full text-xs font-semibold hover:bg-gray-800 transition-colors shadow-sm disabled:opacity-70"
                           style={{ fontFamily: "var(--font-landing-body)" }}
                         >
                           {checkoutLoading === "unlimited" ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}

@@ -93,7 +93,7 @@ export async function POST(req: NextRequest) {
           { status: 409 }
         )
       } else {
-        const returnUrl = `${process.env.NEXT_PUBLIC_APP_URL}/dashboard?upgrade=success`
+        const returnUrl = `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/settings?tab=billing&upgrade=success`
 
         const attempts: Array<{ url: string; body: Record<string, unknown> }> = [
           {
@@ -165,11 +165,12 @@ export async function POST(req: NextRequest) {
     const checkoutBody: Record<string, unknown> = {
       products: [plan.productId],
       customer_email: user.email,
+      external_customer_id: user.id,
       metadata: {
         user_id: user.id,
         plan: planId,
       },
-      success_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard?upgrade=success`,
+      success_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/settings?tab=billing&upgrade=success`,
       cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/#pricing`,
     }
 
