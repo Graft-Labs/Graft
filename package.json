@@ -31,6 +31,7 @@
     "posthog-node": "^5.28.2",
     "react": "19.2.3",
     "react-dom": "19.2.3",
+    "standardwebhooks": "^1.0.0",
     "tailwind-merge": "^3.5.0"
   },
   "devDependencies": {
