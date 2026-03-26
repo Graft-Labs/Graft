@@ -133,23 +133,6 @@ export default function SettingsPage() {
         return;
       }
 
-      // Direct upgrade: plan changed without navigating away
-      if (data?.upgraded) {
-        setUserData((prev) =>
-          prev
-            ? {
-                ...prev,
-                plan: data.plan,
-                scans_limit: data.scansLimit,
-                subscription_status: "active",
-              }
-            : prev,
-        );
-        setShowUpgradeSuccess(true);
-        setCheckoutLoading(null);
-        return;
-      }
-
       if (!data?.url) {
         setCheckoutError("No checkout URL returned. Please try again.");
         setCheckoutLoading(null);
