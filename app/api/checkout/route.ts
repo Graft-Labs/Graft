@@ -211,16 +211,70 @@ export async function POST(req: NextRequest) {
     }
 
     // -----------------------------------------------------------
-    // Step 2: If user has active subscription, open portal
+    // Step 2: If user has active subscription, upgrade or open portal
     // -----------------------------------------------------------
     if (hasActiveSubscription) {
-      console.log('User has active subscription, creating portal session', {
+      console.log('User has active subscription', {
         userId: user.id,
         currentPlan: resolvedPlan,
         targetPlan: planId,
         customerId: resolvedCustomerId,
         subscriptionId: resolvedSubscriptionId,
       })
+
+      // Attempt 0: Direct subscription product upgrade via Polar API.
+      // This avoids needing a portal session and handles the Pro → Unlimited case
+      // without redirecting the user away from the page.
+      if (resolvedSubscriptionId && planId !== resolvedPlan) {
+        const newProductId = plan.productId
+        if (newProductId) {
+          try {
+            const upgradeResp = await fetch(
+              `${POLAR_API_URL}/subscriptions/${resolvedSubscriptionId}`,
+              {
+                method: 'PATCH',
+                headers: {
+                  Authorization: `Bearer ${POLAR_ACCESS_TOKEN}`,
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ product_id: newProductId }),
+              },
+            )
+
+            if (upgradeResp.ok) {
+              // Update DB immediately so the UI reflects the new plan
+              const { error: dbError } = await supabase
+                .from('users')
+                .update({
+                  plan: planId,
+                  scans_limit: plan.scansLimit,
+                  subscription_status: 'active',
+                  updated_at: new Date().toISOString(),
+                })
+                .eq('id', user.id)
+
+              if (dbError) {
+                console.error('DB update after direct upgrade failed:', dbError)
+                // The Polar subscription was upgraded successfully; a webhook will
+                // eventually sync the DB. Return success so the UI can reflect it.
+              }
+
+              return NextResponse.json({
+                upgraded: true,
+                plan: planId,
+                scansLimit: plan.scansLimit,
+              })
+            } else {
+              const errBody = await upgradeResp.text()
+              console.error('Direct subscription upgrade failed, will try portal:', upgradeResp.status, errBody)
+              // Fall through to portal
+            }
+          } catch (upgradeErr) {
+            console.error('Direct subscription upgrade error, will try portal:', upgradeErr)
+            // Fall through to portal
+          }
+        }
+      }
 
       const returnUrl = `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/settings?tab=billing&upgrade=success`
 
