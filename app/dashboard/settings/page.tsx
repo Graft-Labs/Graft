@@ -128,10 +128,6 @@ export default function SettingsPage() {
         throw new Error(data?.message || data?.error || "Failed to start checkout");
       }
 
-      if (data?.isPortal !== true && userData?.subscription_status === "active") {
-        throw new Error("Could not open billing portal for your active subscription.");
-      }
-
       if (!data?.url) throw new Error("No checkout URL returned.");
       window.location.href = data.url;
     } catch (error: unknown) {
@@ -269,6 +265,7 @@ export default function SettingsPage() {
 
   const loadSubscriptionStatus = useCallback(async () => {
     try {
+      // Step 1: call status endpoint — this syncs plan from Polar into DB
       const res = await fetch("/api/subscription/status", {
         method: "GET",
         headers: { "Content-Type": "application/json" },
@@ -277,39 +274,11 @@ export default function SettingsPage() {
       const body = await res.json().catch(() => null);
       if (!res.ok || !body) return;
 
-      if (body.plan && typeof body.plan === "string") {
-        setUserData((prev) =>
-          prev
-            ? {
-                ...prev,
-                plan: body.plan,
-                scans_limit:
-                  typeof body.scansLimit === "number"
-                    ? body.scansLimit
-                    : prev.scans_limit,
-              }
-            : prev,
-        );
-      }
+      setCurrentPeriodEnd(
+        typeof body.currentPeriodEnd === "string" ? body.currentPeriodEnd : null,
+      );
 
-      const nextStatus =
-        typeof body.subscriptionStatus === "string"
-          ? body.subscriptionStatus
-          : null;
-      const periodEnd =
-        typeof body.currentPeriodEnd === "string" ? body.currentPeriodEnd : null;
-
-      if (nextStatus) {
-        setUserData((prev) =>
-          prev
-            ? {
-                ...prev,
-                subscription_status: nextStatus,
-              }
-            : prev,
-        );
-      }
-
+      // Step 2: re-read full user row from Supabase so UI has latest plan/scans/subscription
       const supabase = createClient();
       const {
         data: { user: currentUser },
@@ -335,8 +304,6 @@ export default function SettingsPage() {
           );
         }
       }
-
-      setCurrentPeriodEnd(periodEnd);
     } catch (error) {
       console.error("Failed to load subscription status", error);
     }

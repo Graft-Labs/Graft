@@ -90,38 +90,112 @@ export async function POST(req: NextRequest) {
         hasCustomerId: Boolean(userData?.customer_id),
       })
 
-      const polar = buildPolarClient()
-      if (!polar) {
-        return NextResponse.json({
-          error: 'Payment not configured',
-          message: 'Polar.sh is not configured. Please contact support.'
-        }, { status: 500 })
-      }
-
       const returnUrl = `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/settings?tab=billing&upgrade=success`
 
+      // --- Attempt 1: Polar SDK with customerId ---
       try {
-        // Try with stored customer_id first; fall back to externalCustomerId (Supabase user ID).
-        // externalCustomerId is set during checkout creation as `external_customer_id: user.id`,
-        // so Polar always has this mapping even when our DB row is missing customer_id.
-        const session = userData?.customer_id
-          ? await polar.customerSessions.create({ customerId: userData.customer_id, returnUrl })
-          : await polar.customerSessions.create({ externalCustomerId: user.id, returnUrl })
+        const polar = buildPolarClient()
+        if (polar && userData?.customer_id) {
+          const session = await polar.customerSessions.create({
+            customerId: userData.customer_id,
+            returnUrl,
+          })
+          // SDK returns { ok, value } or plain object depending on version
+          const portalUrl =
+            (session as Record<string, unknown>).customerPortalUrl as
+              | string
+              | undefined ??
+            ((session as Record<string, unknown>).value as
+              | Record<string, unknown>
+              | undefined)?.customerPortalUrl as string | undefined ??
+            ((session as Record<string, unknown>).value as
+              | Record<string, unknown>
+              | undefined)?.url as string | undefined
 
-        return NextResponse.json({
-          url: session.customerPortalUrl,
-          isPortal: true,
-        })
-      } catch (portalErr) {
-        console.error('Failed to create customer portal session:', portalErr)
-        return NextResponse.json(
-          {
-            error: 'Failed to open billing portal',
-            message: 'Could not open billing portal for your active subscription. Please contact support.',
-          },
-          { status: 500 }
-        )
+          if (portalUrl) {
+            return NextResponse.json({ url: portalUrl, isPortal: true })
+          }
+        }
+      } catch (sdkCustomerErr) {
+        console.error('Polar SDK portal (customerId) failed:', sdkCustomerErr)
       }
+
+      // --- Attempt 2: Polar SDK with externalCustomerId ---
+      try {
+        const polar = buildPolarClient()
+        if (polar) {
+          const session = await polar.customerSessions.create({
+            externalCustomerId: user.id,
+            returnUrl,
+          })
+          const portalUrl =
+            (session as Record<string, unknown>).customerPortalUrl as
+              | string
+              | undefined ??
+            ((session as Record<string, unknown>).value as
+              | Record<string, unknown>
+              | undefined)?.customerPortalUrl as string | undefined ??
+            ((session as Record<string, unknown>).value as
+              | Record<string, unknown>
+              | undefined)?.url as string | undefined
+
+          if (portalUrl) {
+            return NextResponse.json({ url: portalUrl, isPortal: true })
+          }
+        }
+      } catch (sdkExtErr) {
+        console.error('Polar SDK portal (externalCustomerId) failed:', sdkExtErr)
+      }
+
+      // --- Attempt 3: Raw HTTP POST to Polar customer portal sessions API ---
+      // Per Polar docs: POST /v1/customer-portal/sessions with customer_id or external_customer_id
+      try {
+        const portalBody: Record<string, unknown> = userData?.customer_id
+          ? { customer_id: userData.customer_id, return_url: returnUrl }
+          : { external_customer_id: user.id, return_url: returnUrl }
+
+        const portalResp = await fetch(
+          `${POLAR_API_URL}/customer-portal/sessions`,
+          {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${POLAR_ACCESS_TOKEN}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(portalBody),
+          },
+        )
+
+        if (portalResp.ok) {
+          const portalData = (await portalResp.json()) as Record<string, unknown>
+          const portalUrl =
+            (portalData.customer_portal_url as string | undefined) ||
+            (portalData.url as string | undefined) ||
+            (portalData.customerPortalUrl as string | undefined)
+
+          if (portalUrl) {
+            return NextResponse.json({ url: portalUrl, isPortal: true })
+          }
+        } else {
+          console.error(
+            'Polar HTTP portal session failed:',
+            portalResp.status,
+            await portalResp.text(),
+          )
+        }
+      } catch (httpErr) {
+        console.error('Polar HTTP portal session error:', httpErr)
+      }
+
+      // --- Fallback: All portal attempts failed, create a fresh checkout session ---
+      // This avoids the user being stuck with "could not open portal" error.
+      console.log('Portal creation failed for active subscriber, falling back to checkout', {
+        userId: user.id,
+        subscriptionId: userData?.subscription_id,
+        customerId: userData?.customer_id,
+        targetPlan: planId,
+      })
+      // Fall through to checkout creation below.
     }
 
     // No active subscription - create a new checkout session
