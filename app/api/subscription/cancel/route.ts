@@ -1,5 +1,6 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase-server";
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 
 const POLAR_ACCESS_TOKEN = process.env.POLAR_ACCESS_TOKEN;
 const POLAR_IS_SANDBOX = process.env.POLAR_IS_SANDBOX === "true";
@@ -19,7 +20,13 @@ function getCancellationScheduled(subscription: Record<string, unknown>) {
   return status === "cancelled" || status === "canceled";
 }
 
-export async function POST() {
+export async function POST(req: NextRequest) {
+  // Rate limit: 10 cancel requests per minute per IP
+  const ip = getClientIp(req)
+  if (!checkRateLimit(`subscription-cancel:${ip}`, 10, 60_000)) {
+    return NextResponse.json({ message: "Too many requests" }, { status: 429 })
+  }
+
   try {
     const supabase = await createServerClient();
     const {

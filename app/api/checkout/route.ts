@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { Polar } from '@polar-sh/sdk'
 import { createServerClient } from '@/lib/supabase-server'
+import { checkRateLimit, getClientIp } from '@/lib/rate-limit'
 
 const POLAR_ACCESS_TOKEN = process.env.POLAR_ACCESS_TOKEN
 const POLAR_ORGANIZATION = process.env.NEXT_PUBLIC_POLAR_ORGANIZATION
@@ -14,9 +16,39 @@ const PLAN_PRICES: Record<string, { productId: string; priceId: string; scansLim
   unlimited: { productId: process.env.POLAR_UNLIMITED_PRODUCT_ID || '', priceId: process.env.POLAR_UNLIMITED_PRICE_ID || '', scansLimit: 999999 },
 }
 
+function buildPolarClient() {
+  if (!POLAR_ACCESS_TOKEN || POLAR_ACCESS_TOKEN === 'your_polar_access_token_here') return null
+  return new Polar({
+    accessToken: POLAR_ACCESS_TOKEN,
+    server: POLAR_IS_SANDBOX ? 'sandbox' : 'production',
+  })
+}
+
+const VALID_PLAN_IDS = new Set(Object.keys(PLAN_PRICES))
+
 export async function POST(req: NextRequest) {
+  // Rate limit: 20 checkout requests per minute per IP
+  const ip = getClientIp(req)
+  if (!checkRateLimit(`checkout:${ip}`, 20, 60_000)) {
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
+  }
+
   try {
-    const { planId } = await req.json()
+    let body: unknown
+    try {
+      body = await req.json()
+    } catch {
+      return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
+    }
+
+    if (!body || typeof body !== 'object') {
+      return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
+    }
+
+    const planId = (body as Record<string, unknown>).planId
+    if (typeof planId !== 'string' || !VALID_PLAN_IDS.has(planId)) {
+      return NextResponse.json({ error: 'Invalid plan' }, { status: 400 })
+    }
 
     const supabase = await createServerClient()
     const { data: { user } } = await supabase.auth.getUser()
@@ -49,114 +81,43 @@ export async function POST(req: NextRequest) {
     const hasActiveSubscription = Boolean(userData?.subscription_id) &&
       (userData?.subscription_status === 'active' || userData?.subscription_status === 'cancelled')
 
-    // If user has active subscription, always send them to the billing portal for upgrades
+    // If user has active subscription, redirect to customer portal for plan upgrades/changes.
     if (hasActiveSubscription) {
-      console.log('User has active subscription, attempting portal session for upgrade')
-      
-      let customerId = userData?.customer_id
+      console.log('User has active subscription, creating customer portal session for upgrade', {
+        userId: user.id,
+        currentPlan: userData?.plan,
+        targetPlan: planId,
+        hasCustomerId: Boolean(userData?.customer_id),
+      })
 
-      // If customer_id is missing from database, try to fetch it from Polar using subscription_id
-      if (!customerId && userData?.subscription_id) {
-        console.log('customer_id missing, fetching from Polar using subscription_id:', userData.subscription_id)
-        
-        const subResponse = await fetch(`${POLAR_API_URL}/subscriptions/${userData.subscription_id}`, {
-          headers: {
-            'Authorization': `Bearer ${POLAR_ACCESS_TOKEN}`,
-            'Content-Type': 'application/json',
-          },
-        })
-
-        if (subResponse.ok) {
-          const subData = await subResponse.json()
-          customerId = subData.customer_id
-          console.log('Fetched customer_id from Polar:', customerId)
-
-          // Optionally update the database with the fetched customer_id
-          if (customerId) {
-            await supabase
-              .from('users')
-              .update({ customer_id: customerId })
-              .eq('id', user.id)
-          }
-        } else {
-          console.error('Failed to fetch subscription from Polar:', await subResponse.text())
-        }
+      const polar = buildPolarClient()
+      if (!polar) {
+        return NextResponse.json({
+          error: 'Payment not configured',
+          message: 'Polar.sh is not configured. Please contact support.'
+        }, { status: 500 })
       }
 
-      // If we still don't have customer_id, do not create a new checkout.
-      // Polar will reject it with "already have an active subscription".
-      if (!customerId) {
-        console.error('No customer_id available for active subscription user')
-        return NextResponse.json(
-          {
-            error: 'Active subscription found',
-            message: 'You already have an active subscription. Please manage upgrades in billing.'
-          },
-          { status: 409 }
-        )
-      } else {
-        const returnUrl = `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/settings?tab=billing&upgrade=success`
+      const returnUrl = `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/settings?tab=billing&upgrade=success`
 
-        const attempts: Array<{ url: string; body: Record<string, unknown> }> = [
-          {
-            url: `${POLAR_API_URL}/customer/sessions`,
-            body: { customer_id: customerId, return_url: returnUrl },
-          },
-          {
-            url: `${POLAR_API_URL}/customer/sessions`,
-            body: { customer_id: customerId, redirect_url: returnUrl },
-          },
-          {
-            url: `${POLAR_API_URL}/customer-sessions`,
-            body: { customer_id: customerId, return_url: returnUrl },
-          },
-          {
-            url: `${POLAR_API_URL}/customer-sessions`,
-            body: { customer_id: customerId, redirect_url: returnUrl },
-          },
-          {
-            url: `${POLAR_API_URL}/portals`,
-            body: { customer_id: customerId, return_url: returnUrl },
-          },
-          {
-            url: `${POLAR_API_URL}/customers/${customerId}/portal-session`,
-            body: { return_url: returnUrl },
-          },
-        ]
+      try {
+        // Try with stored customer_id first; fall back to externalCustomerId (Supabase user ID).
+        // externalCustomerId is set during checkout creation as `external_customer_id: user.id`,
+        // so Polar always has this mapping even when our DB row is missing customer_id.
+        const session = userData?.customer_id
+          ? await polar.customerSessions.create({ customerId: userData.customer_id, returnUrl })
+          : await polar.customerSessions.create({ externalCustomerId: user.id, returnUrl })
 
-        for (const attempt of attempts) {
-          const portalResponse = await fetch(attempt.url, {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${POLAR_ACCESS_TOKEN}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(attempt.body),
-          })
-
-          if (!portalResponse.ok) {
-            const errorText = await portalResponse.text()
-            console.error('Polar portal attempt failed:', attempt.url, portalResponse.status, errorText)
-            continue
-          }
-
-          const portal = await portalResponse.json()
-          const portalUrl = portal?.url || portal?.customer_portal_url || portal?.portal_url || portal?.session_url
-
-          if (portalUrl) {
-            return NextResponse.json({
-              url: portalUrl,
-              isPortal: true,
-            })
-          }
-
-          console.error('Polar portal attempt succeeded without URL:', attempt.url, portal)
-        }
-
+        return NextResponse.json({
+          url: session.customerPortalUrl,
+          isPortal: true,
+        })
+      } catch (portalErr) {
+        console.error('Failed to create customer portal session:', portalErr)
         return NextResponse.json(
           {
             error: 'Failed to open billing portal',
-            message: 'Could not open billing portal for your active subscription.'
+            message: 'Could not open billing portal for your active subscription. Please contact support.',
           },
           { status: 500 }
         )
