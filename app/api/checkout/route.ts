@@ -263,9 +263,12 @@ export async function POST(req: NextRequest) {
             user_id: user.id,
             plan: planId,
           },
-          success_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/settings?tab=billing&upgrade=success&checkout_id={CHECKOUT_ID}`,
-          cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/settings?tab=billing`,
+          success_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/settings?tab=billing&upgrade=success&target_plan=${planId}&checkout_id={CHECKOUT_ID}`,
+          return_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/settings?tab=billing`,
         }
+
+        if (plan.productId) upgradeCheckoutBody.product_id = plan.productId
+        if (plan.priceId) upgradeCheckoutBody.product_price_id = plan.priceId
 
         // Important: pass subscription_id for plan changes on an existing subscription.
         // Creating a checkout with only customer_id can be interpreted as a new
@@ -496,8 +499,8 @@ export async function POST(req: NextRequest) {
         user_id: user.id,
         plan: planId,
       },
-      success_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/settings?tab=billing&upgrade=success&checkout_id={CHECKOUT_ID}`,
-      cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/#pricing`,
+      success_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/settings?tab=billing&upgrade=success&target_plan=${planId}&checkout_id={CHECKOUT_ID}`,
+      return_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/settings?tab=billing`,
     }
 
     if (plan.productId) checkoutBody.product_id = plan.productId

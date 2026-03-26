@@ -89,6 +89,20 @@ export default function SettingsPage() {
   const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
 
+  const parseBool = (value: unknown): boolean => {
+    if (typeof value === "boolean") return value;
+    if (typeof value === "string") {
+      const normalized = value.toLowerCase();
+      return normalized === "true" || normalized === "1" || normalized === "yes";
+    }
+    return false;
+  };
+
+  const isSubscriptionActive = (status: string | null | undefined): boolean => {
+    const normalized = (status || "").toLowerCase();
+    return normalized === "active" || normalized === "trialing";
+  };
+
   const openBillingPortal = async () => {
     const response = await fetch("/api/portal", {
       method: "POST",
@@ -151,6 +165,7 @@ export default function SettingsPage() {
     const tab = searchParams.get("tab");
     const integrationError = searchParams.get("integration_error");
     const upgradeSuccess = searchParams.get("upgrade");
+    const targetPlan = searchParams.get("target_plan");
     const checkoutId = searchParams.get("checkout_id");
     const customerSessionToken = searchParams.get("customer_session_token");
 
@@ -160,15 +175,37 @@ export default function SettingsPage() {
         const sleep = (ms: number) =>
           new Promise((resolve) => window.setTimeout(resolve, ms));
 
+        let confirmedUpgrade = false;
+
         try {
           const supabase = createClient();
 
           for (let attempt = 0; attempt < 6; attempt += 1) {
-            await fetch("/api/subscription/sync", {
+            const syncResponse = await fetch("/api/subscription/sync", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ checkoutId }),
             });
+
+            const syncBody = await syncResponse.json().catch(() => null);
+            const syncPlan =
+              typeof syncBody?.plan === "string" ? syncBody.plan : null;
+            const syncStatus =
+              typeof syncBody?.subscriptionStatus === "string"
+                ? syncBody.subscriptionStatus
+                : null;
+            const syncActive =
+              parseBool(syncBody?.success) && isSubscriptionActive(syncStatus);
+
+            if (!targetPlan) {
+              confirmedUpgrade = syncActive && syncPlan !== "free";
+            } else {
+              confirmedUpgrade = syncActive && syncPlan === targetPlan;
+            }
+
+            if (confirmedUpgrade) {
+              // Keep looping disabled and fetch latest row once below
+            }
 
             const {
               data: { user: currentUser },
@@ -179,7 +216,7 @@ export default function SettingsPage() {
                 .from("users")
                 .select("*")
                 .eq("id", currentUser.id)
-              .single();
+                .single();
 
               if (data) {
                 setUserData(data);
@@ -193,10 +230,23 @@ export default function SettingsPage() {
                   60_000,
                 );
 
-                if (data.subscription_id || (data.plan && data.plan !== "free")) {
+                const dbActive = isSubscriptionActive(data.subscription_status);
+                const dbPlan = data.plan || "free";
+
+                if (!targetPlan) {
+                  if (dbActive && dbPlan !== "free") {
+                    confirmedUpgrade = true;
+                    break;
+                  }
+                } else if (dbActive && dbPlan === targetPlan) {
+                  confirmedUpgrade = true;
                   break;
                 }
               }
+            }
+
+            if (confirmedUpgrade) {
+              break;
             }
 
             await sleep(1500);
@@ -204,13 +254,15 @@ export default function SettingsPage() {
         } catch (err) {
           console.error("Failed to sync subscription:", err);
         }
-        if (upgradeSuccess === "success") {
+
+        if (upgradeSuccess === "success" && confirmedUpgrade) {
           setShowUpgradeSuccess(true);
         }
       }
       syncAndShowSuccess();
       const url = new URL(window.location.href);
       url.searchParams.delete("upgrade");
+      url.searchParams.delete("target_plan");
       url.searchParams.delete("checkout_id");
       url.searchParams.delete("customer_session_token");
       window.history.replaceState({}, "", url.pathname + url.search);
