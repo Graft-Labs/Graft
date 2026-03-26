@@ -13,6 +13,9 @@ export interface GrepCheckResults {
   debug_mode_enabled:      string  // DEBUG=true / debug: true in non-dev config
   window_node_polyfill:    string  // window.Buffer / window.process polyfills
   predictable_jwt_secrets: string  // common placeholder JWT/session secrets
+  cors_wildcard:           string  // Access-Control-Allow-Origin: * in API routes
+  sql_injection_template:  string  // Backtick template-string SQL queries
+  dangerously_set_html:    string  // dangerouslySetInnerHTML usage
   // Scalability
   img_tag_not_next_image:  string  // <img> instead of next/image
   images_unoptimized:      string  // images.unoptimized: true in next.config
@@ -25,6 +28,8 @@ export interface GrepCheckResults {
   has_rate_limiting:       string  // 'true' | 'false'
   has_auth_library:        string  // 'true' | 'false'
   has_middleware:          string  // 'true' | 'false'
+  has_input_validation:    string  // 'true' | 'false' — zod/joi/yup/valibot
+  has_structured_logging:  string  // 'true' | 'false' — pino/winston/bunyan
   framework:               string
   // SaaS-specific checks
   jwt_in_localstorage:     string  // localStorage.setItem with token/jwt/accessToken
@@ -85,6 +90,8 @@ export interface ToolOutputs {
     use_client_count:     string
     framework:            string
     hallucinated_packages: string
+    // Pre-production checklist additions
+    has_db_migrations:      string  // migrations/ or supabase/migrations directory
   }
   // Vibe-leak-detector issues (in-process regex/AST scanner)
   vibe_issues?:     VibeIssueInput[]
@@ -477,7 +484,67 @@ function parseGrepChecks(g: GrepCheckResults): EnrichedIssue[] {
     })
   }
 
-  // ── SC1.2 findMany() with no pagination — now handled by LLM ─────────────────
+  // ── CORS wildcard ─────────────────────────────────────────────────────────────
+  if (g.cors_wildcard) {
+    const { file, line } = extractFile(g.cors_wildcard)
+    issues.push({
+      guard: 'security', category: 'cors', severity: 'high', confidence: 'confirmed',
+      title: 'CORS wildcard allows requests from any origin',
+      description: '`Access-Control-Allow-Origin: *` found in an API route. This allows any website to make cross-origin requests to your API — including reading authenticated responses if the route does not also check cookies/auth headers.',
+      fix_suggestion: 'Restrict CORS to your own origin:\n```ts\nreturn new Response(body, {\n  headers: {\n    "Access-Control-Allow-Origin": process.env.NEXT_PUBLIC_APP_URL ?? "",\n    "Access-Control-Allow-Methods": "GET,POST",\n    "Access-Control-Allow-Headers": "Content-Type,Authorization",\n  },\n})\n```\nFor Next.js, configure this in `next.config.ts` `headers()` using the `/api/(.*)` source pattern.',
+      code_snippet: firstLine(g.cors_wildcard),
+      file_path: file,
+      line_number: line,
+    })
+  }
+
+  // ── SQL injection via template string ────────────────────────────────────────
+  if (g.sql_injection_template) {
+    const { file, line } = extractFile(g.sql_injection_template)
+    issues.push({
+      guard: 'security', category: 'injection', severity: 'critical', confidence: 'likely',
+      title: 'Possible SQL injection via template string query',
+      description: 'A database query appears to use a template literal (`\`SELECT … ${var}\``) to interpolate user-supplied or external values directly into SQL. An attacker can manipulate the query to read, modify, or delete arbitrary data.',
+      fix_suggestion: 'Always use parameterized queries or a query builder:\n```ts\n// Dangerous:\ndb.query(`SELECT * FROM users WHERE id = ${userId}`)\n\n// Safe (parameterized):\ndb.query("SELECT * FROM users WHERE id = $1", [userId])\n\n// Safe (ORM):\ndb.select().from(users).where(eq(users.id, userId))\n```',
+      code_snippet: firstLine(g.sql_injection_template),
+      file_path: file,
+      line_number: line,
+    })
+  }
+
+  // ── dangerouslySetInnerHTML XSS ──────────────────────────────────────────────
+  if (g.dangerously_set_html) {
+    const { file, line } = extractFile(g.dangerously_set_html)
+    issues.push({
+      guard: 'security', category: 'xss', severity: 'high', confidence: 'likely',
+      title: 'dangerouslySetInnerHTML may enable XSS',
+      description: '`dangerouslySetInnerHTML` renders raw HTML into the DOM. If the HTML string comes from user input or an external source without sanitization, an attacker can inject `<script>` tags to execute arbitrary JavaScript in your users\' browsers.',
+      fix_suggestion: 'Sanitize HTML before rendering with DOMPurify:\n```ts\nimport DOMPurify from "dompurify"\n\n<div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(html) }} />\n```\nOr avoid `dangerouslySetInnerHTML` entirely and use a Markdown renderer (`react-markdown`) with a content security policy.',
+      code_snippet: firstLine(g.dangerously_set_html),
+      file_path: file,
+      line_number: line,
+    })
+  }
+
+  // ── Input validation missing ──────────────────────────────────────────────────
+  if (g.has_input_validation === 'false') {
+    issues.push({
+      guard: 'security', category: 'input-validation', severity: 'high', confidence: 'confirmed',
+      title: 'No input validation library detected',
+      description: 'No schema validation library (`zod`, `joi`, `yup`, `valibot`) found in dependencies. Without validation, API routes accept any shape of input — attackers can send unexpected types, missing fields, or oversized payloads that crash or corrupt your application.',
+      fix_suggestion: 'Add Zod to validate all API inputs:\n```ts\nnpm install zod\n```\n```ts\nimport { z } from "zod"\n\nconst schema = z.object({\n  email: z.string().email(),\n  planId: z.enum(["pro", "unlimited"]),\n})\n\nexport async function POST(req: Request) {\n  const parsed = schema.safeParse(await req.json())\n  if (!parsed.success) {\n    return Response.json({ error: parsed.error.flatten() }, { status: 400 })\n  }\n  // use parsed.data safely\n}\n```',
+    })
+  }
+
+  // ── Structured logging missing ────────────────────────────────────────────────
+  if (g.has_structured_logging === 'false') {
+    issues.push({
+      guard: 'scalability', category: 'logging', severity: 'medium', confidence: 'confirmed',
+      title: 'No structured logging library detected',
+      description: 'No structured logging library (`pino`, `winston`, `bunyan`) found. Without structured logs, debugging production issues requires manually grepping through unformatted console output — making it nearly impossible to correlate events across requests or filter by severity.',
+      fix_suggestion: 'Add Pino (fastest Node.js logger):\n```ts\nnpm install pino\n```\n```ts\nimport pino from "pino"\nconst logger = pino({ level: process.env.LOG_LEVEL ?? "info" })\n\n// Usage:\nlogger.info({ userId, scanId }, "scan started")\nlogger.error({ err, traceId }, "scan failed")\n```\nPino outputs JSON that integrates with Datadog, Logflare, and other log aggregators.',
+    })
+  }
   // ── SC1.4 N+1 query pattern — now handled by LLM ─────────────────────────────
   // ── SC1.5 select() with no .where() — now handled by LLM ────────────────────
 
@@ -778,6 +845,16 @@ function parseFileChecks(fileChecks: ToolOutputs['file_checks']): EnrichedIssue[
         fix_suggestion: `1. Verify \`${pkg}\` exists and is legitimate: visit https://www.npmjs.com/package/${pkg}\n2. Check the repository and publisher.\n3. If the package was suggested by an AI, replace it with a verified alternative.\n4. Consider using \`npm audit\` and \`socket.dev\` to monitor for suspicious packages.`,
       })
     }
+  }
+
+  // ── Pre-production checklist: Database Migrations / Indexing ─────────────────
+  if (fileChecks.has_db_migrations === 'false') {
+    issues.push({
+      guard: 'scalability', category: 'database', severity: 'medium', confidence: 'possible',
+      title: 'No database migration directory detected',
+      description: 'No `migrations/`, `supabase/migrations/`, or `drizzle/` directory found. Without tracked migrations, schema changes are applied ad-hoc — making it impossible to reproduce the database schema in a new environment, or roll back after a bad deployment.',
+      fix_suggestion: 'Track all schema changes as versioned migration files:\n- **Supabase**: use `supabase migration new <name>` and commit the generated SQL under `supabase/migrations/`\n- **Drizzle**: use `drizzle-kit generate` and commit the output\n- **Prisma**: use `prisma migrate dev` and commit `prisma/migrations/`\n\nAdd database indexes on frequently queried columns:\n```sql\nCREATE INDEX CONCURRENTLY idx_users_email ON users(email);\nCREATE INDEX CONCURRENTLY idx_scans_user_id ON scans(user_id);\n```',
+    })
   }
 
   return issues

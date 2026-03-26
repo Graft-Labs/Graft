@@ -86,3 +86,39 @@ rules:
       confidence: confirmed
     patterns:
       - pattern-regex: '(?is)create\s+policy\s+.+\s+on\s+.+\s+for\s+(select|all).+using\s*\(\s*true\s*\)'
+
+  - id: shipguard.security.cors-wildcard
+    languages: [javascript, typescript]
+    severity: WARNING
+    message: "CORS wildcard (Access-Control-Allow-Origin: *) found. Restrict to your specific domain."
+    metadata:
+      guard: security
+      category: cors
+      confidence: confirmed
+    patterns:
+      - pattern-regex: '"Access-Control-Allow-Origin"\s*[:,]\s*"\*"'
+
+  - id: shipguard.security.dangerously-set-inner-html
+    languages: [javascript, typescript]
+    severity: WARNING
+    message: "dangerouslySetInnerHTML found without DOMPurify sanitization. May enable XSS if content comes from user input."
+    metadata:
+      guard: security
+      category: xss
+      confidence: likely
+    patterns:
+      - pattern: |
+          dangerouslySetInnerHTML={{ __html: $EXPR }}
+      - pattern-not: |
+          dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(...) }}
+
+  - id: shipguard.security.sql-template-literal
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: "SQL query built with template literal interpolation. Use parameterized queries to prevent SQL injection."
+    metadata:
+      guard: security
+      category: injection
+      confidence: likely
+    patterns:
+      - pattern-regex: '`\s*(SELECT|INSERT|UPDATE|DELETE)\s[^`]*\$\{'

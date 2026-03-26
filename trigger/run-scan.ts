@@ -172,6 +172,13 @@ async function runGrepChecks(
     liveApiKeysInSource,
     // import.meta.env.VITE_* secret vars exposed in client bundle
     viteMetaEnvSecrets,
+    // ── Pre-production checklist checks ────────────────────────────────────────
+    // CORS wildcard in API routes
+    corsWildcard,
+    // SQL injection via template string queries
+    sqlInjectionTemplate,
+    // dangerouslySetInnerHTML XSS
+    dangerouslySetHtml,
   ] = await Promise.all([
     // S1.1
     g(`grep -rn "VITE_.*KEY\\|VITE_.*URL\\|VITE_.*SECRET\\|VITE_.*TOKEN\\|VITE_.*PASSWORD\\|VITE_.*DATABASE" ${allSrcFiles} ${srcDirs} 2>/dev/null | grep -v "${publicAllowlistRegex}" | grep -v "${internalScannerRegex}" | head -20 || true`),
@@ -208,6 +215,12 @@ async function runGrepChecks(
     g(`grep -rn "sk_live_[a-zA-Z0-9]\\{20,\\}\\|pk_live_[a-zA-Z0-9]\\{20,\\}\\|rk_live_[a-zA-Z0-9]\\{20,\\}\\|whsec_[a-zA-Z0-9]\\{20,\\}" ${allSrcFiles} . 2>/dev/null | grep -v "\\.env\\|node_modules\\|\\.git\\|test\\|spec" | grep -v "${internalScannerRegex}" | head -10 || true`),
     // SaaS: import.meta.env.VITE_* secret vars in client bundle
     g(`grep -rn "import\\.meta\\.env\\.VITE_.*KEY\\|import\\.meta\\.env\\.VITE_.*SECRET\\|import\\.meta\\.env\\.VITE_.*TOKEN\\|import\\.meta\\.env\\.VITE_.*DATABASE" ${allSrcFiles} ${srcDirs} 2>/dev/null | grep -v "${publicAllowlistRegex}" | grep -v "node_modules\\|\\.git\\|test\\|spec" | grep -v "${internalScannerRegex}" | head -10 || true`),
+    // Pre-production: CORS wildcard in API routes or server files
+    g(`grep -rn "Access-Control-Allow-Origin.*\\*" ${allSrcFiles} app/api pages/api 2>/dev/null | grep -v "node_modules\\|\\.git\\|test\\|spec" | grep -v "${internalScannerRegex}" | head -10 || true`),
+    // Pre-production: SQL injection via template string queries
+    g(`grep -rn "\`SELECT.*\\\${\\|\`INSERT.*\\\${\\|\`UPDATE.*\\\${\\|\`DELETE.*\\\${" ${allSrcFiles} . 2>/dev/null | grep -v "node_modules\\|\\.git\\|test\\|spec" | grep -v "${internalScannerRegex}" | head -10 || true`),
+    // Pre-production: dangerouslySetInnerHTML without sanitization
+    g(`grep -rn "dangerouslySetInnerHTML" --include="*.tsx" --include="*.jsx" . 2>/dev/null | grep -v "node_modules\\|\\.git\\|DOMPurify\\|sanitize" | grep -v "${internalScannerRegex}" | head -10 || true`),
   ])
 
   // Dep-based checks (no grep needed — already have allDeps)
@@ -237,6 +250,18 @@ async function runGrepChecks(
     (await fileExists(join(cloneDir, 'middleware.js'))) ||
     (await fileExists(join(cloneDir, 'src/middleware.ts')))
 
+  // Input validation library (zod, joi, yup, valibot)
+  const hasInputValidation = Object.keys(allDeps).some(k =>
+    k === 'zod' || k === 'joi' || k === 'yup' || k === 'valibot' ||
+    k === '@hapi/joi' || k === 'class-validator' || k === 'superstruct'
+  )
+
+  // Structured logging library (pino, winston, bunyan)
+  const hasStructuredLogging = Object.keys(allDeps).some(k =>
+    k === 'pino' || k === 'winston' || k === 'bunyan' || k === 'log4js' ||
+    k === 'pino-http' || k === 'winston-transport' || k === 'loglevel'
+  )
+
   const results: GrepCheckResults = {
     // Security
     vite_secret_env_vars:    viteSecretEnvVars,
@@ -247,6 +272,9 @@ async function runGrepChecks(
     debug_mode_enabled:      debugModeEnabled,
     window_node_polyfill:    windowNodePolyfill,
     predictable_jwt_secrets: predictableJwtSecrets,
+    cors_wildcard:           corsWildcard,
+    sql_injection_template:  sqlInjectionTemplate,
+    dangerously_set_html:    dangerouslySetHtml,
     // Scalability
     img_tag_not_next_image:  imgTagNotNextImage,
     images_unoptimized:      imagesUnoptimized,
@@ -259,6 +287,8 @@ async function runGrepChecks(
     has_rate_limiting:       String(hasRateLimiting),
     has_auth_library:        String(hasAuthLibrary),
     has_middleware:          String(hasMiddleware),
+    has_input_validation:    String(hasInputValidation),
+    has_structured_logging:  String(hasStructuredLogging),
     framework,
     // SaaS-specific
     jwt_in_localstorage:     jwtInLocalStorage,
@@ -272,9 +302,13 @@ async function runGrepChecks(
     debug_mode_enabled:      !!debugModeEnabled,
     predictable_jwt_secrets: !!predictableJwtSecrets,
     img_tag_not_next_image:  !!imgTagNotNextImage,
+    cors_wildcard:           !!corsWildcard,
+    sql_injection_template:  !!sqlInjectionTemplate,
     has_rate_limiting:       hasRateLimiting,
     has_auth_library:        hasAuthLibrary,
     has_middleware:          hasMiddleware,
+    has_input_validation:    hasInputValidation,
+    has_structured_logging:  hasStructuredLogging,
     console_log_count:       consoleLogCount.trim(),
   })
 
@@ -555,6 +589,13 @@ export const runScanTask = task({
       const hasSupabaseAuth = '@supabase/supabase-js' in allDeps || '@supabase/auth-helpers-nextjs' in allDeps
       const hasNuxtAuth     = '@nuxtjs/supabase' in allDeps || '@sidebase/nuxt-auth' in allDeps
 
+      // Pre-production checklist: database migration directory
+      const hasDbMigrations =
+        (await fileExists(join(cloneDir, 'migrations'))) ||
+        (await fileExists(join(cloneDir, 'supabase/migrations'))) ||
+        (await fileExists(join(cloneDir, 'prisma/migrations'))) ||
+        (await fileExists(join(cloneDir, 'drizzle')))
+
       const hasNuxtSitemapModule =
         '@nuxtjs/sitemap' in allDeps ||
         'nuxt-simple-sitemap' in allDeps ||
@@ -641,6 +682,9 @@ export const runScanTask = task({
 
         // Hallucinated packages
         hallucinated_packages:    hallucinatedPkgs.join(','),
+
+        // Pre-production checklist
+        has_db_migrations:        String(hasDbMigrations),
       }
 
       if (detectedFramework === 'nuxt') {
