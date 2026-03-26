@@ -10,6 +10,7 @@ import {
   LifeBuoy,
   ExternalLink,
   Loader2,
+  X,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase";
 import IntegrationsTab from "@/components/settings/IntegrationsTab";
@@ -86,6 +87,7 @@ export default function SettingsPage() {
   >(null);
   const [currentPeriodEnd, setCurrentPeriodEnd] = useState<string | null>(null);
   const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
 
   const openBillingPortal = async () => {
     const response = await fetch("/api/portal", {
@@ -108,6 +110,7 @@ export default function SettingsPage() {
   const startCheckout = async (planId: "pro" | "unlimited") => {
     try {
       setCheckoutLoading(planId);
+      setCheckoutError(null);
       const response = await fetch("/api/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -125,13 +128,38 @@ export default function SettingsPage() {
           window.location.href = "/dashboard/settings?tab=billing";
           return;
         }
-        throw new Error(data?.message || data?.error || "Failed to start checkout");
+        setCheckoutError(data?.message || data?.error || "Failed to start checkout");
+        setCheckoutLoading(null);
+        return;
       }
 
-      if (!data?.url) throw new Error("No checkout URL returned.");
+      // Direct upgrade: plan changed without navigating away
+      if (data?.upgraded) {
+        setUserData((prev) =>
+          prev
+            ? {
+                ...prev,
+                plan: data.plan,
+                scans_limit: data.scansLimit,
+                subscription_status: "active",
+              }
+            : prev,
+        );
+        setShowUpgradeSuccess(true);
+        setCheckoutLoading(null);
+        return;
+      }
+
+      if (!data?.url) {
+        setCheckoutError("No checkout URL returned. Please try again.");
+        setCheckoutLoading(null);
+        return;
+      }
       window.location.href = data.url;
     } catch (error: unknown) {
-      alert(error instanceof Error ? error.message : "Unable to start checkout right now.");
+      setCheckoutError(
+        error instanceof Error ? error.message : "Unable to start checkout right now.",
+      );
       setCheckoutLoading(null);
     }
   };
@@ -1145,6 +1173,53 @@ export default function SettingsPage() {
                 style={{ fontFamily: "var(--font-landing-body)" }}
               >
                 {deletingAccount ? "Deleting..." : "Delete Permanently"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {checkoutError && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/40"
+            onClick={() => setCheckoutError(null)}
+          />
+          <div className="relative w-full max-w-md rounded-2xl border border-gray-200 bg-white p-6 shadow-xl">
+            <div className="flex items-start justify-between gap-3 mb-3">
+              <div className="flex items-center gap-2">
+                <AlertTriangle size={20} className="text-red-500 shrink-0" />
+                <h3
+                  className="text-base font-bold text-gray-900"
+                  style={{ fontFamily: "var(--font-landing-heading)" }}
+                >
+                  Unable to Complete
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCheckoutError(null)}
+                className="text-gray-400 hover:text-gray-600 shrink-0"
+                aria-label="Dismiss"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <p
+              className="text-sm text-gray-700"
+              style={{ fontFamily: "var(--font-landing-body)" }}
+            >
+              {checkoutError}
+            </p>
+            <div className="mt-5 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setCheckoutError(null)}
+                className="px-4 py-2 rounded-full bg-black text-white text-sm font-semibold hover:bg-gray-800 transition-colors"
+                style={{ fontFamily: "var(--font-landing-body)" }}
+              >
+                Close
               </button>
             </div>
           </div>
