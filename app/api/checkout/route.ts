@@ -7,14 +7,20 @@ const POLAR_ACCESS_TOKEN = process.env.POLAR_ACCESS_TOKEN
 const POLAR_ORGANIZATION = process.env.NEXT_PUBLIC_POLAR_ORGANIZATION
 const POLAR_IS_SANDBOX = process.env.POLAR_IS_SANDBOX === 'true'
 
-const POLAR_API_URL = POLAR_IS_SANDBOX 
-  ? 'https://sandbox-api.polar.sh/v1' 
+const POLAR_API_URL = POLAR_IS_SANDBOX
+  ? 'https://sandbox-api.polar.sh/v1'
   : 'https://api.polar.sh/v1'
 
 const PLAN_PRICES: Record<string, { productId: string; priceId: string; scansLimit: number }> = {
   pro: { productId: process.env.POLAR_PRO_PRODUCT_ID || '', priceId: process.env.POLAR_PRO_PRICE_ID || '', scansLimit: 50 },
   unlimited: { productId: process.env.POLAR_UNLIMITED_PRODUCT_ID || '', priceId: process.env.POLAR_UNLIMITED_PRICE_ID || '', scansLimit: 999999 },
 }
+
+const PLAN_PRODUCT_MAP: Record<string, string> = {}
+if (process.env.POLAR_PRO_PRODUCT_ID) PLAN_PRODUCT_MAP[process.env.POLAR_PRO_PRODUCT_ID] = 'pro'
+if (process.env.POLAR_UNLIMITED_PRODUCT_ID) PLAN_PRODUCT_MAP[process.env.POLAR_UNLIMITED_PRODUCT_ID] = 'unlimited'
+
+const ACTIVE_SUB_STATUSES = new Set(['active', 'trialing', 'cancelled', 'canceled'])
 
 function buildPolarClient() {
   if (!POLAR_ACCESS_TOKEN || POLAR_ACCESS_TOKEN === 'your_polar_access_token_here') return null
@@ -24,10 +30,77 @@ function buildPolarClient() {
   })
 }
 
+type PolarSubscription = Record<string, unknown>
+
+function extractPortalUrl(session: unknown): string | null {
+  if (!session || typeof session !== 'object') return null
+  const obj = session as Record<string, unknown>
+  const direct =
+    (obj.customerPortalUrl as string | undefined) ||
+    (obj.customer_portal_url as string | undefined) ||
+    (obj.url as string | undefined)
+  if (direct) return direct
+  const value = obj.value as Record<string, unknown> | undefined
+  if (value) {
+    return (
+      (value.customerPortalUrl as string | undefined) ||
+      (value.customer_portal_url as string | undefined) ||
+      (value.url as string | undefined) ||
+      null
+    )
+  }
+  return null
+}
+
+function findBestSubscription(subs: PolarSubscription[]): PolarSubscription | null {
+  if (!subs.length) return null
+  // Prefer active/trialing
+  const active = subs.find((s) => {
+    const st = typeof s.status === 'string' ? s.status.toLowerCase() : ''
+    return st === 'active' || st === 'trialing'
+  })
+  if (active) return active
+  // Then cancelled (cancel-at-period-end is still active in Polar)
+  const cancelled = subs.find((s) => {
+    const st = typeof s.status === 'string' ? s.status.toLowerCase() : ''
+    return st === 'cancelled' || st === 'canceled'
+  })
+  if (cancelled) return cancelled
+  return subs[0]
+}
+
+function getPlanFromSubscription(sub: PolarSubscription): string | null {
+  const productId =
+    (sub.product_id as string | undefined) ||
+    ((sub.product as Record<string, unknown> | undefined)?.id as string | undefined)
+  if (productId && PLAN_PRODUCT_MAP[productId]) return PLAN_PRODUCT_MAP[productId]
+  const items = sub.items as Array<Record<string, unknown>> | undefined
+  if (Array.isArray(items)) {
+    for (const item of items) {
+      const id =
+        (item.product_id as string | undefined) ||
+        ((item.product as Record<string, unknown> | undefined)?.id as string | undefined)
+      if (id && PLAN_PRODUCT_MAP[id]) return PLAN_PRODUCT_MAP[id]
+    }
+  }
+  return null
+}
+
+/** Extract subscription list from various Polar response shapes */
+function extractSubscriptions(payload: Record<string, unknown>): PolarSubscription[] {
+  const direct = payload.subscriptions
+  if (Array.isArray(direct)) return direct as PolarSubscription[]
+  const cs = payload.customer_state as Record<string, unknown> | undefined
+  const nested = cs?.subscriptions
+  if (Array.isArray(nested)) return nested as PolarSubscription[]
+  const data = payload.data
+  if (Array.isArray(data)) return data as PolarSubscription[]
+  return []
+}
+
 const VALID_PLAN_IDS = new Set(Object.keys(PLAN_PRICES))
 
 export async function POST(req: NextRequest) {
-  // Rate limit: 20 checkout requests per minute per IP
   const ip = getClientIp(req)
   if (!checkRateLimit(`checkout:${ip}`, 20, 60_000)) {
     return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
@@ -58,7 +131,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (!POLAR_ACCESS_TOKEN || !POLAR_ORGANIZATION || POLAR_ACCESS_TOKEN === 'your_polar_access_token_here') {
-      return NextResponse.json({ 
+      return NextResponse.json({
         error: 'Payment not configured',
         message: 'Polar.sh is not configured. Please contact support or set up Polar.sh integration.'
       }, { status: 500 })
@@ -69,58 +142,170 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid plan' }, { status: 400 })
     }
 
-    // Check if user already has an active subscription - redirect to customer portal for upgrades
+    // Read user row from DB
     const { data: userData } = await supabase
       .from('users')
       .select('plan, subscription_id, subscription_status, customer_id')
       .eq('id', user.id)
       .single()
 
-    // 'cancelled' means cancel-at-period-end: the subscription is still active in Polar
-    // so we must redirect to the portal rather than create a duplicate checkout.
-    const hasActiveSubscription = Boolean(userData?.subscription_id) &&
-      (userData?.subscription_status === 'active' || userData?.subscription_status === 'cancelled')
+    // -----------------------------------------------------------
+    // Step 1: Determine if user has an active subscription.
+    // Check our DB first, then verify against Polar if uncertain.
+    // -----------------------------------------------------------
+    let hasActiveSubscription =
+      Boolean(userData?.subscription_id) &&
+      ACTIVE_SUB_STATUSES.has(userData?.subscription_status ?? '')
 
-    // If user has active subscription, redirect to customer portal for plan upgrades/changes.
+    let resolvedCustomerId: string | null = userData?.customer_id ?? null
+    let resolvedSubscriptionId: string | null = userData?.subscription_id ?? null
+    let resolvedPlan: string | null = userData?.plan ?? null
+
+    // If DB says no active subscription, double-check with Polar
+    // using external customer ID (Supabase user ID set on checkout).
+    if (!hasActiveSubscription) {
+      const stateResp = await fetch(
+        `${POLAR_API_URL}/customers/external/${encodeURIComponent(user.id)}/state`,
+        {
+          headers: {
+            Authorization: `Bearer ${POLAR_ACCESS_TOKEN}`,
+            'Content-Type': 'application/json',
+          },
+        },
+      )
+
+      if (stateResp.ok) {
+        const statePayload = (await stateResp.json()) as Record<string, unknown>
+        const subs = extractSubscriptions(statePayload)
+        const picked = findBestSubscription(subs)
+
+        if (picked) {
+          const pickedStatus = typeof picked.status === 'string' ? picked.status.toLowerCase() : ''
+          if (ACTIVE_SUB_STATUSES.has(pickedStatus)) {
+            hasActiveSubscription = true
+            resolvedSubscriptionId = (picked.id as string | undefined) || resolvedSubscriptionId
+            resolvedCustomerId =
+              (picked.customer_id as string | undefined) ||
+              ((statePayload.customer as Record<string, unknown> | undefined)?.id as string | undefined) ||
+              ((statePayload.customer_state as Record<string, unknown> | undefined)?.customer_id as string | undefined) ||
+              resolvedCustomerId
+            resolvedPlan = getPlanFromSubscription(picked) || resolvedPlan
+
+            // Persist what we learned so next time it's faster
+            await supabase
+              .from('users')
+              .update({
+                subscription_id: resolvedSubscriptionId,
+                subscription_status: ACTIVE_SUB_STATUSES.has(pickedStatus)
+                  ? (pickedStatus === 'active' || pickedStatus === 'trialing' ? 'active' : 'cancelled')
+                  : 'active',
+                customer_id: resolvedCustomerId,
+                plan: resolvedPlan || userData?.plan || 'pro',
+                scans_limit: PLAN_PRICES[resolvedPlan || 'pro']?.scansLimit ?? 50,
+                updated_at: new Date().toISOString(),
+              })
+              .eq('id', user.id)
+          }
+        }
+      }
+    }
+
+    // -----------------------------------------------------------
+    // Step 2: If user has active subscription, open portal
+    // -----------------------------------------------------------
     if (hasActiveSubscription) {
-      console.log('User has active subscription, creating customer portal session for upgrade', {
+      console.log('User has active subscription, creating portal session', {
         userId: user.id,
-        currentPlan: userData?.plan,
+        currentPlan: resolvedPlan,
         targetPlan: planId,
-        hasCustomerId: Boolean(userData?.customer_id),
+        customerId: resolvedCustomerId,
+        subscriptionId: resolvedSubscriptionId,
       })
 
       const returnUrl = `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/settings?tab=billing&upgrade=success`
 
-      // --- Attempt 1: Polar SDK with customerId ---
-      try {
-        const polar = buildPolarClient()
-        if (polar && userData?.customer_id) {
-          const session = await polar.customerSessions.create({
-            customerId: userData.customer_id,
-            returnUrl,
-          })
-          // SDK returns { ok, value } or plain object depending on version
-          const portalUrl =
-            (session as Record<string, unknown>).customerPortalUrl as
-              | string
-              | undefined ??
-            ((session as Record<string, unknown>).value as
-              | Record<string, unknown>
-              | undefined)?.customerPortalUrl as string | undefined ??
-            ((session as Record<string, unknown>).value as
-              | Record<string, unknown>
-              | undefined)?.url as string | undefined
-
-          if (portalUrl) {
-            return NextResponse.json({ url: portalUrl, isPortal: true })
+      // Helper: try all portal approaches with a given customerId
+      async function tryPortalWithCustomerId(customerId: string): Promise<string | null> {
+        // SDK
+        try {
+          const polar = buildPolarClient()
+          if (polar) {
+            const session = await polar.customerSessions.create({ customerId, returnUrl })
+            const url = extractPortalUrl(session)
+            if (url) return url
           }
+        } catch (e) {
+          console.error('Portal SDK failed:', e)
         }
-      } catch (sdkCustomerErr) {
-        console.error('Polar SDK portal (customerId) failed:', sdkCustomerErr)
+
+        // Raw HTTP
+        try {
+          const resp = await fetch(`${POLAR_API_URL}/customer-portal/sessions`, {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${POLAR_ACCESS_TOKEN}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ customer_id: customerId, return_url: returnUrl }),
+          })
+          if (resp.ok) {
+            const data = (await resp.json()) as Record<string, unknown>
+            return (
+              (data.customer_portal_url as string | undefined) ||
+              (data.url as string | undefined) ||
+              (data.customerPortalUrl as string | undefined) ||
+              null
+            )
+          }
+        } catch (e) {
+          console.error('Portal HTTP failed:', e)
+        }
+
+        return null
       }
 
-      // --- Attempt 2: Polar SDK with externalCustomerId ---
+      // Attempt A: use stored customer_id
+      if (resolvedCustomerId) {
+        const portalUrl = await tryPortalWithCustomerId(resolvedCustomerId)
+        if (portalUrl) {
+          return NextResponse.json({ url: portalUrl, isPortal: true })
+        }
+      }
+
+      // Attempt B: recover customer_id from subscription_id via Polar API
+      if (resolvedSubscriptionId) {
+        const subResp = await fetch(
+          `${POLAR_API_URL}/subscriptions/${resolvedSubscriptionId}`,
+          {
+            headers: {
+              Authorization: `Bearer ${POLAR_ACCESS_TOKEN}`,
+              'Content-Type': 'application/json',
+            },
+          },
+        )
+        if (subResp.ok) {
+          const subData = (await subResp.json()) as Record<string, unknown>
+          const customerIdFromSub =
+            (subData.customer_id as string | undefined) ||
+            ((subData.customer as Record<string, unknown> | undefined)?.id as string | undefined)
+
+          if (customerIdFromSub) {
+            // Save recovered customer_id to DB
+            await supabase
+              .from('users')
+              .update({ customer_id: customerIdFromSub, updated_at: new Date().toISOString() })
+              .eq('id', user.id)
+
+            resolvedCustomerId = customerIdFromSub
+            const portalUrl = await tryPortalWithCustomerId(customerIdFromSub)
+            if (portalUrl) {
+              return NextResponse.json({ url: portalUrl, isPortal: true })
+            }
+          }
+        }
+      }
+
+      // Attempt C: try externalCustomerId via SDK (last resort for portal)
       try {
         const polar = buildPolarClient()
         if (polar) {
@@ -128,77 +313,36 @@ export async function POST(req: NextRequest) {
             externalCustomerId: user.id,
             returnUrl,
           })
-          const portalUrl =
-            (session as Record<string, unknown>).customerPortalUrl as
-              | string
-              | undefined ??
-            ((session as Record<string, unknown>).value as
-              | Record<string, unknown>
-              | undefined)?.customerPortalUrl as string | undefined ??
-            ((session as Record<string, unknown>).value as
-              | Record<string, unknown>
-              | undefined)?.url as string | undefined
-
-          if (portalUrl) {
-            return NextResponse.json({ url: portalUrl, isPortal: true })
+          const url = extractPortalUrl(session)
+          if (url) {
+            return NextResponse.json({ url, isPortal: true })
           }
         }
-      } catch (sdkExtErr) {
-        console.error('Polar SDK portal (externalCustomerId) failed:', sdkExtErr)
+      } catch (e) {
+        console.error('Portal SDK (externalCustomerId) failed:', e)
       }
 
-      // --- Attempt 3: Raw HTTP POST to Polar customer portal sessions API ---
-      // Per Polar docs: POST /v1/customer-portal/sessions with customer_id or external_customer_id
-      try {
-        const portalBody: Record<string, unknown> = userData?.customer_id
-          ? { customer_id: userData.customer_id, return_url: returnUrl }
-          : { external_customer_id: user.id, return_url: returnUrl }
-
-        const portalResp = await fetch(
-          `${POLAR_API_URL}/customer-portal/sessions`,
-          {
-            method: 'POST',
-            headers: {
-              Authorization: `Bearer ${POLAR_ACCESS_TOKEN}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(portalBody),
-          },
-        )
-
-        if (portalResp.ok) {
-          const portalData = (await portalResp.json()) as Record<string, unknown>
-          const portalUrl =
-            (portalData.customer_portal_url as string | undefined) ||
-            (portalData.url as string | undefined) ||
-            (portalData.customerPortalUrl as string | undefined)
-
-          if (portalUrl) {
-            return NextResponse.json({ url: portalUrl, isPortal: true })
-          }
-        } else {
-          console.error(
-            'Polar HTTP portal session failed:',
-            portalResp.status,
-            await portalResp.text(),
-          )
-        }
-      } catch (httpErr) {
-        console.error('Polar HTTP portal session error:', httpErr)
-      }
-
-      // --- Fallback: All portal attempts failed, create a fresh checkout session ---
-      // This avoids the user being stuck with "could not open portal" error.
-      console.log('Portal creation failed for active subscriber, falling back to checkout', {
+      // All portal attempts failed. Do NOT fall through to checkout creation —
+      // Polar will reject it because the user already has an active subscription.
+      // Return a helpful error.
+      console.error('All portal creation attempts failed for active subscriber', {
         userId: user.id,
-        subscriptionId: userData?.subscription_id,
-        customerId: userData?.customer_id,
-        targetPlan: planId,
+        subscriptionId: resolvedSubscriptionId,
+        customerId: resolvedCustomerId,
       })
-      // Fall through to checkout creation below.
+      return NextResponse.json(
+        {
+          error: 'Could not open billing portal',
+          message:
+            'Unable to open your billing portal right now. Please try again in a moment or contact support.',
+        },
+        { status: 503 },
+      )
     }
 
-    // No active subscription - create a new checkout session
+    // -----------------------------------------------------------
+    // Step 3: No active subscription — create a new checkout
+    // -----------------------------------------------------------
     const checkoutBody: Record<string, unknown> = {
       products: [plan.productId],
       customer_email: user.email,
@@ -211,14 +355,13 @@ export async function POST(req: NextRequest) {
       cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/#pricing`,
     }
 
-    // Add product_id and product_price_id only if priceId is provided (sandbox may not have price IDs)
     if (plan.productId) checkoutBody.product_id = plan.productId
     if (plan.priceId) checkoutBody.product_price_id = plan.priceId
 
     const response = await fetch(`${POLAR_API_URL}/checkouts`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${POLAR_ACCESS_TOKEN}`,
+        Authorization: `Bearer ${POLAR_ACCESS_TOKEN}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(checkoutBody),
@@ -232,7 +375,7 @@ export async function POST(req: NextRequest) {
 
     const checkout = await response.json()
 
-    return NextResponse.json({ 
+    return NextResponse.json({
       url: checkout.url,
       checkoutId: checkout.id
     })

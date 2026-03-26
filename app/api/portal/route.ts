@@ -114,10 +114,64 @@ export async function POST(req: NextRequest) {
       console.error('Portal SDK (externalCustomerId) failed:', sdkErr2)
     }
 
-    // --- Attempt 3: Raw HTTP ---
+    // --- Attempt 3: Recover customer_id from subscription_id via Polar API ---
+    if (!userData?.customer_id && userData?.subscription_id) {
+      try {
+        const subResp = await fetch(
+          `${POLAR_API_URL}/subscriptions/${userData.subscription_id}`,
+          {
+            headers: {
+              Authorization: `Bearer ${POLAR_ACCESS_TOKEN}`,
+              'Content-Type': 'application/json',
+            },
+          },
+        )
+        if (subResp.ok) {
+          const subData = (await subResp.json()) as Record<string, unknown>
+          const customerIdFromSub =
+            (subData.customer_id as string | undefined) ||
+            ((subData.customer as Record<string, unknown> | undefined)?.id as string | undefined)
+
+          if (customerIdFromSub) {
+            await supabase
+              .from('users')
+              .update({ customer_id: customerIdFromSub, updated_at: new Date().toISOString() })
+              .eq('id', user.id)
+
+            // Retry portal creation with recovered customer_id
+            try {
+              const polar = buildPolarClient()
+              if (polar) {
+                const session = await polar.customerSessions.create({
+                  customerId: customerIdFromSub,
+                  returnUrl,
+                })
+                const portalUrl = extractPortalUrl(session)
+                if (portalUrl) {
+                  return NextResponse.json({ url: portalUrl })
+                }
+              }
+            } catch (e) {
+              console.error('Portal SDK (recovered customerId) failed:', e)
+            }
+          }
+        }
+      } catch (e) {
+        console.error('Subscription lookup for customer_id recovery failed:', e)
+      }
+    }
+
+    // --- Attempt 4: Raw HTTP ---
     try {
-      const portalBody: Record<string, unknown> = userData?.customer_id
-        ? { customer_id: userData.customer_id, return_url: returnUrl }
+      // Re-read customer_id in case it was recovered above
+      const { data: freshUserData } = await supabase
+        .from('users')
+        .select('customer_id')
+        .eq('id', user.id)
+        .single()
+
+      const portalBody: Record<string, unknown> = freshUserData?.customer_id
+        ? { customer_id: freshUserData.customer_id, return_url: returnUrl }
         : { external_customer_id: user.id, return_url: returnUrl }
 
       const resp = await fetch(`${POLAR_API_URL}/customer-portal/sessions`, {
