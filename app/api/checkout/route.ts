@@ -20,7 +20,10 @@ const PLAN_PRODUCT_MAP: Record<string, string> = {}
 if (process.env.POLAR_PRO_PRODUCT_ID) PLAN_PRODUCT_MAP[process.env.POLAR_PRO_PRODUCT_ID] = 'pro'
 if (process.env.POLAR_UNLIMITED_PRODUCT_ID) PLAN_PRODUCT_MAP[process.env.POLAR_UNLIMITED_PRODUCT_ID] = 'unlimited'
 
-const ACTIVE_SUB_STATUSES = new Set(['active', 'trialing', 'cancelled', 'canceled'])
+const ACTIVE_SUB_STATUSES = new Set(['active', 'trialing'])
+
+const FREE_PLAN = 'free'
+const FREE_SCANS_LIMIT = 3
 
 function buildPolarClient() {
   if (!POLAR_ACCESS_TOKEN || POLAR_ACCESS_TOKEN === 'your_polar_access_token_here') return null
@@ -96,6 +99,20 @@ function extractSubscriptions(payload: Record<string, unknown>): PolarSubscripti
   const data = payload.data
   if (Array.isArray(data)) return data as PolarSubscription[]
   return []
+}
+
+async function clearStaleBillingState(supabase: Awaited<ReturnType<typeof createServerClient>>, userId: string) {
+  await supabase
+    .from('users')
+    .update({
+      plan: FREE_PLAN,
+      scans_limit: FREE_SCANS_LIMIT,
+      subscription_id: null,
+      subscription_status: 'inactive',
+      customer_id: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', userId)
 }
 
 const VALID_PLAN_IDS = new Set(Object.keys(PLAN_PRICES))
@@ -207,6 +224,17 @@ export async function POST(req: NextRequest) {
               .eq('id', user.id)
           }
         }
+      } else if (stateResp.status === 404 && (resolvedCustomerId || resolvedSubscriptionId)) {
+        console.warn('billing.stale_state.cleared_from_external_lookup', {
+          userId: user.id,
+          status: stateResp.status,
+          hadCustomerId: Boolean(resolvedCustomerId),
+          hadSubscriptionId: Boolean(resolvedSubscriptionId),
+        })
+        await clearStaleBillingState(supabase, user.id)
+        resolvedCustomerId = null
+        resolvedSubscriptionId = null
+        resolvedPlan = FREE_PLAN
       }
     }
 
@@ -214,6 +242,8 @@ export async function POST(req: NextRequest) {
     // Step 2: If user has active subscription, upgrade or open portal
     // -----------------------------------------------------------
     if (hasActiveSubscription) {
+      let shouldForceFreshCheckout = false
+
       console.log('User has active subscription', {
         userId: user.id,
         currentPlan: resolvedPlan,
@@ -264,7 +294,24 @@ export async function POST(req: NextRequest) {
           } else {
             const errBody = await upgradeCheckoutResp.text()
             console.error('Upgrade checkout creation failed, will try portal:', upgradeCheckoutResp.status, errBody)
-            // Fall through to portal
+
+            const customerMissing =
+              upgradeCheckoutResp.status === 422 &&
+              (errBody.includes('Customer does not exist') || errBody.includes('customer_id'))
+
+            if (customerMissing) {
+              console.warn('billing.stale_customer.cleared', {
+                userId: user.id,
+                customerId: resolvedCustomerId,
+                subscriptionId: resolvedSubscriptionId,
+              })
+              await clearStaleBillingState(supabase, user.id)
+              shouldForceFreshCheckout = true
+              hasActiveSubscription = false
+              resolvedCustomerId = null
+              resolvedSubscriptionId = null
+              resolvedPlan = FREE_PLAN
+            }
           }
         } catch (upgradeCheckoutErr) {
           console.error('Upgrade checkout creation error, will try portal:', upgradeCheckoutErr)
@@ -272,12 +319,20 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      const returnUrl = `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/settings?tab=billing&upgrade=success`
+      if (shouldForceFreshCheckout) {
+        console.log('billing.checkout.fallback_to_fresh_checkout', {
+          userId: user.id,
+          reason: 'stale_customer_or_subscription',
+          targetPlan: planId,
+        })
+      } else {
 
-      let lastError: unknown = null
+        const returnUrl = `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/settings?tab=billing&upgrade=success`
+
+        let lastError: unknown = null
 
       // Helper: try all portal approaches with a given customerId
-      async function tryPortalWithCustomerId(customerId: string): Promise<string | null> {
+        async function tryPortalWithCustomerId(customerId: string): Promise<string | null> {
         // SDK — hits POST /v1/customer-sessions/ (from @polar-sh/sdk source)
         try {
           const polar = buildPolarClient()
@@ -323,82 +378,107 @@ export async function POST(req: NextRequest) {
       }
 
       // Attempt A: use stored customer_id
-      if (resolvedCustomerId) {
-        const portalUrl = await tryPortalWithCustomerId(resolvedCustomerId)
-        if (portalUrl) {
-          return NextResponse.json({ url: portalUrl, isPortal: true })
+        if (resolvedCustomerId) {
+          const portalUrl = await tryPortalWithCustomerId(resolvedCustomerId)
+          if (portalUrl) {
+            return NextResponse.json({ url: portalUrl, isPortal: true })
+          }
         }
-      }
 
-      // Attempt B: recover customer_id from subscription_id via Polar API
-      if (resolvedSubscriptionId) {
-        const subResp = await fetch(
-          `${POLAR_API_URL}/subscriptions/${resolvedSubscriptionId}`,
-          {
-            headers: {
-              Authorization: `Bearer ${POLAR_ACCESS_TOKEN}`,
-              'Content-Type': 'application/json',
+        // Attempt B: recover customer_id from subscription_id via Polar API
+        if (resolvedSubscriptionId) {
+          const subResp = await fetch(
+            `${POLAR_API_URL}/subscriptions/${resolvedSubscriptionId}`,
+            {
+              headers: {
+                Authorization: `Bearer ${POLAR_ACCESS_TOKEN}`,
+                'Content-Type': 'application/json',
+              },
             },
-          },
-        )
-        if (subResp.ok) {
-          const subData = (await subResp.json()) as Record<string, unknown>
-          const customerIdFromSub =
-            (subData.customer_id as string | undefined) ||
-            ((subData.customer as Record<string, unknown> | undefined)?.id as string | undefined)
+          )
+          if (subResp.ok) {
+            const subData = (await subResp.json()) as Record<string, unknown>
+            const customerIdFromSub =
+              (subData.customer_id as string | undefined) ||
+              ((subData.customer as Record<string, unknown> | undefined)?.id as string | undefined)
 
-          if (customerIdFromSub) {
-            // Save recovered customer_id to DB
-            await supabase
-              .from('users')
-              .update({ customer_id: customerIdFromSub, updated_at: new Date().toISOString() })
-              .eq('id', user.id)
+            if (customerIdFromSub) {
+              // Save recovered customer_id to DB
+              await supabase
+                .from('users')
+                .update({ customer_id: customerIdFromSub, updated_at: new Date().toISOString() })
+                .eq('id', user.id)
 
-            resolvedCustomerId = customerIdFromSub
-            const portalUrl = await tryPortalWithCustomerId(customerIdFromSub)
-            if (portalUrl) {
-              return NextResponse.json({ url: portalUrl, isPortal: true })
+              resolvedCustomerId = customerIdFromSub
+              const portalUrl = await tryPortalWithCustomerId(customerIdFromSub)
+              if (portalUrl) {
+                return NextResponse.json({ url: portalUrl, isPortal: true })
+              }
             }
+          } else if (subResp.status === 404) {
+            console.warn('billing.stale_state.cleared_from_subscription_lookup', {
+              userId: user.id,
+              subscriptionId: resolvedSubscriptionId,
+            })
+            await clearStaleBillingState(supabase, user.id)
+            hasActiveSubscription = false
+            resolvedCustomerId = null
+            resolvedSubscriptionId = null
+            resolvedPlan = FREE_PLAN
+            shouldForceFreshCheckout = true
           }
         }
-      }
 
-      // Attempt C: try externalCustomerId via SDK (last resort for portal)
-      try {
-        const polar = buildPolarClient()
-        if (polar) {
-          const session = await polar.customerSessions.create({
-            externalCustomerId: user.id,
-            returnUrl,
+        if (shouldForceFreshCheckout) {
+          console.log('billing.checkout.fallback_to_fresh_checkout', {
+            userId: user.id,
+            reason: 'stale_subscription_lookup',
+            targetPlan: planId,
           })
-          const url = extractPortalUrl(session)
-          if (url) {
-            return NextResponse.json({ url, isPortal: true })
+        } else {
+          // Attempt C: try externalCustomerId via SDK (last resort for portal)
+          try {
+            const polar = buildPolarClient()
+            if (polar) {
+              const session = await polar.customerSessions.create({
+                externalCustomerId: user.id,
+                returnUrl,
+              })
+              const url = extractPortalUrl(session)
+              if (url) {
+                return NextResponse.json({ url, isPortal: true })
+              }
+            }
+          } catch (e) {
+            lastError = e
+            console.error('Portal SDK (externalCustomerId) failed:', e)
           }
-        }
-      } catch (e) {
-        lastError = e
-        console.error('Portal SDK (externalCustomerId) failed:', e)
-      }
 
-      // All portal attempts failed. Do NOT fall through to checkout creation —
-      // Polar will reject it because the user already has an active subscription.
-      // Return a helpful error with Polar details for debugging.
-      console.error('All portal creation attempts failed for active subscriber', {
-        userId: user.id,
-        subscriptionId: resolvedSubscriptionId,
-        customerId: resolvedCustomerId,
-        lastError: lastError instanceof Error ? lastError.message : JSON.stringify(lastError),
-      })
-      return NextResponse.json(
-        {
-          error: 'Could not open billing portal',
-          message:
-            'Unable to open your billing portal right now. Please try again in a moment or contact support.',
-          polarError: lastError instanceof Error ? lastError.message : String(lastError),
-        },
-        { status: 503 },
-      )
+          // All portal attempts failed. Do NOT fall through to checkout creation —
+          // Polar will reject it because the user already has an active subscription.
+          // Return a helpful error with Polar details for debugging.
+          console.error('All portal creation attempts failed for active subscriber', {
+            userId: user.id,
+            subscriptionId: resolvedSubscriptionId,
+            customerId: resolvedCustomerId,
+            lastError: lastError instanceof Error ? lastError.message : JSON.stringify(lastError),
+          })
+
+          const lastErrorMessage = lastError instanceof Error ? lastError.message : String(lastError)
+          const isScopeError = lastErrorMessage.includes('insufficient_scope')
+
+          return NextResponse.json(
+            {
+              error: 'Could not open billing portal',
+              message: isScopeError
+                ? 'Billing portal permissions are missing in Polar access token. Please add customer_sessions:write and web:write scopes.'
+                : 'Unable to open your billing portal right now. Please try again in a moment or contact support.',
+              polarError: lastErrorMessage,
+            },
+            { status: 503 },
+          )
+        }
+      }
     }
 
     // -----------------------------------------------------------
