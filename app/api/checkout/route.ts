@@ -224,9 +224,11 @@ export async function POST(req: NextRequest) {
 
       const returnUrl = `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/settings?tab=billing&upgrade=success`
 
+      let lastError: unknown = null
+
       // Helper: try all portal approaches with a given customerId
       async function tryPortalWithCustomerId(customerId: string): Promise<string | null> {
-        // SDK
+        // SDK — hits POST /v1/customer-sessions/ (from @polar-sh/sdk source)
         try {
           const polar = buildPolarClient()
           if (polar) {
@@ -235,12 +237,13 @@ export async function POST(req: NextRequest) {
             if (url) return url
           }
         } catch (e) {
+          lastError = e
           console.error('Portal SDK failed:', e)
         }
 
-        // Raw HTTP
+        // Raw HTTP — correct endpoint per SDK source: /v1/customer-sessions/
         try {
-          const resp = await fetch(`${POLAR_API_URL}/customer-portal/sessions`, {
+          const resp = await fetch(`${POLAR_API_URL}/customer-sessions/`, {
             method: 'POST',
             headers: {
               Authorization: `Bearer ${POLAR_ACCESS_TOKEN}`,
@@ -252,12 +255,17 @@ export async function POST(req: NextRequest) {
             const data = (await resp.json()) as Record<string, unknown>
             return (
               (data.customer_portal_url as string | undefined) ||
-              (data.url as string | undefined) ||
               (data.customerPortalUrl as string | undefined) ||
+              (data.url as string | undefined) ||
               null
             )
+          } else {
+            const errText = await resp.text()
+            lastError = { status: resp.status, body: errText }
+            console.error('Portal HTTP failed:', resp.status, errText)
           }
         } catch (e) {
+          lastError = e
           console.error('Portal HTTP failed:', e)
         }
 
@@ -319,22 +327,25 @@ export async function POST(req: NextRequest) {
           }
         }
       } catch (e) {
+        lastError = e
         console.error('Portal SDK (externalCustomerId) failed:', e)
       }
 
       // All portal attempts failed. Do NOT fall through to checkout creation —
       // Polar will reject it because the user already has an active subscription.
-      // Return a helpful error.
+      // Return a helpful error with Polar details for debugging.
       console.error('All portal creation attempts failed for active subscriber', {
         userId: user.id,
         subscriptionId: resolvedSubscriptionId,
         customerId: resolvedCustomerId,
+        lastError: lastError instanceof Error ? lastError.message : JSON.stringify(lastError),
       })
       return NextResponse.json(
         {
           error: 'Could not open billing portal',
           message:
             'Unable to open your billing portal right now. Please try again in a moment or contact support.',
+          polarError: lastError instanceof Error ? lastError.message : String(lastError),
         },
         { status: 503 },
       )

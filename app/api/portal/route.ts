@@ -174,7 +174,7 @@ export async function POST(req: NextRequest) {
         ? { customer_id: freshUserData.customer_id, return_url: returnUrl }
         : { external_customer_id: user.id, return_url: returnUrl }
 
-      const resp = await fetch(`${POLAR_API_URL}/customer-portal/sessions`, {
+      const resp = await fetch(`${POLAR_API_URL}/customer-sessions/`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${POLAR_ACCESS_TOKEN}`,
