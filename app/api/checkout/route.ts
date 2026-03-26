@@ -222,57 +222,53 @@ export async function POST(req: NextRequest) {
         subscriptionId: resolvedSubscriptionId,
       })
 
-      // Attempt 0: Direct subscription product upgrade via Polar API.
-      // This avoids needing a portal session and handles the Pro → Unlimited case
-      // without redirecting the user away from the page.
+      // Attempt 0: Create a checkout for the upgrade so the user confirms payment.
+      // Using a checkout (not a direct PATCH) ensures billing is collected properly
+      // and the user explicitly confirms the plan change before it takes effect.
       if (resolvedSubscriptionId && planId !== resolvedPlan) {
-        const newProductId = plan.productId
-        if (newProductId) {
-          try {
-            const upgradeResp = await fetch(
-              `${POLAR_API_URL}/subscriptions/${resolvedSubscriptionId}`,
-              {
-                method: 'PATCH',
-                headers: {
-                  Authorization: `Bearer ${POLAR_ACCESS_TOKEN}`,
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ product_id: newProductId }),
-              },
-            )
+        const upgradeCheckoutBody: Record<string, unknown> = {
+          products: [plan.productId],
+          metadata: {
+            user_id: user.id,
+            plan: planId,
+          },
+          success_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/settings?tab=billing&upgrade=success&checkout_id={CHECKOUT_ID}`,
+          cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/settings?tab=billing`,
+        }
 
-            if (upgradeResp.ok) {
-              // Update DB immediately so the UI reflects the new plan
-              const { error: dbError } = await supabase
-                .from('users')
-                .update({
-                  plan: planId,
-                  scans_limit: plan.scansLimit,
-                  subscription_status: 'active',
-                  updated_at: new Date().toISOString(),
-                })
-                .eq('id', user.id)
+        if (resolvedCustomerId) {
+          upgradeCheckoutBody.customer_id = resolvedCustomerId
+        } else {
+          upgradeCheckoutBody.customer_email = user.email
+          upgradeCheckoutBody.external_customer_id = user.id
+        }
 
-              if (dbError) {
-                console.error('DB update after direct upgrade failed:', dbError)
-                // The Polar subscription was upgraded successfully; a webhook will
-                // eventually sync the DB. Return success so the UI can reflect it.
-              }
+        try {
+          const upgradeCheckoutResp = await fetch(`${POLAR_API_URL}/checkouts`, {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${POLAR_ACCESS_TOKEN}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(upgradeCheckoutBody),
+          })
 
+          if (upgradeCheckoutResp.ok) {
+            const upgradeCheckout = (await upgradeCheckoutResp.json()) as Record<string, unknown>
+            if (upgradeCheckout.url) {
               return NextResponse.json({
-                upgraded: true,
-                plan: planId,
-                scansLimit: plan.scansLimit,
+                url: upgradeCheckout.url as string,
+                checkoutId: upgradeCheckout.id as string,
               })
-            } else {
-              const errBody = await upgradeResp.text()
-              console.error('Direct subscription upgrade failed, will try portal:', upgradeResp.status, errBody)
-              // Fall through to portal
             }
-          } catch (upgradeErr) {
-            console.error('Direct subscription upgrade error, will try portal:', upgradeErr)
+          } else {
+            const errBody = await upgradeCheckoutResp.text()
+            console.error('Upgrade checkout creation failed, will try portal:', upgradeCheckoutResp.status, errBody)
             // Fall through to portal
           }
+        } catch (upgradeCheckoutErr) {
+          console.error('Upgrade checkout creation error, will try portal:', upgradeCheckoutErr)
+          // Fall through to portal
         }
       }
 
