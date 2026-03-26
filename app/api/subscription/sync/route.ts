@@ -225,7 +225,7 @@ export async function POST(req: NextRequest) {
             | string
             | undefined);
 
-        const completedStatuses = new Set(["succeeded", "paid", "completed", "active"]);
+        const completedStatuses = new Set(["succeeded", "paid", "completed", "active", "confirmed"]);
         const planFromCheckout =
           checkoutProductId && PLAN_PRODUCT_MAP[checkoutProductId]
             ? PLAN_PRODUCT_MAP[checkoutProductId]

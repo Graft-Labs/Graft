@@ -44,8 +44,10 @@ export async function POST(req: NextRequest) {
       .eq('id', user.id)
       .single()
 
-    const hasActiveSubscription = userData?.subscription_id && 
-      userData?.subscription_status === 'active'
+    // 'cancelled' means cancel-at-period-end: the subscription is still active in Polar
+    // so we must redirect to the portal rather than create a duplicate checkout.
+    const hasActiveSubscription = Boolean(userData?.subscription_id) &&
+      (userData?.subscription_status === 'active' || userData?.subscription_status === 'cancelled')
 
     // If user has active subscription, always send them to the billing portal for upgrades
     if (hasActiveSubscription) {

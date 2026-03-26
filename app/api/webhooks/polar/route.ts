@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import crypto from 'crypto'
+import { Webhook as StandardWebhook, WebhookVerificationError } from 'standardwebhooks'
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
 const SUPABASE_SECRET_KEY = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -84,11 +84,41 @@ function allowWebhookRequest(ip: string): boolean {
   return true
 }
 
-function timingSafeEqual(a: string, b: string): boolean {
-  const aBuf = Buffer.from(a)
-  const bBuf = Buffer.from(b)
-  if (aBuf.length !== bBuf.length) return false
-  return crypto.timingSafeEqual(aBuf, bBuf)
+/**
+ * Verify a Polar webhook using the Standard Webhooks specification.
+ * Polar signs webhooks using HMAC-SHA256 with headers:
+ *   webhook-id, webhook-timestamp, webhook-signature
+ * The signature is `v1,<base64(hmac_sha256(secret, "{id}.{ts}.{body}"))>`
+ */
+function verifyWebhookSignature(
+  rawBody: string,
+  req: NextRequest,
+  secret: string,
+): boolean {
+  const webhookId = req.headers.get('webhook-id')
+  const webhookTimestamp = req.headers.get('webhook-timestamp')
+  const webhookSignature = req.headers.get('webhook-signature')
+
+  if (!webhookId || !webhookTimestamp || !webhookSignature) {
+    return false
+  }
+
+  try {
+    // StandardWebhooks expects the secret as base64 of the raw secret bytes.
+    const base64Secret = Buffer.from(secret, 'utf-8').toString('base64')
+    const wh = new StandardWebhook(base64Secret)
+    wh.verify(rawBody, {
+      'webhook-id': webhookId,
+      'webhook-timestamp': webhookTimestamp,
+      'webhook-signature': webhookSignature,
+    })
+    return true
+  } catch (err) {
+    if (err instanceof WebhookVerificationError) {
+      return false
+    }
+    throw err
+  }
 }
 
 export async function POST(req: NextRequest) {
@@ -104,21 +134,14 @@ export async function POST(req: NextRequest) {
     }
 
     const rawBody = await req.text()
-    const signature = req.headers.get('polar-signature')
 
-    // Skip signature verification in sandbox mode (for testing)
+    // Verify signature using Standard Webhooks (Polar's signing scheme).
+    // Skip in sandbox mode to simplify local/test setup.
     if (!POLAR_IS_SANDBOX && POLAR_WEBHOOK_SECRET && POLAR_WEBHOOK_SECRET !== 'your_polar_webhook_secret_here') {
-      if (!signature) {
-        return NextResponse.json({ error: 'No signature' }, { status: 401 })
-      }
-
-      const expectedSignature = crypto
-        .createHmac('sha256', POLAR_WEBHOOK_SECRET)
-        .update(rawBody)
-        .digest('hex')
-
-      if (!timingSafeEqual(signature, expectedSignature)) {
-        return NextResponse.json({ error: 'Invalid signature' }, { status: 401 })
+      const valid = verifyWebhookSignature(rawBody, req, POLAR_WEBHOOK_SECRET)
+      if (!valid) {
+        console.error('Webhook signature verification failed')
+        return NextResponse.json({ error: 'Invalid webhook signature' }, { status: 401 })
       }
     }
 
@@ -140,10 +163,14 @@ export async function POST(req: NextRequest) {
       ((data.checkout as Record<string, unknown> | undefined)?.metadata as Record<string, unknown> | undefined)
     )
 
+    // For order/refund events data.id is the order/refund id, not a subscription id.
+    // Always prefer data.subscription_id when available.
+    const isOrderOrRefundEvent = event.startsWith('order.') || event.startsWith('refund.')
+    const isCheckoutEvent = event.startsWith('checkout.')
     const subscriptionId =
-      (data.id as string | undefined) ||
       (data.subscription_id as string | undefined) ||
       ((data.subscription as Record<string, unknown> | undefined)?.id as string | undefined) ||
+      ((!isOrderOrRefundEvent && !isCheckoutEvent) ? (data.id as string | undefined) : undefined) ||
       ''
 
     const status =
@@ -239,9 +266,13 @@ export async function POST(req: NextRequest) {
 
     console.log(`Existing user state: plan=${existingUser?.plan}, subId=${existingUser?.subscription_id}, subStatus=${existingUser?.subscription_status}`)
 
+    // Idempotency: skip if this exact subscription + normalized status is already recorded.
+    // Use our normalized status values ('active'/'cancelled') for comparison.
+    const incomingNormalizedStatus = cancellationScheduled ? 'cancelled' : (status || 'active')
     if (
+      subscriptionId &&
       existingUser?.subscription_id === subscriptionId &&
-      existingUser?.subscription_status === status
+      existingUser?.subscription_status === incomingNormalizedStatus
     ) {
       console.log(`⏭️ Skipping duplicate webhook for user ${userId}`)
       return NextResponse.json({ received: true, duplicate: true })
@@ -254,9 +285,7 @@ export async function POST(req: NextRequest) {
       case 'subscription.active':
       case 'order.created':
       case 'order.paid':
-      case 'order.updated':
-      case 'checkout.created':
-      case 'checkout.updated': {
+      case 'order.updated': {
         if (
           subscriptionId &&
           existingUser?.subscription_id &&
@@ -277,19 +306,23 @@ export async function POST(req: NextRequest) {
           }
         }
 
-        // If planId couldn't be resolved but we have a subscription event, assume 'pro'
-        // subscriptionId could be empty string '', so we check for truthy non-empty value
-        const hasSubscription = subscriptionId && subscriptionId.trim().length > 0
-        const resolvedPlan = planId || (hasSubscription ? 'pro' : existingUser?.plan) || 'pro'
+        // For order events without a linked subscription (one-time orders), skip plan changes.
+        if (isOrderOrRefundEvent && !subscriptionId) {
+          console.log(`Skipping plan update for order event without subscription_id`)
+          break
+        }
+
+        // Fall back to existing plan to avoid accidental downgrades, then 'pro' as last resort.
+        const resolvedPlan = planId || existingUser?.plan || (hasSubscription ? 'pro' : 'free')
         const scansLimit = PLAN_SCANS_LIMITS[resolvedPlan] ?? 50
-        
+
         const { error } = await supabase
           .from('users')
           .update({
             plan: resolvedPlan,
             scans_limit: scansLimit,
             subscription_id: subscriptionId || existingUser?.subscription_id,
-            subscription_status: cancellationScheduled ? 'cancelled' : status,
+            subscription_status: cancellationScheduled ? 'cancelled' : 'active',
             customer_id: customerId || existingUser?.customer_id,
             updated_at: new Date().toISOString(),
           })
@@ -306,8 +339,7 @@ export async function POST(req: NextRequest) {
 
       case 'subscription.cancelled':
       case 'subscription.canceled': {
-        // Important: canceled usually means "cancel at period end", not immediate loss of access.
-        // Keep current plan/limits and only update subscription status.
+        // Canceled means "cancel at period end" - keep current plan, only update status.
         if (
           subscriptionId &&
           existingUser?.subscription_id &&
@@ -333,6 +365,63 @@ export async function POST(req: NextRequest) {
         }
 
         console.log(`User ${userId} marked cancelled (plan retained)`)
+        break
+      }
+
+      case 'subscription.uncanceled': {
+        // User reversed cancellation - restore active status.
+        if (
+          subscriptionId &&
+          existingUser?.subscription_id &&
+          existingUser.subscription_id !== subscriptionId
+        ) {
+          console.log(
+            `Ignoring uncancel for non-current subscription ${subscriptionId} (current: ${existingUser.subscription_id})`
+          )
+          break
+        }
+
+        const { error } = await supabase
+          .from('users')
+          .update({
+            subscription_status: 'active',
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', userId)
+
+        if (error) {
+          console.error('Failed to mark subscription as active after uncancel:', error)
+          return NextResponse.json({ error: 'Failed to update user' }, { status: 500 })
+        }
+
+        console.log(`User ${userId} uncancel - subscription restored to active`)
+        break
+      }
+
+      case 'subscription.past_due': {
+        // Payment failed but subscription not yet revoked - keep plan, update status only.
+        if (
+          subscriptionId &&
+          existingUser?.subscription_id &&
+          existingUser.subscription_id !== subscriptionId
+        ) {
+          break
+        }
+
+        const { error } = await supabase
+          .from('users')
+          .update({
+            subscription_status: 'past_due',
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', userId)
+
+        if (error) {
+          console.error('Failed to mark subscription as past_due:', error)
+          return NextResponse.json({ error: 'Failed to update user' }, { status: 500 })
+        }
+
+        console.log(`User ${userId} subscription marked past_due`)
         break
       }
 
@@ -373,14 +462,10 @@ export async function POST(req: NextRequest) {
       }
 
       default:
-        if (
-          event.startsWith('subscription.') ||
-          event.startsWith('order.') ||
-          event.startsWith('checkout.')
-        ) {
-          // If planId couldn't be resolved but we have a subscription event, assume 'pro'
-          const hasSubscription = subscriptionId && subscriptionId.trim().length > 0
-          const resolvedPlan = planId || (hasSubscription ? 'pro' : existingUser?.plan) || 'pro'
+        // Handle any future subscription events generically, but skip checkout events
+        // (checkout.created/updated fire before payment is confirmed).
+        if (event.startsWith('subscription.') || event.startsWith('order.')) {
+          const resolvedPlan = planId || existingUser?.plan || (hasSubscription ? 'pro' : 'free')
           const scansLimit = PLAN_SCANS_LIMITS[resolvedPlan] ?? 50
 
           const { error } = await supabase
@@ -389,7 +474,7 @@ export async function POST(req: NextRequest) {
               plan: resolvedPlan,
               scans_limit: scansLimit,
               subscription_id: subscriptionId || existingUser?.subscription_id,
-              subscription_status: cancellationScheduled ? 'cancelled' : status,
+              subscription_status: cancellationScheduled ? 'cancelled' : incomingNormalizedStatus,
               customer_id: customerId || existingUser?.customer_id,
               updated_at: new Date().toISOString(),
             })
