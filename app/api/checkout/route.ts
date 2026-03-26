@@ -258,6 +258,7 @@ export async function POST(req: NextRequest) {
       if (resolvedSubscriptionId && planId !== resolvedPlan) {
         const upgradeCheckoutBody: Record<string, unknown> = {
           products: [plan.productId],
+          subscription_id: resolvedSubscriptionId,
           metadata: {
             user_id: user.id,
             plan: planId,
@@ -266,12 +267,9 @@ export async function POST(req: NextRequest) {
           cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/settings?tab=billing`,
         }
 
-        if (resolvedCustomerId) {
-          upgradeCheckoutBody.customer_id = resolvedCustomerId
-        } else {
-          upgradeCheckoutBody.customer_email = user.email
-          upgradeCheckoutBody.external_customer_id = user.id
-        }
+        // Important: pass subscription_id for plan changes on an existing subscription.
+        // Creating a checkout with only customer_id can be interpreted as a new
+        // subscription attempt and trigger "already active subscription" errors.
 
         try {
           const upgradeCheckoutResp = await fetch(`${POLAR_API_URL}/checkouts`, {
@@ -294,6 +292,12 @@ export async function POST(req: NextRequest) {
           } else {
             const errBody = await upgradeCheckoutResp.text()
             console.error('Upgrade checkout creation failed, will try portal:', upgradeCheckoutResp.status, errBody)
+            console.error('billing.upgrade_checkout.request_context', {
+              userId: user.id,
+              subscriptionId: resolvedSubscriptionId,
+              customerId: resolvedCustomerId,
+              targetPlan: planId,
+            })
 
             const customerMissing =
               upgradeCheckoutResp.status === 422 &&
