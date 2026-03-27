@@ -244,10 +244,6 @@ export default function LandingPage() {
                 { name: "Claude", src: "/ide-logos/claude.svg" },
                 { name: "Tabnine", src: "/ide-logos/tabnine.svg" },
                 { name: "Replit", src: "/ide-logos/replit.svg" },
-                { name: "Lovable", src: "/ide-logos/lovable.svg" },
-                { name: "Bolt.new", src: "/ide-logos/boltnew.svg" },
-                { name: "Devin", src: "/ide-logos/devin.svg" },
-                { name: "Anthropic", src: "/ide-logos/anthropic.svg" },
               ].map((tool) => (
                 <div
                   key={tool.name}
@@ -270,11 +266,11 @@ export default function LandingPage() {
         </div>
 
         {/* ─── STORY SECTION: PRODUCT SHOWCASE ─────────────────────────────────────────────── */}
-        <section className="py-16 px-6 relative bg-white">
-          <div className="max-w-6xl mx-auto space-y-12">
+        <section className="py-12 px-6 relative bg-white">
+          <div className="max-w-6xl mx-auto space-y-8">
             {/* ── OPTION A: Animated Vulnerability Detection ──────────────────────── */}
             <BlurFade delay={0.1} direction="up">
-            <div className="flex flex-col md:flex-row items-center gap-16">
+            <div className="flex flex-col md:flex-row items-center gap-12">
               <div className="flex-1 space-y-6">
                 <h2
                   className="text-4xl md:text-5xl font-bold tracking-tight text-gray-900"
@@ -382,7 +378,7 @@ export default function LandingPage() {
 
             {/* ── OPTION C: Modern Prompt Experience ─────────────────────────────── */}
             <BlurFade delay={0.2} direction="up">
-            <div className="flex flex-col md:flex-row items-center gap-16">
+            <div className="flex flex-col md:flex-row items-center gap-12">
               <div className="flex-1 space-y-6">
                 <h2
                   className="text-4xl md:text-5xl font-bold tracking-tight text-gray-900"
@@ -412,49 +408,55 @@ export default function LandingPage() {
                 </ul>
               </div>
               <div className="flex-1 w-full">
-                <div className="relative h-[380px] w-full overflow-hidden rounded-2xl border border-gray-200 bg-[#0D1117] p-0">
-                  <div className="absolute top-0 left-0 right-0 h-8 bg-[#161B22] rounded-tl-2xl rounded-tr-2xl flex items-center gap-2 px-3 border-b border-gray-700">
-                    <div className="w-3 h-3 rounded-full bg-red-500" />
-                    <div className="w-3 h-3 rounded-full bg-yellow-500" />
-                    <div className="w-3 h-3 rounded-full bg-green-500" />
-                    <span className="ml-3 text-xs text-gray-400 font-mono">shipguard scan</span>
-                  </div>
-                  <div className="pt-8 px-4 pb-4 font-mono text-sm">
-                    <div className="text-green-400 mb-2">$ shipguard scan ./my-app</div>
-                    <div className="text-gray-400 mb-4 animate-pulse">Scanning for vulnerabilities...</div>
-                    <div className="space-y-2 text-sm">
-                      <div className="flex items-center gap-2">
-                        <span className="text-red-500">✗</span>
-                        <span className="text-red-400">CRITICAL:</span>
-                        <span className="text-gray-300">Exposed SUPABASE_SERVICE_ROLE_KEY</span>
+                <div className="relative w-full overflow-hidden rounded-2xl border border-gray-200 bg-white p-6">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="rounded-xl bg-red-50 border border-red-100 p-4">
+                      <div className="flex items-center gap-2 mb-2">
+                        <X className="w-4 h-4 text-red-600" />
+                        <span className="text-xs font-semibold text-red-600">CRITICAL</span>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-red-500">✗</span>
-                        <span className="text-red-400">CRITICAL:</span>
-                        <span className="text-gray-300">Hardcoded API key in production</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-amber-500">⚠</span>
-                        <span className="text-amber-400">HIGH:</span>
-                        <span className="text-gray-300">Missing rate limiting</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-blue-400">ℹ</span>
-                        <span className="text-blue-400">INFO:</span>
-                        <span className="text-gray-300">Found 3 optimization opportunities</span>
-                      </div>
+                      <p className="text-sm font-medium text-gray-900">Exposed API Key</p>
+                      <p className="text-xs text-gray-500 mt-1">lib/config.ts:6</p>
                     </div>
-                    <div className="mt-4 pt-4 border-t border-gray-700">
-                      <div className="text-green-400 mb-2">$ shipguard fix --severity critical</div>
-                      <div className="text-gray-400">Generating remediation steps...</div>
-                      <div className="mt-2 text-gray-300">
-                        → Fixed: Removed hardcoded secrets from lib/config.ts
+                    <div className="rounded-xl bg-red-50 border border-red-100 p-4">
+                      <div className="flex items-center gap-2 mb-2">
+                        <X className="w-4 h-4 text-red-600" />
+                        <span className="text-xs font-semibold text-red-600">CRITICAL</span>
                       </div>
-                      <div className="text-gray-300">
-                        → Fixed: Added rate limiting to auth endpoints
+                      <p className="text-sm font-medium text-gray-900">Missing Auth</p>
+                      <p className="text-xs text-gray-500 mt-1">app/api/admin/:*</p>
+                    </div>
+                    <div className="rounded-xl bg-amber-50 border border-amber-100 p-4">
+                      <div className="flex items-center gap-2 mb-2">
+                        <AlertTriangle className="w-4 h-4 text-amber-600" />
+                        <span className="text-xs font-semibold text-amber-600">HIGH</span>
                       </div>
-                      <div className="mt-2 text-green-500 font-medium">
-                        ✓ 3 issues fixed in 2.3s
+                      <p className="text-sm font-medium text-gray-900">No Rate Limit</p>
+                      <p className="text-xs text-gray-500 mt-1">app/api/auth/:*</p>
+                    </div>
+                    <div className="rounded-xl bg-blue-50 border border-blue-100 p-4">
+                      <div className="flex items-center gap-2 mb-2">
+                        <AlertTriangle className="w-4 h-4 text-blue-600" />
+                        <span className="text-xs font-semibold text-blue-600">MEDIUM</span>
+                      </div>
+                      <p className="text-sm font-medium text-gray-900">Missing RLS</p>
+                      <p className="text-xs text-gray-500 mt-1">public.profiles</p>
+                    </div>
+                  </div>
+                  <div className="mt-4 pt-4 border-t border-gray-100">
+                    <p className="text-sm font-medium text-gray-900 mb-3">Remediation Steps:</p>
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-sm text-gray-600">
+                        <CheckCircle className="w-4 h-4 text-green-500" />
+                        <span>Move secrets to environment variables</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-sm text-gray-600">
+                        <CheckCircle className="w-4 h-4 text-green-500" />
+                        <span>Add middleware auth check</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-sm text-gray-600">
+                        <CheckCircle className="w-4 h-4 text-green-500" />
+                        <span>Enable Supabase RLS policies</span>
                       </div>
                     </div>
                   </div>
