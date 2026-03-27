@@ -64,21 +64,31 @@ function getCancellationScheduled(
 }
 
 export async function GET() {
+  const debugSteps: string[] = [];
   try {
+    debugSteps.push("1: entered handler");
     console.log("Subscription status API called");
     let supabase;
     try {
       supabase = await createServerClient();
+      debugSteps.push("2: createServerClient OK");
       console.log("Supabase client created");
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : String(e);
-      console.error("CRITICAL: createServerClient() failed:", msg, e instanceof Error ? e.stack : "");
-      throw e; // Re-throw to be caught by outer catch
+      debugSteps.push("2: createServerClient FAILED: " + (e instanceof Error ? e.message : String(e)));
+      console.error("CRITICAL: createServerClient() failed:", e);
+      return NextResponse.json({ message: "createServerClient failed", debug: debugSteps, error: e instanceof Error ? e.message : String(e) }, { status: 500 });
     }
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    console.log("User auth check:", user ? "authenticated" : "not authenticated");
+    
+    let authResult;
+    try {
+      authResult = await supabase.auth.getUser();
+      debugSteps.push("3: auth.getUser OK, user=" + (authResult.data.user ? "yes" : "no"));
+      console.log("User auth check:", authResult.data.user ? "authenticated" : "not authenticated");
+    } catch (e: unknown) {
+      debugSteps.push("3: auth.getUser FAILED: " + (e instanceof Error ? e.message : String(e)));
+      return NextResponse.json({ message: "auth.getUser failed", debug: debugSteps, error: e instanceof Error ? e.message : String(e) }, { status: 500 });
+    }
+    const { data: { user } } = authResult;
 
     if (!user) {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
@@ -296,7 +306,7 @@ export async function GET() {
     const errorStack = error instanceof Error ? error.stack : undefined;
     console.error("Subscription status API error:", errorMessage, errorStack);
     return NextResponse.json(
-      { message: "Internal server error", error: errorMessage, stack: errorStack },
+      { message: "Internal server error", error: errorMessage, stack: errorStack, debug: debugSteps },
       { status: 500 },
     );
   }
