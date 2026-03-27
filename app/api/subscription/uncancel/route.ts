@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
       .from("users")
       .select("subscription_id")
       .eq("id", user.id)
-      .single();
+      .maybeSingle();
 
     if (userError || !userData?.subscription_id) {
       return NextResponse.json(

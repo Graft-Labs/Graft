@@ -164,7 +164,7 @@ export async function POST(req: NextRequest) {
       .from('users')
       .select('plan, subscription_id, subscription_status, customer_id')
       .eq('id', user.id)
-      .single()
+      .maybeSingle()
 
     // -----------------------------------------------------------
     // Step 1: Determine if user has an active subscription.

@@ -123,7 +123,7 @@ export async function POST(req: NextRequest) {
       .from("users")
       .select("plan, subscription_id, subscription_status, customer_id")
       .eq("id", user.id)
-      .single();
+      .maybeSingle();
 
     const currentPlan = userData?.plan || "free";
     const subscriptionId = userData?.subscription_id;

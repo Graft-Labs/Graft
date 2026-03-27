@@ -223,7 +223,7 @@ export default function SettingsPage() {
           .from("users")
           .select("*")
           .eq("id", currentUser.id)
-          .single();
+          .maybeSingle();
         if (freshData) {
           setUserData(freshData);
           setCached(
@@ -312,7 +312,7 @@ export default function SettingsPage() {
                 .from("users")
                 .select("*")
                 .eq("id", currentUser.id)
-                .single();
+                .maybeSingle();
 
               if (data) {
                 setUserData(data);
@@ -400,7 +400,7 @@ export default function SettingsPage() {
           .from("users")
           .select("*")
           .eq("id", user.id)
-          .single();
+          .maybeSingle();
 
         setUserData(data);
         if (data?.name) setFullName(data.name);
@@ -449,7 +449,7 @@ export default function SettingsPage() {
           .from("users")
           .select("*")
           .eq("id", currentUser.id)
-          .single();
+          .maybeSingle();
 
         if (data) {
           // Merge API plan into user data

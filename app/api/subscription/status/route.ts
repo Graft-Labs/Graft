@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase-server";
+import { createClient } from "@supabase/supabase-js";
 
 const POLAR_ACCESS_TOKEN = process.env.POLAR_ACCESS_TOKEN;
 const POLAR_IS_SANDBOX = process.env.POLAR_IS_SANDBOX === "true";
@@ -7,6 +8,10 @@ const POLAR_IS_SANDBOX = process.env.POLAR_IS_SANDBOX === "true";
 const POLAR_API_URL = POLAR_IS_SANDBOX
   ? "https://sandbox-api.polar.sh/v1"
   : "https://api.polar.sh/v1";
+
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const SUPABASE_SERVICE_KEY =
+  process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 const PLAN_SCANS_LIMITS: Record<string, number> = {
   pro: 50,
@@ -248,7 +253,7 @@ export async function GET() {
               "plan, scans_limit, subscription_id, subscription_status, customer_id",
             )
             .eq("id", user.id)
-            .single();
+            .maybeSingle();
 
           if (dbError) {
             console.error("Users table query failed:", dbError.message);
@@ -349,9 +354,11 @@ export async function GET() {
     const resolvedCustomerId =
       (subscription.customer_id as string | undefined) || dbCustomerId;
 
-    // Persist if anything changed
-    if (supabase && userData) {
+    // Persist if anything changed — use admin client to ensure the write goes
+    // through even when the user's row doesn't exist yet (upsert creates it).
+    if (supabase && userId) {
       const hasChanges =
+        !userData ||
         effectivePlan !== dbPlan ||
         scansLimit !== dbScansLimit ||
         effectiveStatus !== dbSubscriptionStatus ||
@@ -359,17 +366,28 @@ export async function GET() {
         resolvedCustomerId !== dbCustomerId;
 
       if (hasChanges) {
-        await supabase
+        const adminSupabase =
+          SUPABASE_URL && SUPABASE_SERVICE_KEY
+            ? createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+            : supabase;
+
+        const persistPayload: Record<string, unknown> = {
+          id: userId,
+          plan: effectivePlan,
+          scans_limit: scansLimit,
+          subscription_status: effectiveStatus,
+          subscription_id: resolvedSubscriptionId || null,
+          customer_id: resolvedCustomerId || null,
+          updated_at: new Date().toISOString(),
+        };
+        // Supply defaults only when inserting a brand-new row
+        if (!userData) {
+          persistPayload.scans_used = 0;
+        }
+
+        await adminSupabase
           .from("users")
-          .update({
-            plan: effectivePlan,
-            scans_limit: scansLimit,
-            subscription_status: effectiveStatus,
-            subscription_id: resolvedSubscriptionId || null,
-            customer_id: resolvedCustomerId || null,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", userId);
+          .upsert(persistPayload, { onConflict: "id" });
       }
     }
 

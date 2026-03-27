@@ -232,6 +232,16 @@ export async function POST(req: NextRequest) {
     }
 
     let userId = (metadata?.user_id as string | undefined) || undefined
+
+    // Fallback 1: use customer.external_id (set via external_customer_id on checkout)
+    if (!userId) {
+      const externalId = (data.customer as Record<string, unknown> | undefined)?.external_id as string | undefined
+      if (externalId?.trim()) {
+        userId = externalId.trim()
+      }
+    }
+
+    // Fallback 2: email lookup in users table
     if (!userId && resolvedCustomerEmail) {
       const { data: userByEmail } = await supabase
         .from('users')
@@ -262,7 +272,7 @@ export async function POST(req: NextRequest) {
       .from('users')
       .select('plan, subscription_id, subscription_status, customer_id')
       .eq('id', userId)
-      .single()
+      .maybeSingle()
 
     console.log(`Existing user state: plan=${existingUser?.plan}, subId=${existingUser?.subscription_id}, subStatus=${existingUser?.subscription_status}`)
 
@@ -316,17 +326,28 @@ export async function POST(req: NextRequest) {
         const resolvedPlan = planId || existingUser?.plan || (hasSubscription ? 'pro' : 'free')
         const scansLimit = PLAN_SCANS_LIMITS[resolvedPlan] ?? 50
 
+        // Use upsert so the update works even if the users row doesn't exist yet
+        // (e.g. email/password users who haven't visited the dashboard).
+        // For existing rows: all specified fields are merged. scans_used is only
+        // set on INSERT (new rows) to avoid resetting usage for existing users.
+        const upsertPayload: Record<string, unknown> = {
+          id: userId,
+          plan: resolvedPlan,
+          scans_limit: scansLimit,
+          subscription_id: subscriptionId || existingUser?.subscription_id,
+          subscription_status: cancellationScheduled ? 'cancelled' : 'active',
+          customer_id: customerId || existingUser?.customer_id,
+          updated_at: new Date().toISOString(),
+        }
+        if (!existingUser) {
+          // New row — supply defaults for required columns
+          upsertPayload.email = resolvedCustomerEmail ?? null
+          upsertPayload.scans_used = 0
+        }
+
         const { error } = await supabase
           .from('users')
-          .update({
-            plan: resolvedPlan,
-            scans_limit: scansLimit,
-            subscription_id: subscriptionId || existingUser?.subscription_id,
-            subscription_status: cancellationScheduled ? 'cancelled' : 'active',
-            customer_id: customerId || existingUser?.customer_id,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', userId)
+          .upsert(upsertPayload, { onConflict: 'id' })
 
         if (error) {
           console.error('Failed to update user plan:', error)
@@ -348,6 +369,11 @@ export async function POST(req: NextRequest) {
           console.log(
             `Ignoring cancellation for non-current subscription ${subscriptionId} (current: ${existingUser.subscription_id})`
           )
+          break
+        }
+
+        if (!existingUser) {
+          console.warn(`Received ${event} for user ${userId} with no existing DB row — skipping status-only update`)
           break
         }
 
@@ -381,6 +407,11 @@ export async function POST(req: NextRequest) {
           break
         }
 
+        if (!existingUser) {
+          console.warn(`Received ${event} for user ${userId} with no existing DB row — skipping status-only update`)
+          break
+        }
+
         const { error } = await supabase
           .from('users')
           .update({
@@ -405,6 +436,11 @@ export async function POST(req: NextRequest) {
           existingUser?.subscription_id &&
           existingUser.subscription_id !== subscriptionId
         ) {
+          break
+        }
+
+        if (!existingUser) {
+          console.warn(`Received ${event} for user ${userId} with no existing DB row — skipping status-only update`)
           break
         }
 
@@ -442,6 +478,11 @@ export async function POST(req: NextRequest) {
           break
         }
 
+        if (!existingUser) {
+          console.warn(`Received ${event} for user ${userId} with no existing DB row — skipping downgrade`)
+          break
+        }
+
         const { error } = await supabase
           .from('users')
           .update({
@@ -468,17 +509,23 @@ export async function POST(req: NextRequest) {
           const resolvedPlan = planId || existingUser?.plan || (hasSubscription ? 'pro' : 'free')
           const scansLimit = PLAN_SCANS_LIMITS[resolvedPlan] ?? 50
 
+          const genericUpsertPayload: Record<string, unknown> = {
+            id: userId,
+            plan: resolvedPlan,
+            scans_limit: scansLimit,
+            subscription_id: subscriptionId || existingUser?.subscription_id,
+            subscription_status: cancellationScheduled ? 'cancelled' : incomingNormalizedStatus,
+            customer_id: customerId || existingUser?.customer_id,
+            updated_at: new Date().toISOString(),
+          }
+          if (!existingUser) {
+            genericUpsertPayload.email = resolvedCustomerEmail ?? null
+            genericUpsertPayload.scans_used = 0
+          }
+
           const { error } = await supabase
             .from('users')
-            .update({
-              plan: resolvedPlan,
-              scans_limit: scansLimit,
-              subscription_id: subscriptionId || existingUser?.subscription_id,
-              subscription_status: cancellationScheduled ? 'cancelled' : incomingNormalizedStatus,
-              customer_id: customerId || existingUser?.customer_id,
-              updated_at: new Date().toISOString(),
-            })
-            .eq('id', userId)
+            .upsert(genericUpsertPayload, { onConflict: 'id' })
 
           if (error) {
             console.error('Failed to update user plan in generic webhook handler:', error)
