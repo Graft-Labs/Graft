@@ -17,7 +17,6 @@ import { ShimmerButton } from "@/components/ui/shimmer-button";
 import { Marquee } from "@/components/ui/marquee";
 import { AnimatedList } from "@/components/ui/animated-list";
 import { IconCloud } from "@/components/ui/icon-cloud";
-import { OrbitingCircles } from "@/components/ui/orbiting-circles";
 import { SmoothCursor } from "@/components/ui/smooth-cursor";
 
 type PlanTier = "free" | "pro" | "unlimited";
@@ -245,6 +244,10 @@ export default function LandingPage() {
                 { name: "Claude", src: "/ide-logos/claude.svg" },
                 { name: "Tabnine", src: "/ide-logos/tabnine.svg" },
                 { name: "Replit", src: "/ide-logos/replit.svg" },
+                { name: "Lovable", src: "/ide-logos/lovable.svg" },
+                { name: "Bolt.new", src: "/ide-logos/boltnew.svg" },
+                { name: "Devin", src: "/ide-logos/devin.svg" },
+                { name: "Anthropic", src: "/ide-logos/anthropic.svg" },
               ].map((tool) => (
                 <div
                   key={tool.name}
@@ -267,8 +270,8 @@ export default function LandingPage() {
         </div>
 
         {/* ─── STORY SECTION: PRODUCT SHOWCASE ─────────────────────────────────────────────── */}
-        <section className="py-20 px-6 relative bg-white">
-          <div className="max-w-6xl mx-auto space-y-20">
+        <section className="py-16 px-6 relative bg-white">
+          <div className="max-w-6xl mx-auto space-y-12">
             {/* ── OPTION A: Animated Vulnerability Detection ──────────────────────── */}
             <BlurFade delay={0.1} direction="up">
             <div className="flex flex-col md:flex-row items-center gap-16">
@@ -365,10 +368,11 @@ export default function LandingPage() {
                       "/typescript.svg",
                       "/tailwindcss.svg",
                       "/prisma.svg",
-                      "/next.svg",
-                      "/window.svg",
-                      "/file.svg",
-                      "/globe.svg",
+                      "/express.svg",
+                      "/nestjs.svg",
+                      "/svelte.svg",
+                      "/nuxtjs.svg",
+                      "/fastify.svg",
                     ]}
                   />
                 </div>
@@ -408,20 +412,51 @@ export default function LandingPage() {
                 </ul>
               </div>
               <div className="flex-1 w-full">
-                <div className="relative flex h-[340px] w-full items-center justify-center overflow-hidden rounded-2xl border border-gray-200 bg-white">
-                  <OrbitingCircles radius={120} iconSize={44} speed={1.1} path className="bg-white border border-gray-200 shadow-sm">
-                    <Image src="/ide-logos/cursor.svg" alt="Cursor" className="h-6 w-6 object-contain" />
-                    <Image src="/ide-logos/windsurf.svg" alt="Windsurf" className="h-6 w-6 object-contain" />
-                    <Image src="/ide-logos/github-copilot.svg" alt="GitHub Copilot" className="h-6 w-6 object-contain" />
-                    <Image src="/ide-logos/claude.svg" alt="Claude" className="h-6 w-6 object-contain" />
-                    <Image src="/ide-logos/tabnine.svg" alt="Tabnine" className="h-6 w-6 object-contain" />
-                    <Image src="/ide-logos/replit.svg" alt="Replit" className="h-6 w-6 object-contain" />
-                  </OrbitingCircles>
-
-                  <div className="z-20 rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50 to-emerald-50 px-6 py-4 text-center shadow-lg">
-                    <Image src="/graft.svg" alt="Graft" className="mx-auto mb-2 h-10 w-10" />
-                    <p className="text-sm font-semibold text-gray-900">Graft</p>
-                    <p className="text-xs text-gray-600">Finds, prioritizes, and explains fixes</p>
+                <div className="relative h-[380px] w-full overflow-hidden rounded-2xl border border-gray-200 bg-[#0D1117] p-0">
+                  <div className="absolute top-0 left-0 right-0 h-8 bg-[#161B22] rounded-tl-2xl rounded-tr-2xl flex items-center gap-2 px-3 border-b border-gray-700">
+                    <div className="w-3 h-3 rounded-full bg-red-500" />
+                    <div className="w-3 h-3 rounded-full bg-yellow-500" />
+                    <div className="w-3 h-3 rounded-full bg-green-500" />
+                    <span className="ml-3 text-xs text-gray-400 font-mono">shipguard scan</span>
+                  </div>
+                  <div className="pt-8 px-4 pb-4 font-mono text-sm">
+                    <div className="text-green-400 mb-2">$ shipguard scan ./my-app</div>
+                    <div className="text-gray-400 mb-4 animate-pulse">Scanning for vulnerabilities...</div>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex items-center gap-2">
+                        <span className="text-red-500">✗</span>
+                        <span className="text-red-400">CRITICAL:</span>
+                        <span className="text-gray-300">Exposed SUPABASE_SERVICE_ROLE_KEY</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-red-500">✗</span>
+                        <span className="text-red-400">CRITICAL:</span>
+                        <span className="text-gray-300">Hardcoded API key in production</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-amber-500">⚠</span>
+                        <span className="text-amber-400">HIGH:</span>
+                        <span className="text-gray-300">Missing rate limiting</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-blue-400">ℹ</span>
+                        <span className="text-blue-400">INFO:</span>
+                        <span className="text-gray-300">Found 3 optimization opportunities</span>
+                      </div>
+                    </div>
+                    <div className="mt-4 pt-4 border-t border-gray-700">
+                      <div className="text-green-400 mb-2">$ shipguard fix --severity critical</div>
+                      <div className="text-gray-400">Generating remediation steps...</div>
+                      <div className="mt-2 text-gray-300">
+                        → Fixed: Removed hardcoded secrets from lib/config.ts
+                      </div>
+                      <div className="text-gray-300">
+                        → Fixed: Added rate limiting to auth endpoints
+                      </div>
+                      <div className="mt-2 text-green-500 font-medium">
+                        ✓ 3 issues fixed in 2.3s
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
