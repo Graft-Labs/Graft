@@ -66,8 +66,15 @@ function getCancellationScheduled(
 export async function GET() {
   try {
     console.log("Subscription status API called");
-    const supabase = await createServerClient();
-    console.log("Supabase client created");
+    let supabase;
+    try {
+      supabase = await createServerClient();
+      console.log("Supabase client created");
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error("CRITICAL: createServerClient() failed:", msg, e instanceof Error ? e.stack : "");
+      throw e; // Re-throw to be caught by outer catch
+    }
     const {
       data: { user },
     } = await supabase.auth.getUser();
