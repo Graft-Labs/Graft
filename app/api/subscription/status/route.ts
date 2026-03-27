@@ -63,192 +63,82 @@ function getCancellationScheduled(
   return status === "cancelled" || status === "canceled";
 }
 
-export async function GET() {
-  const debugSteps: string[] = [];
-  try {
-    debugSteps.push("1: entered handler");
-    console.log("Subscription status API called");
-
-    const timeoutPromise = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error("Function timed out after 8s")), 8000)
-    );
-
-    const result = await Promise.race([
-      handleRequest(debugSteps),
-      timeoutPromise,
-    ]);
-    return result;
-  } catch (error: unknown) {
-    const errorMessage =
-      error instanceof Error ? error.message : String(error);
-    console.error("OUTER_CATCH:", errorMessage);
-    return NextResponse.json(
-      {
-        message: "Internal server error",
-        error: errorMessage,
-        debug: debugSteps,
-      },
-      { status: 500 },
-    );
-  }
-}
-
-async function handleRequest(debugSteps: string[]): Promise<NextResponse> {
-  let supabase;
-  try {
-    supabase = await createServerClient();
-    debugSteps.push("2: createServerClient OK");
-    console.log("Supabase client created");
-  } catch (e: unknown) {
-    debugSteps.push(
-      "2: createServerClient FAILED: " +
-        (e instanceof Error ? e.message : String(e)),
-    );
-    return NextResponse.json(
-      {
-        message: "createServerClient failed",
-        debug: debugSteps,
-        error: e instanceof Error ? e.message : String(e),
-      },
-      { status: 500 },
-    );
-  }
-
-  let authResult;
-  try {
-    authResult = await supabase.auth.getUser();
-    debugSteps.push(
-      "3: auth.getUser OK, user=" +
-        (authResult.data.user ? "yes" : "no"),
-    );
-    console.log(
-      "User auth check:",
-      authResult.data.user ? "authenticated" : "not authenticated",
-    );
-  } catch (e: unknown) {
-    debugSteps.push(
-      "3: auth.getUser FAILED: " +
-        (e instanceof Error ? e.message : String(e)),
-    );
-    return NextResponse.json(
-      {
-        message: "auth.getUser failed",
-        debug: debugSteps,
-        error: e instanceof Error ? e.message : String(e),
-      },
-      { status: 500 },
-    );
-  }
-  const { data: { user } } = authResult;
-
-  if (!user) {
-    return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-  }
-
-  debugSteps.push("4: querying users table");
-  console.log("Querying users table for:", user.id);
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select(
-      "plan, scans_limit, subscription_id, subscription_status, customer_id",
-    )
-    .eq("id", user.id)
-    .single();
-
-  if (userError || !userData) {
-    debugSteps.push(
-      "4: users query FAILED: " + (userError?.message || "no data"),
-    );
-    return NextResponse.json(
-      {
-        message: "Could not load subscription status.",
-        debug: debugSteps,
-        error: userError?.message,
-      },
-      { status: 500 },
-    );
-  }
-
-  debugSteps.push("5: users query OK, plan=" + userData.plan);
-  console.log("User data loaded:", JSON.stringify(userData));
-
-  // Polar not configured — return whatever is in DB
+async function fetchSubscriptionFromPolar(
+  userId: string,
+  dbSubscriptionId: string | null,
+  dbCustomerId: string | null,
+): Promise<Record<string, unknown> | null> {
   if (
     !POLAR_ACCESS_TOKEN ||
     POLAR_ACCESS_TOKEN === "your_polar_access_token_here"
   ) {
-    return NextResponse.json({
-      success: true,
-      plan: userData.plan || "free",
-      scansLimit: userData.scans_limit ?? 3,
-      subscriptionStatus: userData.subscription_status,
-      subscriptionId: userData.subscription_id,
-      customerId: userData.customer_id,
-      cancellationScheduled:
-        userData.subscription_status === "cancelled" ||
-        userData.subscription_status === "canceled",
-      currentPeriodEnd: null,
-      debug: debugSteps,
-    });
+    return null;
   }
 
-  let subscription: Record<string, unknown> | null = null;
-
   // 1) Try by subscription_id
-  if (userData.subscription_id) {
-    const resp = await fetch(
-      `${POLAR_API_URL}/subscriptions/${userData.subscription_id}`,
-      {
-        headers: {
-          Authorization: `Bearer ${POLAR_ACCESS_TOKEN}`,
-          "Content-Type": "application/json",
+  if (dbSubscriptionId) {
+    try {
+      const resp = await fetch(
+        `${POLAR_API_URL}/subscriptions/${dbSubscriptionId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${POLAR_ACCESS_TOKEN}`,
+            "Content-Type": "application/json",
+          },
         },
-      },
-    );
-    if (resp.ok) {
-      subscription = (await resp.json()) as Record<string, unknown>;
-    }
+      );
+      if (resp.ok) {
+        return (await resp.json()) as Record<string, unknown>;
+      }
+    } catch {}
   }
 
   // 2) Fallback by customer_id
-  if (!subscription && userData.customer_id) {
-    const resp = await fetch(
-      `${POLAR_API_URL}/customers/${encodeURIComponent(userData.customer_id)}/state`,
-      {
-        headers: {
-          Authorization: `Bearer ${POLAR_ACCESS_TOKEN}`,
-          "Content-Type": "application/json",
+  if (dbCustomerId) {
+    try {
+      const resp = await fetch(
+        `${POLAR_API_URL}/customers/${encodeURIComponent(dbCustomerId)}/state`,
+        {
+          headers: {
+            Authorization: `Bearer ${POLAR_ACCESS_TOKEN}`,
+            "Content-Type": "application/json",
+          },
         },
-      },
-    );
-    if (resp.ok) {
-      const payload =
-        (await resp.json()) as Record<string, unknown>;
-      const subs =
-        (payload.subscriptions as Array<Record<string, unknown>> | undefined) ||
-        ((payload.customer_state as Record<string, unknown> | undefined)
-          ?.subscriptions as Array<Record<string, unknown>> | undefined) ||
-        [];
-      if (subs.length) {
-        subscription =
-          subs.find((s) => {
-            const st =
-              typeof s.status === "string" ? s.status.toLowerCase() : "";
-            return (
-              st === "active" ||
-              st === "trialing" ||
-              st === "cancelled" ||
-              st === "canceled"
-            );
-          }) || subs[0];
+      );
+      if (resp.ok) {
+        const payload = (await resp.json()) as Record<string, unknown>;
+        const subs =
+          (payload.subscriptions as
+            | Array<Record<string, unknown>>
+            | undefined) ||
+          ((
+            payload.customer_state as Record<string, unknown> | undefined
+          )?.subscriptions as
+            | Array<Record<string, unknown>>
+            | undefined) ||
+          [];
+        if (subs.length) {
+          return (
+            subs.find((s) => {
+              const st =
+                typeof s.status === "string" ? s.status.toLowerCase() : "";
+              return (
+                st === "active" ||
+                st === "trialing" ||
+                st === "cancelled" ||
+                st === "canceled"
+              );
+            }) || subs[0]
+          );
+        }
       }
-    }
+    } catch {}
   }
 
   // 3) Fallback by external user ID
-  if (!subscription) {
+  try {
     const resp = await fetch(
-      `${POLAR_API_URL}/customers/external/${encodeURIComponent(user.id)}/state`,
+      `${POLAR_API_URL}/customers/external/${encodeURIComponent(userId)}/state`,
       {
         headers: {
           Authorization: `Bearer ${POLAR_ACCESS_TOKEN}`,
@@ -257,15 +147,19 @@ async function handleRequest(debugSteps: string[]): Promise<NextResponse> {
       },
     );
     if (resp.ok) {
-      const payload =
-        (await resp.json()) as Record<string, unknown>;
+      const payload = (await resp.json()) as Record<string, unknown>;
       const subs =
-        (payload.subscriptions as Array<Record<string, unknown>> | undefined) ||
-        ((payload.customer_state as Record<string, unknown> | undefined)
-          ?.subscriptions as Array<Record<string, unknown>> | undefined) ||
+        (payload.subscriptions as
+          | Array<Record<string, unknown>>
+          | undefined) ||
+        ((
+          payload.customer_state as Record<string, unknown> | undefined
+        )?.subscriptions as
+          | Array<Record<string, unknown>>
+          | undefined) ||
         [];
       if (subs.length) {
-        subscription =
+        return (
           subs.find((s) => {
             const st =
               typeof s.status === "string" ? s.status.toLowerCase() : "";
@@ -275,91 +169,156 @@ async function handleRequest(debugSteps: string[]): Promise<NextResponse> {
               st === "cancelled" ||
               st === "canceled"
             );
-          }) || subs[0];
+          }) || subs[0]
+        );
       }
     }
-  }
+  } catch {}
 
-  // No subscription found on Polar — return current DB state
-  if (!subscription) {
+  return null;
+}
+
+export async function GET() {
+  try {
+    console.log("Subscription status API called");
+
+    const supabase = await createServerClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+    }
+
+    // Try to load user from DB, but don't fail if it errors
+    const { data: userData, error: userError } = await supabase
+      .from("users")
+      .select(
+        "plan, scans_limit, subscription_id, subscription_status, customer_id",
+      )
+      .eq("id", user.id)
+      .single();
+
+    if (userError) {
+      console.error("Users table query failed:", userError.message);
+    }
+
+    const dbPlan = userData?.plan || null;
+    const dbScansLimit = userData?.scans_limit ?? 3;
+    const dbSubscriptionId = userData?.subscription_id || null;
+    const dbCustomerId = userData?.customer_id || null;
+    const dbSubscriptionStatus = userData?.subscription_status || null;
+
+    // Polar not configured — return whatever is in DB
+    if (
+      !POLAR_ACCESS_TOKEN ||
+      POLAR_ACCESS_TOKEN === "your_polar_access_token_here"
+    ) {
+      return NextResponse.json({
+        success: true,
+        plan: dbPlan || "free",
+        scansLimit: dbScansLimit,
+        subscriptionStatus: dbSubscriptionStatus,
+        subscriptionId: dbSubscriptionId,
+        customerId: dbCustomerId,
+        cancellationScheduled:
+          dbSubscriptionStatus === "cancelled" ||
+          dbSubscriptionStatus === "canceled",
+        currentPeriodEnd: null,
+      });
+    }
+
+    // Fetch subscription from Polar
+    const subscription = await fetchSubscriptionFromPolar(
+      user.id,
+      dbSubscriptionId,
+      dbCustomerId,
+    );
+
+    if (!subscription) {
+      return NextResponse.json({
+        success: true,
+        plan: dbPlan || "free",
+        scansLimit: dbScansLimit,
+        subscriptionStatus: dbSubscriptionStatus,
+        subscriptionId: dbSubscriptionId,
+        customerId: dbCustomerId,
+        cancellationScheduled: false,
+        currentPeriodEnd: null,
+      });
+    }
+
+    // Determine plan from subscription
+    const detectedPlan = getPlanFromSubscription(subscription);
+    const cancellationScheduled = getCancellationScheduled(subscription);
+    const rawStatus =
+      typeof subscription.status === "string"
+        ? subscription.status.toLowerCase()
+        : "";
+    const isActive = rawStatus === "active" || rawStatus === "trialing";
+
+    const effectivePlan = isActive
+      ? detectedPlan || (dbPlan && dbPlan !== "free" ? dbPlan : "pro")
+      : "free";
+
+    const scansLimit = PLAN_SCANS_LIMITS[effectivePlan] ?? 3;
+
+    const effectiveStatus = cancellationScheduled
+      ? "cancelled"
+      : isActive
+        ? "active"
+        : rawStatus;
+
+    const resolvedSubscriptionId =
+      (subscription.id as string | undefined) || dbSubscriptionId;
+    const resolvedCustomerId =
+      (subscription.customer_id as string | undefined) || dbCustomerId;
+
+    // Persist if anything changed
+    if (userData) {
+      const hasChanges =
+        effectivePlan !== userData.plan ||
+        scansLimit !== userData.scans_limit ||
+        effectiveStatus !== userData.subscription_status ||
+        resolvedSubscriptionId !== userData.subscription_id ||
+        resolvedCustomerId !== userData.customer_id;
+
+      if (hasChanges) {
+        await supabase
+          .from("users")
+          .update({
+            plan: effectivePlan,
+            scans_limit: scansLimit,
+            subscription_status: effectiveStatus,
+            subscription_id: resolvedSubscriptionId || null,
+            customer_id: resolvedCustomerId || null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", user.id);
+      }
+    }
+
     return NextResponse.json({
       success: true,
-      plan: userData.plan || "free",
-      scansLimit: userData.scans_limit ?? 3,
-      subscriptionStatus: userData.subscription_status,
-      subscriptionId: userData.subscription_id,
-      customerId: userData.customer_id,
-      cancellationScheduled: false,
-      currentPeriodEnd: null,
-      debug: debugSteps,
+      plan: effectivePlan,
+      scansLimit,
+      subscriptionStatus: effectiveStatus,
+      subscriptionId: resolvedSubscriptionId,
+      customerId: resolvedCustomerId,
+      cancellationScheduled,
+      currentPeriodEnd:
+        typeof subscription.current_period_end === "string"
+          ? subscription.current_period_end
+          : null,
     });
+  } catch (error: unknown) {
+    const errorMessage =
+      error instanceof Error ? error.message : String(error);
+    console.error("Subscription status API error:", errorMessage);
+    return NextResponse.json(
+      { message: "Internal server error", error: errorMessage },
+      { status: 500 },
+    );
   }
-
-  // Determine plan from subscription
-  const detectedPlan = getPlanFromSubscription(subscription);
-  const cancellationScheduled = getCancellationScheduled(subscription);
-  const rawStatus =
-    typeof subscription.status === "string"
-      ? subscription.status.toLowerCase()
-      : "";
-  const isActive =
-    rawStatus === "active" || rawStatus === "trialing";
-
-  const effectivePlan = isActive
-    ? detectedPlan ||
-      (userData.plan && userData.plan !== "free"
-        ? userData.plan
-        : "pro")
-    : "free";
-
-  const scansLimit = PLAN_SCANS_LIMITS[effectivePlan] ?? 3;
-
-  const effectiveStatus = cancellationScheduled
-    ? "cancelled"
-    : isActive
-      ? "active"
-      : rawStatus;
-
-  const resolvedSubscriptionId =
-    (subscription.id as string | undefined) || userData.subscription_id;
-  const resolvedCustomerId =
-    (subscription.customer_id as string | undefined) ||
-    userData.customer_id;
-
-  // Persist if anything changed
-  const hasChanges =
-    effectivePlan !== userData.plan ||
-    scansLimit !== userData.scans_limit ||
-    effectiveStatus !== userData.subscription_status ||
-    resolvedSubscriptionId !== userData.subscription_id ||
-    resolvedCustomerId !== userData.customer_id;
-
-  if (hasChanges) {
-    await supabase
-      .from("users")
-      .update({
-        plan: effectivePlan,
-        scans_limit: scansLimit,
-        subscription_status: effectiveStatus,
-        subscription_id: resolvedSubscriptionId || null,
-        customer_id: resolvedCustomerId || null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", user.id);
-  }
-
-  return NextResponse.json({
-    success: true,
-    plan: effectivePlan,
-    scansLimit,
-    subscriptionStatus: effectiveStatus,
-    subscriptionId: resolvedSubscriptionId,
-    customerId: resolvedCustomerId,
-    cancellationScheduled,
-    currentPeriodEnd:
-      typeof subscription.current_period_end === "string"
-        ? subscription.current_period_end
-        : null,
-    debug: debugSteps,
-  });
 }
