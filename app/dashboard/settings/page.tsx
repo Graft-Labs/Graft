@@ -402,20 +402,47 @@ export default function SettingsPage() {
           .eq("id", user.id)
           .maybeSingle();
 
-        setUserData(data);
+        // Use a functional updater so we never overwrite a paid plan that was
+        // already resolved by loadSubscriptionStatus() running concurrently.
+        setUserData((prev) => {
+          if (!data) return prev;
+          const hasSyncedPlan =
+            prev?.plan === "pro" || prev?.plan === "unlimited";
+          if (hasSyncedPlan) {
+            // Keep subscription fields from the authoritative status sync but
+            // pick up any fresh profile fields (name, avatar, scans_used, etc.)
+            return {
+              ...data,
+              plan: prev.plan,
+              scans_limit: prev.scans_limit,
+              subscription_status: prev.subscription_status,
+              subscription_id: prev.subscription_id,
+              customer_id: prev.customer_id,
+            };
+          }
+          return data;
+        });
         if (data?.name) setFullName(data.name);
         else if (user?.user_metadata?.full_name)
           setFullName(user.user_metadata.full_name);
 
-        setCached(
-          "settings:data",
-          {
-            user,
-            userData: data,
-            fullName: data?.name || user?.user_metadata?.full_name || "",
-          },
-          60_000,
-        );
+        // Only cache this raw DB snapshot when loadSubscriptionStatus hasn't
+        // already written a better (Polar-synced) entry for this session.
+        const existingCached = getCached<CachedData>("settings:data");
+        const existingPlan = existingCached?.userData?.plan;
+        const hasBetterCachedPlan =
+          existingPlan === "pro" || existingPlan === "unlimited";
+        if (!hasBetterCachedPlan) {
+          setCached(
+            "settings:data",
+            {
+              user,
+              userData: data,
+              fullName: data?.name || user?.user_metadata?.full_name || "",
+            },
+            60_000,
+          );
+        }
       }
       setLoading(false);
     }

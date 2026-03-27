@@ -78,7 +78,7 @@ export async function GET(_req: NextRequest) {
         .from('users')
         .select('github_token')
         .eq('id', user.id)
-        .single()
+        .maybeSingle()
       token = userRow?.github_token ?? null
     }
 

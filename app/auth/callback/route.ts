@@ -110,6 +110,11 @@ export async function GET(request: Request) {
           .eq('id', userId)
           .maybeSingle()
 
+        // Track the verified GitHub credentials so the final upsert can use the
+        // freshly-obtained token rather than the stale existingUser snapshot.
+        let resolvedGithubToken: string | null = existingUser?.github_token ?? null
+        let resolvedGithubUserId: string | null = existingUser?.github_user_id ?? null
+
         if (provider === 'github' && providerToken) {
           const githubUserId = await getGithubUserId(providerToken)
 
@@ -142,6 +147,11 @@ export async function GET(request: Request) {
               const redirect = NextResponse.redirect(new URL(next, requestUrl.origin))
               return withClearedConnectCookies(redirect)
             }
+
+            // Save the fresh credentials so the upsert below persists them
+            // (the UPDATE only works for existing rows; the upsert handles new users)
+            resolvedGithubToken = providerToken
+            resolvedGithubUserId = githubUserId
 
             await supabase
               .from('users')
@@ -180,8 +190,8 @@ export async function GET(request: Request) {
           name: resolvedName,
           email: resolvedEmail,
           avatar_url: resolvedAvatar,
-          github_token: existingUser?.github_token ?? null,
-          github_user_id: existingUser?.github_user_id ?? null,
+          github_token: resolvedGithubToken,
+          github_user_id: resolvedGithubUserId,
           updated_at: new Date().toISOString(),
         }
 
