@@ -266,11 +266,11 @@ export default function LandingPage() {
         </div>
 
         {/* ─── STORY SECTION: PRODUCT SHOWCASE ─────────────────────────────────────────────── */}
-        <section className="py-12 px-6 relative bg-white">
-          <div className="max-w-6xl mx-auto space-y-8">
+        <section className="py-8 px-6 relative bg-white">
+          <div className="max-w-6xl mx-auto space-y-6">
             {/* ── OPTION A: Animated Vulnerability Detection ──────────────────────── */}
             <BlurFade delay={0.1} direction="up">
-            <div className="flex flex-col md:flex-row items-center gap-12">
+            <div className="flex flex-col md:flex-row items-center gap-8">
               <div className="flex-1 space-y-6">
                 <h2
                   className="text-4xl md:text-5xl font-bold tracking-tight text-gray-900"
@@ -332,7 +332,7 @@ export default function LandingPage() {
 
             {/* ── OPTION B: Icon Cloud Deep Integration ─────────────────────────── */}
             <BlurFade delay={0.15} direction="up">
-            <div className="flex flex-col md:flex-row-reverse items-center gap-16">
+            <div className="flex flex-col md:flex-row-reverse items-center gap-8">
               <div className="flex-1 space-y-6">
                 <h2
                   className="text-4xl md:text-5xl font-bold tracking-tight text-gray-900"
@@ -378,7 +378,7 @@ export default function LandingPage() {
 
             {/* ── OPTION C: Modern Prompt Experience ─────────────────────────────── */}
             <BlurFade delay={0.2} direction="up">
-            <div className="flex flex-col md:flex-row items-center gap-12">
+            <div className="flex flex-col md:flex-row items-center gap-8">
               <div className="flex-1 space-y-6">
                 <h2
                   className="text-4xl md:text-5xl font-bold tracking-tight text-gray-900"
@@ -408,54 +408,54 @@ export default function LandingPage() {
                 </ul>
               </div>
               <div className="flex-1 w-full">
-                <div className="relative w-full overflow-hidden rounded-2xl border border-gray-200 bg-white p-6">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="rounded-xl bg-red-50 border border-red-100 p-4">
-                      <div className="flex items-center gap-2 mb-2">
-                        <X className="w-4 h-4 text-red-600" />
-                        <span className="text-xs font-semibold text-red-600">CRITICAL</span>
+                <div className="relative w-full overflow-hidden rounded-2xl border border-gray-200 bg-gray-50 p-6">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="rounded-lg bg-white border border-gray-200 p-3 shadow-sm">
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <div className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                        <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wide">Critical</span>
                       </div>
                       <p className="text-sm font-medium text-gray-900">Exposed API Key</p>
-                      <p className="text-xs text-gray-500 mt-1">lib/config.ts:6</p>
+                      <p className="text-[11px] text-gray-400 mt-0.5 font-mono">lib/config.ts:6</p>
                     </div>
-                    <div className="rounded-xl bg-red-50 border border-red-100 p-4">
-                      <div className="flex items-center gap-2 mb-2">
-                        <X className="w-4 h-4 text-red-600" />
-                        <span className="text-xs font-semibold text-red-600">CRITICAL</span>
+                    <div className="rounded-lg bg-white border border-gray-200 p-3 shadow-sm">
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <div className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                        <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wide">Critical</span>
                       </div>
                       <p className="text-sm font-medium text-gray-900">Missing Auth</p>
-                      <p className="text-xs text-gray-500 mt-1">app/api/admin/:*</p>
+                      <p className="text-[11px] text-gray-400 mt-0.5 font-mono">app/api/admin/:*</p>
                     </div>
-                    <div className="rounded-xl bg-amber-50 border border-amber-100 p-4">
-                      <div className="flex items-center gap-2 mb-2">
-                        <AlertTriangle className="w-4 h-4 text-amber-600" />
-                        <span className="text-xs font-semibold text-amber-600">HIGH</span>
+                    <div className="rounded-lg bg-white border border-gray-200 p-3 shadow-sm">
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <div className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                        <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wide">High</span>
                       </div>
                       <p className="text-sm font-medium text-gray-900">No Rate Limit</p>
-                      <p className="text-xs text-gray-500 mt-1">app/api/auth/:*</p>
+                      <p className="text-[11px] text-gray-400 mt-0.5 font-mono">app/api/auth/:*</p>
                     </div>
-                    <div className="rounded-xl bg-blue-50 border border-blue-100 p-4">
-                      <div className="flex items-center gap-2 mb-2">
-                        <AlertTriangle className="w-4 h-4 text-blue-600" />
-                        <span className="text-xs font-semibold text-blue-600">MEDIUM</span>
+                    <div className="rounded-lg bg-white border border-gray-200 p-3 shadow-sm">
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <div className="w-1.5 h-1.5 rounded-full bg-sky-500" />
+                        <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wide">Medium</span>
                       </div>
                       <p className="text-sm font-medium text-gray-900">Missing RLS</p>
-                      <p className="text-xs text-gray-500 mt-1">public.profiles</p>
+                      <p className="text-[11px] text-gray-400 mt-0.5 font-mono">public.profiles</p>
                     </div>
                   </div>
-                  <div className="mt-4 pt-4 border-t border-gray-100">
-                    <p className="text-sm font-medium text-gray-900 mb-3">Remediation Steps:</p>
+                  <div className="mt-4 pt-4 border-t border-gray-200">
+                    <p className="text-xs font-semibold text-gray-900 mb-3 uppercase tracking-wide">Remediation</p>
                     <div className="space-y-2">
                       <div className="flex items-center gap-2 text-sm text-gray-600">
-                        <CheckCircle className="w-4 h-4 text-green-500" />
-                        <span>Move secrets to environment variables</span>
+                        <CheckCircle className="w-4 h-4 text-emerald-500" />
+                        <span>Move secrets to env variables</span>
                       </div>
                       <div className="flex items-center gap-2 text-sm text-gray-600">
-                        <CheckCircle className="w-4 h-4 text-green-500" />
+                        <CheckCircle className="w-4 h-4 text-emerald-500" />
                         <span>Add middleware auth check</span>
                       </div>
                       <div className="flex items-center gap-2 text-sm text-gray-600">
-                        <CheckCircle className="w-4 h-4 text-green-500" />
+                        <CheckCircle className="w-4 h-4 text-emerald-500" />
                         <span>Enable Supabase RLS policies</span>
                       </div>
                     </div>
