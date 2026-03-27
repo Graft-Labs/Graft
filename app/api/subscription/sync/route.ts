@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase-server";
 import { createClient } from "@supabase/supabase-js";
+import {
+  PLAN_SCANS_LIMITS,
+  getPlanFromSubscription as _getPlanFromSubscription,
+  getNormalizedStatus,
+  getSubscriptionsFromStatePayload,
+  pickBestSubscription,
+} from "@/lib/subscription-utils";
 
 const POLAR_ACCESS_TOKEN = process.env.POLAR_ACCESS_TOKEN;
 const POLAR_IS_SANDBOX = process.env.POLAR_IS_SANDBOX === "true";
@@ -13,18 +20,15 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_SERVICE_KEY =
   process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-const PLAN_SCANS_LIMITS: Record<string, number> = {
-  pro: 50,
-  unlimited: 999999,
-};
-
-const ACTIVE_STATUSES = new Set(["active", "trialing"]);
-
 const PLAN_PRODUCT_MAP: Record<string, string> = {};
 const proProductId = process.env.POLAR_PRO_PRODUCT_ID;
 const unlimitedProductId = process.env.POLAR_UNLIMITED_PRODUCT_ID;
 if (proProductId) PLAN_PRODUCT_MAP[proProductId] = "pro";
 if (unlimitedProductId) PLAN_PRODUCT_MAP[unlimitedProductId] = "unlimited";
+
+function getPlanFromSubscription(subscription: Record<string, unknown>): string | null {
+  return _getPlanFromSubscription(subscription, PLAN_PRODUCT_MAP);
+}
 
 type UserRow = {
   id: string;
@@ -35,108 +39,6 @@ type UserRow = {
   subscription_status: string | null;
   customer_id: string | null;
 };
-
-function getPlanFromSubscription(subscription: Record<string, unknown>): string | null {
-  const directProductId =
-    (subscription.product_id as string | undefined) ||
-    ((subscription.product as Record<string, unknown> | undefined)?.id as
-      | string
-      | undefined);
-
-  if (directProductId && PLAN_PRODUCT_MAP[directProductId]) {
-    return PLAN_PRODUCT_MAP[directProductId];
-  }
-
-  const items = subscription.items as Array<Record<string, unknown>> | undefined;
-  if (Array.isArray(items)) {
-    for (const item of items) {
-      const itemProductId =
-        (item.product_id as string | undefined) ||
-        ((item.product as Record<string, unknown> | undefined)?.id as
-          | string
-          | undefined);
-
-      if (itemProductId && PLAN_PRODUCT_MAP[itemProductId]) {
-        return PLAN_PRODUCT_MAP[itemProductId];
-      }
-    }
-  }
-
-  const products = subscription.products as Array<Record<string, unknown>> | undefined;
-  if (Array.isArray(products)) {
-    for (const product of products) {
-      const productId =
-        (product.id as string | undefined) ||
-        (product.product_id as string | undefined);
-
-      if (productId && PLAN_PRODUCT_MAP[productId]) {
-        return PLAN_PRODUCT_MAP[productId];
-      }
-    }
-  }
-
-  return null;
-}
-
-function getNormalizedStatus(
-  subscription: Record<string, unknown>,
-): { status: string | null; active: boolean } {
-  const rawStatus =
-    typeof subscription.status === "string"
-      ? subscription.status.toLowerCase()
-      : "";
-
-  const cancelAtPeriodEnd =
-    subscription.cancel_at_period_end === true ||
-    subscription.cancelAtPeriodEnd === true;
-
-  if (cancelAtPeriodEnd || rawStatus === "cancelled" || rawStatus === "canceled") {
-    return { status: "cancelled", active: true };
-  }
-
-  if (ACTIVE_STATUSES.has(rawStatus)) {
-    return { status: "active", active: true };
-  }
-
-  return { status: rawStatus || null, active: false };
-}
-
-function getSubscriptionsFromStatePayload(
-  payload: Record<string, unknown>,
-): Array<Record<string, unknown>> {
-  // Handle active_subscriptions (Polar CustomerState top-level field)
-  const active = payload.active_subscriptions;
-  if (Array.isArray(active) && active.length) {
-    return active as Array<Record<string, unknown>>;
-  }
-
-  const direct = payload.subscriptions;
-  if (Array.isArray(direct)) {
-    return direct as Array<Record<string, unknown>>;
-  }
-
-  const customerState = payload.customer_state as Record<string, unknown> | undefined;
-  const nested = customerState?.subscriptions;
-  if (Array.isArray(nested)) {
-    return nested as Array<Record<string, unknown>>;
-  }
-
-  return [];
-}
-
-function pickBestSubscription(
-  subscriptions: Array<Record<string, unknown>>,
-): Record<string, unknown> | null {
-  if (!subscriptions.length) return null;
-
-  const active = subscriptions.find((sub) => {
-    const status = typeof sub.status === "string" ? sub.status.toLowerCase() : "";
-    return ACTIVE_STATUSES.has(status) || status === "cancelled" || status === "canceled";
-  });
-
-  if (active) return active;
-  return subscriptions[0] || null;
-}
 
 export async function POST(req: NextRequest) {
   try {

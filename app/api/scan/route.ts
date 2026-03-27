@@ -1,9 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { randomUUID } from 'node:crypto'
 import { createServerClient } from '@/lib/supabase-server'
+import { createClient } from '@supabase/supabase-js'
 import { tasks } from '@trigger.dev/sdk/v3'
 import type { runScanTask } from '@/trigger/run-scan'
 import { captureServerEvent } from '@/lib/posthog-server'
+
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
+const SUPABASE_SERVICE_KEY =
+  process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY
 
 interface ScanPayload {
   repo: string
@@ -80,7 +85,7 @@ export async function POST(request: NextRequest) {
         .from('users')
         .select('github_token')
         .eq('id', user.id)
-        .single()
+        .maybeSingle()
       githubToken = userRow?.github_token ?? null
     }
 
@@ -152,7 +157,7 @@ export async function POST(request: NextRequest) {
       .from('users')
       .select('name, email, avatar_url, plan, scans_used, scans_limit')
       .eq('id', user.id)
-      .single()
+      .maybeSingle()
 
     const plan = userData?.plan || 'free'
     const scansLimit = userData?.scans_limit ?? 3
@@ -185,7 +190,15 @@ export async function POST(request: NextRequest) {
     const userAvatar = userData?.avatar_url ?? null
     const userEmail = userData?.email ?? user.email
 
-    const { error: userUpsertError } = await supabase
+    // Use the service-role client so this upsert succeeds regardless of RLS INSERT
+    // policies on the users table.  Fall back to the user-scoped client if the
+    // service key is not configured.
+    const adminSupabase =
+      SUPABASE_URL && SUPABASE_SERVICE_KEY
+        ? createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+        : supabase
+
+    const { error: userUpsertError } = await adminSupabase
       .from('users')
       .upsert(
         {
@@ -202,16 +215,10 @@ export async function POST(request: NextRequest) {
       )
 
     if (userUpsertError) {
-      console.error('Failed to upsert user record:', userUpsertError)
+      // Profile sync failure is not fatal — the user is authenticated and their
+      // scan limit was already checked.  Log the error and continue.
+      console.error('Failed to upsert user record (non-fatal):', userUpsertError)
       logScan('user_upsert_failed', { traceId, error: userUpsertError.message })
-      return NextResponse.json(
-        {
-          error: 'user_sync_error',
-          message: 'Failed to sync user profile before scan',
-          details: userUpsertError.message,
-        },
-        { status: 500 }
-      )
     }
 
     const { data: scan, error: scanError } = await supabase
