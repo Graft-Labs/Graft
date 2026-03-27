@@ -66,6 +66,9 @@ export default function DashboardSidebar() {
             credentials: "include",
           });
           const statusData = await response.json();
+          if (!response.ok) {
+            console.error("Subscription status API error:", response.status, JSON.stringify(statusData));
+          }
           
           const { data } = await supabase
             .from("users")
