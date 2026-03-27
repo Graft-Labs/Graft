@@ -266,8 +266,8 @@ export default function LandingPage() {
         </div>
 
         {/* ─── STORY SECTION: PRODUCT SHOWCASE ─────────────────────────────────────────────── */}
-        <section className="py-8 px-6 relative bg-white">
-          <div className="max-w-6xl mx-auto space-y-6">
+        <section className="py-16 px-6 relative bg-white">
+          <div className="max-w-6xl mx-auto space-y-10">
             {/* ── OPTION A: Animated Vulnerability Detection ──────────────────────── */}
             <BlurFade delay={0.1} direction="up">
             <div className="flex flex-col md:flex-row items-center gap-8">
@@ -410,56 +410,54 @@ export default function LandingPage() {
               <div className="flex-1 w-full">
                 <div className="relative w-full overflow-hidden rounded-2xl border border-gray-200 bg-gray-50 p-6">
                   <div className="grid grid-cols-2 gap-3">
-                    <div className="rounded-lg bg-white border border-gray-200 p-3 shadow-sm">
-                      <div className="flex items-center gap-2 mb-1.5">
-                        <div className="w-1.5 h-1.5 rounded-full bg-rose-500" />
-                        <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wide">Critical</span>
-                      </div>
-                      <p className="text-sm font-medium text-gray-900">Exposed API Key</p>
-                      <p className="text-[11px] text-gray-400 mt-0.5 font-mono">lib/config.ts:6</p>
-                    </div>
-                    <div className="rounded-lg bg-white border border-gray-200 p-3 shadow-sm">
-                      <div className="flex items-center gap-2 mb-1.5">
-                        <div className="w-1.5 h-1.5 rounded-full bg-rose-500" />
-                        <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wide">Critical</span>
-                      </div>
-                      <p className="text-sm font-medium text-gray-900">Missing Auth</p>
-                      <p className="text-[11px] text-gray-400 mt-0.5 font-mono">app/api/admin/:*</p>
-                    </div>
-                    <div className="rounded-lg bg-white border border-gray-200 p-3 shadow-sm">
-                      <div className="flex items-center gap-2 mb-1.5">
-                        <div className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                        <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wide">High</span>
-                      </div>
-                      <p className="text-sm font-medium text-gray-900">No Rate Limit</p>
-                      <p className="text-[11px] text-gray-400 mt-0.5 font-mono">app/api/auth/:*</p>
-                    </div>
-                    <div className="rounded-lg bg-white border border-gray-200 p-3 shadow-sm">
-                      <div className="flex items-center gap-2 mb-1.5">
-                        <div className="w-1.5 h-1.5 rounded-full bg-sky-500" />
-                        <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wide">Medium</span>
-                      </div>
-                      <p className="text-sm font-medium text-gray-900">Missing RLS</p>
-                      <p className="text-[11px] text-gray-400 mt-0.5 font-mono">public.profiles</p>
-                    </div>
+                    {[
+                      { level: "critical", label: "Critical", color: "bg-rose-500", issue: "Exposed API Key", file: "lib/config.ts:6" },
+                      { level: "critical", label: "Critical", color: "bg-rose-500", issue: "Missing Auth", file: "app/api/admin/:*" },
+                      { level: "high", label: "High", color: "bg-amber-500", issue: "No Rate Limit", file: "app/api/auth/:*" },
+                      { level: "medium", label: "Medium", color: "bg-sky-500", issue: "Missing RLS", file: "public.profiles" },
+                    ].map((item, i) => (
+                      <motion.div
+                        key={item.issue}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: i * 0.1, duration: 0.4 }}
+                        className="rounded-lg bg-white border border-gray-200 p-3 shadow-sm"
+                      >
+                        <div className="flex items-center gap-2 mb-1.5">
+                          <div className={`w-1.5 h-1.5 rounded-full ${item.color}`} />
+                          <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wide">{item.label}</span>
+                        </div>
+                        <p className="text-sm font-medium text-gray-900">{item.issue}</p>
+                        <p className="text-[11px] text-gray-400 mt-0.5 font-mono">{item.file}</p>
+                      </motion.div>
+                    ))}
                   </div>
-                  <div className="mt-4 pt-4 border-t border-gray-200">
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.5 }}
+                    className="mt-4 pt-4 border-t border-gray-200"
+                  >
                     <p className="text-xs font-semibold text-gray-900 mb-3 uppercase tracking-wide">Remediation</p>
                     <div className="space-y-2">
-                      <div className="flex items-center gap-2 text-sm text-gray-600">
-                        <CheckCircle className="w-4 h-4 text-emerald-500" />
-                        <span>Move secrets to env variables</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-sm text-gray-600">
-                        <CheckCircle className="w-4 h-4 text-emerald-500" />
-                        <span>Add middleware auth check</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-sm text-gray-600">
-                        <CheckCircle className="w-4 h-4 text-emerald-500" />
-                        <span>Enable Supabase RLS policies</span>
-                      </div>
+                      {[
+                        "Move secrets to env variables",
+                        "Add middleware auth check",
+                        "Enable Supabase RLS policies"
+                      ].map((step, i) => (
+                        <motion.div
+                          key={step}
+                          initial={{ opacity: 0, x: -10 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: 0.6 + i * 0.1 }}
+                          className="flex items-center gap-2 text-sm text-gray-600"
+                        >
+                          <CheckCircle className="w-4 h-4 text-emerald-500" />
+                          <span>{step}</span>
+                        </motion.div>
+                      ))}
                     </div>
-                  </div>
+                  </motion.div>
                 </div>
               </div>
             </div>
