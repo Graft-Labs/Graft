@@ -65,15 +65,19 @@ function getCancellationScheduled(
 
 export async function GET() {
   try {
+    console.log("Subscription status API called");
     const supabase = await createServerClient();
+    console.log("Supabase client created");
     const {
       data: { user },
     } = await supabase.auth.getUser();
+    console.log("User auth check:", user ? "authenticated" : "not authenticated");
 
     if (!user) {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }
 
+    console.log("Querying users table for:", user.id);
     const { data: userData, error: userError } = await supabase
       .from("users")
       .select(
@@ -83,11 +87,14 @@ export async function GET() {
       .single();
 
     if (userError || !userData) {
+      console.error("Users table query error:", userError, userData);
       return NextResponse.json(
         { message: "Could not load subscription status." },
         { status: 500 },
       );
     }
+
+    console.log("User data loaded:", JSON.stringify(userData));
 
     // Polar not configured — return whatever is in DB
     if (
@@ -277,10 +284,12 @@ export async function GET() {
           ? subscription.current_period_end
           : null,
     });
-  } catch (error) {
-    console.error("Subscription status API error", error);
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? error.stack : undefined;
+    console.error("Subscription status API error:", errorMessage, errorStack);
     return NextResponse.json(
-      { message: "Internal server error" },
+      { message: "Internal server error", error: errorMessage, stack: errorStack },
       { status: 500 },
     );
   }
