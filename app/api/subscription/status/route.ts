@@ -1,6 +1,13 @@
 import { NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase-server";
 import { createClient } from "@supabase/supabase-js";
+import {
+  PLAN_SCANS_LIMITS,
+  getPlanFromSubscription as _getPlanFromSubscription,
+  getCancellationScheduled,
+  getSubscriptionsFromStatePayload,
+  pickBestSubscription,
+} from "@/lib/subscription-utils";
 
 const POLAR_ACCESS_TOKEN = process.env.POLAR_ACCESS_TOKEN;
 const POLAR_IS_SANDBOX = process.env.POLAR_IS_SANDBOX === "true";
@@ -13,11 +20,6 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_SERVICE_KEY =
   process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-const PLAN_SCANS_LIMITS: Record<string, number> = {
-  pro: 50,
-  unlimited: 999999,
-};
-
 const PLAN_PRODUCT_MAP: Record<string, string> = {};
 const proProductId = process.env.POLAR_PRO_PRODUCT_ID;
 const unlimitedProductId = process.env.POLAR_UNLIMITED_PRODUCT_ID;
@@ -27,60 +29,7 @@ if (unlimitedProductId) PLAN_PRODUCT_MAP[unlimitedProductId] = "unlimited";
 function getPlanFromSubscription(
   subscription: Record<string, unknown>,
 ): string | null {
-  // 1) Check metadata first (most reliable)
-  const metadata = subscription.metadata as Record<string, unknown> | undefined;
-  if (metadata?.plan && typeof metadata.plan === "string") {
-    const metaPlan = metadata.plan.toLowerCase();
-    if (metaPlan === "pro" || metaPlan === "unlimited") return metaPlan;
-  }
-
-  // 2) Check product_id against known product IDs
-  const productId =
-    (subscription.product_id as string | undefined) ||
-    ((subscription.product as Record<string, unknown> | undefined)?.id as
-      | string
-      | undefined);
-
-  if (productId && PLAN_PRODUCT_MAP[productId]) {
-    return PLAN_PRODUCT_MAP[productId];
-  }
-
-  // 3) Check items for product_id
-  const items = subscription.items as
-    | Array<Record<string, unknown>>
-    | undefined;
-  if (Array.isArray(items)) {
-    for (const item of items) {
-      // Check item metadata
-      const itemMeta = item.metadata as Record<string, unknown> | undefined;
-      if (itemMeta?.plan && typeof itemMeta.plan === "string") {
-        const metaPlan = itemMeta.plan.toLowerCase();
-        if (metaPlan === "pro" || metaPlan === "unlimited") return metaPlan;
-      }
-      const id =
-        (item.product_id as string | undefined) ||
-        ((item.product as Record<string, unknown> | undefined)?.id as
-          | string
-          | undefined);
-      if (id && PLAN_PRODUCT_MAP[id]) return PLAN_PRODUCT_MAP[id];
-    }
-  }
-
-  return null;
-}
-
-function getCancellationScheduled(
-  subscription: Record<string, unknown>,
-): boolean {
-  if (subscription.cancel_at_period_end === true) return true;
-  if (subscription.cancelAtPeriodEnd === true) return true;
-
-  const status =
-    typeof subscription.status === "string"
-      ? subscription.status.toLowerCase()
-      : "";
-
-  return status === "cancelled" || status === "canceled";
+  return _getPlanFromSubscription(subscription, PLAN_PRODUCT_MAP);
 }
 
 async function fetchSubscriptionFromPolar(
@@ -127,33 +76,9 @@ async function fetchSubscriptionFromPolar(
       );
       if (resp.ok) {
         const payload = (await resp.json()) as Record<string, unknown>;
-        const subs =
-          (payload.active_subscriptions as
-            | Array<Record<string, unknown>>
-            | undefined) ||
-          (payload.subscriptions as
-            | Array<Record<string, unknown>>
-            | undefined) ||
-          ((
-            payload.customer_state as Record<string, unknown> | undefined
-          )?.subscriptions as
-            | Array<Record<string, unknown>>
-            | undefined) ||
-          [];
-        if (subs.length) {
-          return (
-            subs.find((s) => {
-              const st =
-                typeof s.status === "string" ? s.status.toLowerCase() : "";
-              return (
-                st === "active" ||
-                st === "trialing" ||
-                st === "cancelled" ||
-                st === "canceled"
-              );
-            }) || subs[0]
-          );
-        }
+        const subs = getSubscriptionsFromStatePayload(payload);
+        const picked = pickBestSubscription(subs);
+        if (picked) return picked;
       }
     } catch {}
   }
@@ -171,33 +96,9 @@ async function fetchSubscriptionFromPolar(
     );
     if (resp.ok) {
       const payload = (await resp.json()) as Record<string, unknown>;
-      const subs =
-        (payload.active_subscriptions as
-          | Array<Record<string, unknown>>
-          | undefined) ||
-        (payload.subscriptions as
-          | Array<Record<string, unknown>>
-          | undefined) ||
-        ((
-          payload.customer_state as Record<string, unknown> | undefined
-        )?.subscriptions as
-          | Array<Record<string, unknown>>
-          | undefined) ||
-        [];
-      if (subs.length) {
-        return (
-          subs.find((s) => {
-            const st =
-              typeof s.status === "string" ? s.status.toLowerCase() : "";
-            return (
-              st === "active" ||
-              st === "trialing" ||
-              st === "cancelled" ||
-              st === "canceled"
-            );
-          }) || subs[0]
-        );
-      }
+      const subs = getSubscriptionsFromStatePayload(payload);
+      const picked = pickBestSubscription(subs);
+      if (picked) return picked;
     }
   } catch {}
 
