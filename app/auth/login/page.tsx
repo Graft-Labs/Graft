@@ -233,6 +233,9 @@ export default function LoginPage() {
                     options: {
                       redirectTo: getAuthRedirectUrl(),
                       scopes: "repo read:org user:email",
+                      queryParams: {
+                        prompt: "select_account",
+                      },
                     },
                   });
                 if (oauthError) {

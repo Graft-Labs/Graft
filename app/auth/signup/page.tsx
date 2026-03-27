@@ -316,6 +316,9 @@ export default function SignupPage() {
                     options: {
                       redirectTo: getAuthRedirectUrl(),
                       scopes: "repo read:org user:email",
+                      queryParams: {
+                        prompt: "select_account",
+                      },
                     },
                   });
                 if (oauthError) {
