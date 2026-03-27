@@ -28,8 +28,6 @@ function getPlanFromSubscription(
       | string
       | undefined);
 
-  console.log("getPlanFromSubscription - productId:", productId, "map:", JSON.stringify(PLAN_PRODUCT_MAP));
-
   if (productId && PLAN_PRODUCT_MAP[productId]) {
     return PLAN_PRODUCT_MAP[productId];
   }
@@ -44,7 +42,6 @@ function getPlanFromSubscription(
         ((item.product as Record<string, unknown> | undefined)?.id as
           | string
           | undefined);
-      console.log("getPlanFromSubscription - checking item product_id:", id);
       if (id && PLAN_PRODUCT_MAP[id]) return PLAN_PRODUCT_MAP[id];
     }
   }
@@ -181,116 +178,145 @@ async function fetchSubscriptionFromPolar(
   return null;
 }
 
+function buildResponse(
+  plan: string,
+  scansLimit: number,
+  subscriptionStatus: string | null,
+  subscriptionId: string | null,
+  customerId: string | null,
+  cancellationScheduled: boolean,
+  currentPeriodEnd: string | null,
+) {
+  return NextResponse.json({
+    success: true,
+    plan,
+    scansLimit,
+    subscriptionStatus,
+    subscriptionId,
+    customerId,
+    cancellationScheduled,
+    currentPeriodEnd,
+  });
+}
+
 export async function GET() {
   try {
     console.log("Subscription status API called");
 
-    const supabase = await createServerClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-    if (!user) {
+    // Try to get authenticated user from Supabase
+    let userId: string | null = null;
+    let supabase: Awaited<ReturnType<typeof createServerClient>> | null = null;
+    let userData: Record<string, unknown> | null = null;
+
+    if (supabaseUrl && supabaseAnonKey) {
+      try {
+        supabase = await createServerClient();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (user) {
+          userId = user.id;
+
+          // Try to load user from DB
+          const { data: dbData, error: dbError } = await supabase
+            .from("users")
+            .select(
+              "plan, scans_limit, subscription_id, subscription_status, customer_id",
+            )
+            .eq("id", user.id)
+            .single();
+
+          if (dbError) {
+            console.error("Users table query failed:", dbError.message);
+          } else if (dbData) {
+            userData = dbData as Record<string, unknown>;
+          }
+        }
+      } catch (e) {
+        console.error("Supabase auth failed:", e);
+      }
+    }
+
+    if (!userId) {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }
 
-    // Try to load user from DB, but don't fail if it errors
-    const { data: userData, error: userError } = await supabase
-      .from("users")
-      .select(
-        "plan, scans_limit, subscription_id, subscription_status, customer_id",
-      )
-      .eq("id", user.id)
-      .single();
-
-    if (userError) {
-      console.error("Users table query failed:", userError.message);
-    }
-
-    const dbPlan = userData?.plan || null;
-    const dbScansLimit = userData?.scans_limit ?? 3;
-    const dbSubscriptionId = userData?.subscription_id || null;
-    const dbCustomerId = userData?.customer_id || null;
-    const dbSubscriptionStatus = userData?.subscription_status || null;
+    const dbPlan = (userData?.plan as string) || null;
+    const dbScansLimit = (userData?.scans_limit as number) ?? 3;
+    const dbSubscriptionId = (userData?.subscription_id as string) || null;
+    const dbCustomerId = (userData?.customer_id as string) || null;
+    const dbSubscriptionStatus =
+      (userData?.subscription_status as string) || null;
 
     // Polar not configured — return whatever is in DB
     if (
       !POLAR_ACCESS_TOKEN ||
       POLAR_ACCESS_TOKEN === "your_polar_access_token_here"
     ) {
-      return NextResponse.json({
-        success: true,
-        plan: dbPlan || "free",
-        scansLimit: dbScansLimit,
-        subscriptionStatus: dbSubscriptionStatus,
-        subscriptionId: dbSubscriptionId,
-        customerId: dbCustomerId,
-        cancellationScheduled:
-          dbSubscriptionStatus === "cancelled" ||
+      return buildResponse(
+        dbPlan || "free",
+        dbScansLimit,
+        dbSubscriptionStatus,
+        dbSubscriptionId,
+        dbCustomerId,
+        dbSubscriptionStatus === "cancelled" ||
           dbSubscriptionStatus === "canceled",
-        currentPeriodEnd: null,
-      });
+        null,
+      );
     }
 
     // Fetch subscription from Polar
     const subscription = await fetchSubscriptionFromPolar(
-      user.id,
+      userId,
       dbSubscriptionId,
       dbCustomerId,
     );
 
-    console.log("Polar subscription lookup result:", subscription ? "FOUND" : "NOT FOUND");
-    console.log("Known product IDs:", JSON.stringify(PLAN_PRODUCT_MAP));
-
     if (!subscription) {
-      console.log("No subscription found on Polar for user:", user.id);
-      return NextResponse.json({
-        success: true,
-        plan: dbPlan || "free",
-        scansLimit: dbScansLimit,
-        subscriptionStatus: dbSubscriptionStatus,
-        subscriptionId: dbSubscriptionId,
-        customerId: dbCustomerId,
-        cancellationScheduled: false,
-        currentPeriodEnd: null,
-        debug: {
-          polarFound: false,
-          externalId: user.id,
-          dbPlan,
-          dbSubscriptionId,
-          dbCustomerId,
-        },
-      });
+      console.log("No subscription found on Polar for user:", userId);
+      return buildResponse(
+        dbPlan || "free",
+        dbScansLimit,
+        dbSubscriptionStatus,
+        dbSubscriptionId,
+        dbCustomerId,
+        false,
+        null,
+      );
     }
-
-    console.log("Polar subscription details:", JSON.stringify({
-      id: subscription.id,
-      status: subscription.status,
-      product_id: subscription.product_id,
-      product: subscription.product,
-      items: subscription.items,
-      customer_id: subscription.customer_id,
-      external_id: subscription.external_id,
-    }));
 
     // Determine plan from subscription
     const detectedPlan = getPlanFromSubscription(subscription);
-    const polarProductId = subscription.product_id || (subscription.product as Record<string, unknown>)?.id || null;
-    const polarStatus = typeof subscription.status === "string" ? subscription.status : "";
-    console.log("Detected plan:", detectedPlan, "from product_id:", polarProductId);
-    const cancellationScheduled = getCancellationScheduled(subscription);
+    const polarProductId =
+      subscription.product_id ||
+      (subscription.product as Record<string, unknown>)?.id ||
+      null;
     const rawStatus =
       typeof subscription.status === "string"
         ? subscription.status.toLowerCase()
         : "";
     const isActive = rawStatus === "active" || rawStatus === "trialing";
 
+    console.log(
+      "Polar sub found - product_id:",
+      polarProductId,
+      "status:",
+      rawStatus,
+      "detected_plan:",
+      detectedPlan,
+      "known_ids:",
+      JSON.stringify(PLAN_PRODUCT_MAP),
+    );
+
     const effectivePlan = isActive
       ? detectedPlan || (dbPlan && dbPlan !== "free" ? dbPlan : "pro")
       : "free";
 
     const scansLimit = PLAN_SCANS_LIMITS[effectivePlan] ?? 3;
-
+    const cancellationScheduled = getCancellationScheduled(subscription);
     const effectiveStatus = cancellationScheduled
       ? "cancelled"
       : isActive
@@ -303,13 +329,13 @@ export async function GET() {
       (subscription.customer_id as string | undefined) || dbCustomerId;
 
     // Persist if anything changed
-    if (userData) {
+    if (supabase && userData) {
       const hasChanges =
-        effectivePlan !== userData.plan ||
-        scansLimit !== userData.scans_limit ||
-        effectiveStatus !== userData.subscription_status ||
-        resolvedSubscriptionId !== userData.subscription_id ||
-        resolvedCustomerId !== userData.customer_id;
+        effectivePlan !== dbPlan ||
+        scansLimit !== dbScansLimit ||
+        effectiveStatus !== dbSubscriptionStatus ||
+        resolvedSubscriptionId !== dbSubscriptionId ||
+        resolvedCustomerId !== dbCustomerId;
 
       if (hasChanges) {
         await supabase
@@ -322,32 +348,21 @@ export async function GET() {
             customer_id: resolvedCustomerId || null,
             updated_at: new Date().toISOString(),
           })
-          .eq("id", user.id);
+          .eq("id", userId);
       }
     }
 
-    return NextResponse.json({
-      success: true,
-      plan: effectivePlan,
+    return buildResponse(
+      effectivePlan,
       scansLimit,
-      subscriptionStatus: effectiveStatus,
-      subscriptionId: resolvedSubscriptionId,
-      customerId: resolvedCustomerId,
+      effectiveStatus,
+      resolvedSubscriptionId,
+      resolvedCustomerId,
       cancellationScheduled,
-      currentPeriodEnd:
-        typeof subscription.current_period_end === "string"
-          ? subscription.current_period_end
-          : null,
-      debug: {
-        polarProductId,
-        polarStatus,
-        detectedPlan,
-        knownProductIds: PLAN_PRODUCT_MAP,
-        isActive,
-        dbPlan,
-        externalId: user.id,
-      },
-    });
+      typeof subscription.current_period_end === "string"
+        ? subscription.current_period_end
+        : null,
+    );
   } catch (error: unknown) {
     const errorMessage =
       error instanceof Error ? error.message : String(error);
