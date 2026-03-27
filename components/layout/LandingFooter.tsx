@@ -67,9 +67,6 @@ export default function LandingFooter() {
 
         <div className="pt-8 border-t border-gray-200 flex flex-col sm:flex-row items-center justify-between gap-4">
           <p className="text-sm text-gray-500" style={{ fontFamily: "var(--font-landing-body)" }}>
-            © {new Date().getFullYear()} Graft. All rights reserved.
-          </p>
-          <p className="text-sm text-gray-500" style={{ fontFamily: "var(--font-landing-body)" }}>
             Built for indie hackers shipping with AI
           </p>
         </div>
