@@ -437,13 +437,14 @@ export default function SettingsPage() {
         typeof body.currentPeriodEnd === "string" ? body.currentPeriodEnd : null,
       );
 
-      // Step 2: re-read full user row from Supabase so UI has latest plan/scans/subscription
+      // Step 2: use the plan from the API response directly (synced from Polar)
       const supabase = createClient();
       const {
         data: { user: currentUser },
       } = await supabase.auth.getUser();
 
       if (currentUser) {
+        // Get latest user data but override with API response plan
         const { data } = await supabase
           .from("users")
           .select("*")
@@ -451,12 +452,22 @@ export default function SettingsPage() {
           .single();
 
         if (data) {
-          setUserData(data);
+          // Merge API plan into user data
+          const mergedData = {
+            ...data,
+            plan: body.plan || data.plan || "free",
+            scans_limit: body.scansLimit ?? data.scans_limit ?? 3,
+            subscription_status: body.subscriptionStatus || data.subscription_status,
+            subscription_id: body.subscriptionId || data.subscription_id,
+            customer_id: body.customerId || data.customer_id,
+          };
+          
+          setUserData(mergedData);
           setCached(
             "settings:data",
             {
               user: currentUser,
-              userData: data,
+              userData: mergedData,
               fullName: data?.name || currentUser?.user_metadata?.full_name || "",
             },
             60_000,
