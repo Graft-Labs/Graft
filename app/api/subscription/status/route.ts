@@ -28,6 +28,8 @@ function getPlanFromSubscription(
       | string
       | undefined);
 
+  console.log("getPlanFromSubscription - productId:", productId, "map:", JSON.stringify(PLAN_PRODUCT_MAP));
+
   if (productId && PLAN_PRODUCT_MAP[productId]) {
     return PLAN_PRODUCT_MAP[productId];
   }
@@ -42,6 +44,7 @@ function getPlanFromSubscription(
         ((item.product as Record<string, unknown> | undefined)?.id as
           | string
           | undefined);
+      console.log("getPlanFromSubscription - checking item product_id:", id);
       if (id && PLAN_PRODUCT_MAP[id]) return PLAN_PRODUCT_MAP[id];
     }
   }
@@ -236,7 +239,11 @@ export async function GET() {
       dbCustomerId,
     );
 
+    console.log("Polar subscription lookup result:", subscription ? "FOUND" : "NOT FOUND");
+    console.log("Known product IDs:", JSON.stringify(PLAN_PRODUCT_MAP));
+
     if (!subscription) {
+      console.log("No subscription found on Polar for user:", user.id);
       return NextResponse.json({
         success: true,
         plan: dbPlan || "free",
@@ -249,8 +256,19 @@ export async function GET() {
       });
     }
 
+    console.log("Polar subscription details:", JSON.stringify({
+      id: subscription.id,
+      status: subscription.status,
+      product_id: subscription.product_id,
+      product: subscription.product,
+      items: subscription.items,
+      customer_id: subscription.customer_id,
+      external_id: subscription.external_id,
+    }));
+
     // Determine plan from subscription
     const detectedPlan = getPlanFromSubscription(subscription);
+    console.log("Detected plan:", detectedPlan, "from product_id:", subscription.product_id || (subscription.product as Record<string, unknown>)?.id);
     const cancellationScheduled = getCancellationScheduled(subscription);
     const rawStatus =
       typeof subscription.status === "string"
