@@ -22,6 +22,14 @@ if (unlimitedProductId) PLAN_PRODUCT_MAP[unlimitedProductId] = "unlimited";
 function getPlanFromSubscription(
   subscription: Record<string, unknown>,
 ): string | null {
+  // 1) Check metadata first (most reliable)
+  const metadata = subscription.metadata as Record<string, unknown> | undefined;
+  if (metadata?.plan && typeof metadata.plan === "string") {
+    const metaPlan = metadata.plan.toLowerCase();
+    if (metaPlan === "pro" || metaPlan === "unlimited") return metaPlan;
+  }
+
+  // 2) Check product_id against known product IDs
   const productId =
     (subscription.product_id as string | undefined) ||
     ((subscription.product as Record<string, unknown> | undefined)?.id as
@@ -32,11 +40,18 @@ function getPlanFromSubscription(
     return PLAN_PRODUCT_MAP[productId];
   }
 
+  // 3) Check items for product_id
   const items = subscription.items as
     | Array<Record<string, unknown>>
     | undefined;
   if (Array.isArray(items)) {
     for (const item of items) {
+      // Check item metadata
+      const itemMeta = item.metadata as Record<string, unknown> | undefined;
+      if (itemMeta?.plan && typeof itemMeta.plan === "string") {
+        const metaPlan = itemMeta.plan.toLowerCase();
+        if (metaPlan === "pro" || metaPlan === "unlimited") return metaPlan;
+      }
       const id =
         (item.product_id as string | undefined) ||
         ((item.product as Record<string, unknown> | undefined)?.id as
@@ -108,6 +123,9 @@ async function fetchSubscriptionFromPolar(
       if (resp.ok) {
         const payload = (await resp.json()) as Record<string, unknown>;
         const subs =
+          (payload.active_subscriptions as
+            | Array<Record<string, unknown>>
+            | undefined) ||
           (payload.subscriptions as
             | Array<Record<string, unknown>>
             | undefined) ||
@@ -149,6 +167,9 @@ async function fetchSubscriptionFromPolar(
     if (resp.ok) {
       const payload = (await resp.json()) as Record<string, unknown>;
       const subs =
+        (payload.active_subscriptions as
+          | Array<Record<string, unknown>>
+          | undefined) ||
         (payload.subscriptions as
           | Array<Record<string, unknown>>
           | undefined) ||
