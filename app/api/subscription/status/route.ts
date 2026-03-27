@@ -253,6 +253,13 @@ export async function GET() {
         customerId: dbCustomerId,
         cancellationScheduled: false,
         currentPeriodEnd: null,
+        debug: {
+          polarFound: false,
+          externalId: user.id,
+          dbPlan,
+          dbSubscriptionId,
+          dbCustomerId,
+        },
       });
     }
 
@@ -268,7 +275,9 @@ export async function GET() {
 
     // Determine plan from subscription
     const detectedPlan = getPlanFromSubscription(subscription);
-    console.log("Detected plan:", detectedPlan, "from product_id:", subscription.product_id || (subscription.product as Record<string, unknown>)?.id);
+    const polarProductId = subscription.product_id || (subscription.product as Record<string, unknown>)?.id || null;
+    const polarStatus = typeof subscription.status === "string" ? subscription.status : "";
+    console.log("Detected plan:", detectedPlan, "from product_id:", polarProductId);
     const cancellationScheduled = getCancellationScheduled(subscription);
     const rawStatus =
       typeof subscription.status === "string"
@@ -329,6 +338,15 @@ export async function GET() {
         typeof subscription.current_period_end === "string"
           ? subscription.current_period_end
           : null,
+      debug: {
+        polarProductId,
+        polarStatus,
+        detectedPlan,
+        knownProductIds: PLAN_PRODUCT_MAP,
+        isActive,
+        dbPlan,
+        externalId: user.id,
+      },
     });
   } catch (error: unknown) {
     const errorMessage =
