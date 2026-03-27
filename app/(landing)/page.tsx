@@ -35,16 +35,19 @@ export default function LandingPage() {
       if (user) {
         setIsLoggedIn(true);
 
-        const { data } = await supabase
-          .from("users")
-          .select("plan")
-          .eq("id", user.id)
-          .single();
-
-        const normalizedPlan = data?.plan;
-        if (normalizedPlan === "pro" || normalizedPlan === "unlimited") {
-          setUserPlan(normalizedPlan);
-        } else {
+        try {
+          const response = await fetch("/api/subscription/status", {
+            credentials: "include",
+          });
+          const data = await response.json();
+          const normalizedPlan = data?.plan;
+          if (normalizedPlan === "pro" || normalizedPlan === "unlimited") {
+            setUserPlan(normalizedPlan);
+          } else {
+            setUserPlan("free");
+          }
+        } catch (error) {
+          console.error("Failed to fetch subscription status:", error);
           setUserPlan("free");
         }
       } else {
