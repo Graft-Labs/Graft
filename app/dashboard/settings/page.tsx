@@ -14,10 +14,6 @@ import {
   ArrowRight,
   ArrowDown,
   Sparkles,
-  Zap,
-  Shield,
-  Crown,
-  Check,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase";
 import IntegrationsTab from "@/components/settings/IntegrationsTab";
@@ -581,14 +577,6 @@ export default function SettingsPage() {
         typeof body?.subscriptionStatus === "string"
           ? body.subscriptionStatus
           : "cancelled";
-      const formattedPeriodEnd = periodEnd
-        ? new Date(periodEnd).toLocaleDateString(undefined, {
-            year: "numeric",
-            month: "long",
-            day: "numeric",
-          })
-        : null;
-
       setCancelSubscriptionSuccess(null);
       setCurrentPeriodEnd(periodEnd ?? null);
 
@@ -1017,283 +1005,56 @@ export default function SettingsPage() {
                     </div>
                   </div>
 
-                  {/* Usage Bar */}
-                  <div className="bg-gray-50 border border-gray-200 rounded-2xl p-5 mb-6">
-                    <div
-                      className="flex justify-between text-sm font-bold text-gray-900 mb-2"
-                      style={{ fontFamily: "var(--font-landing-body)" }}
-                    >
-                      <span>Scans Used</span>
-                      <span>
-                        {userData?.scans_used ?? 0} /{" "}
-                        {(userData?.scans_limit ?? 3) >= 999999
-                          ? "Unlimited"
-                          : (userData?.scans_limit ?? 3)}
-                      </span>
-                    </div>
-                    <div className="h-2 rounded-full bg-gray-200 overflow-hidden">
-                      <div
-                        className="h-full bg-[#3079FF] rounded-full transition-all duration-1000"
-                        style={{
-                          width:
-                            (userData?.scans_limit ?? 3) >= 999999
-                              ? "100%"
-                              : `${Math.min(100, ((userData?.scans_used ?? 0) / (userData?.scans_limit ?? 1)) * 100)}%`,
-                        }}
-                      />
-                    </div>
-                    {(userData?.scans_limit ?? 3) < 999999 &&
-                      (userData?.scans_used ?? 0) >=
-                        (userData?.scans_limit ?? 3) && (
-                        <p className="text-xs text-red-600 font-bold flex items-center gap-1 mt-2">
-                          <AlertTriangle size={12} />
-                          You have reached your scan limit. Upgrade to continue.
-                        </p>
-                      )}
-                  </div>
-
-                  {/* Plan Cards Grid */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                    {/* Free Plan Card */}
-                    {(() => {
-                      const isCurrent = effectivePlan === "free";
-                      return (
-                        <div
-                          className={`relative rounded-2xl border-2 p-5 transition-all duration-200 ${
-                            isCurrent
-                              ? "border-[#3079FF] bg-blue-50/40 shadow-md shadow-blue-100/50"
-                              : "border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm"
-                          }`}
+                  <div className="grid grid-cols-1 xl:grid-cols-5 gap-4 mb-6">
+                    <div className="xl:col-span-3 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+                      <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+                        <h3
+                          className="text-sm font-bold text-gray-900"
+                          style={{ fontFamily: "var(--font-landing-heading)" }}
                         >
-                          {isCurrent && (
-                            <div className="absolute -top-3 left-4">
-                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase bg-[#3079FF] text-white shadow-sm">
-                                <Check size={10} strokeWidth={3} /> Current
-                              </span>
-                            </div>
-                          )}
-                          <div className="flex items-center gap-2 mb-3 mt-1">
-                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-                              isCurrent ? "bg-[#3079FF]/10" : "bg-gray-100"
-                            }`}>
-                              <Shield size={16} className={isCurrent ? "text-[#3079FF]" : "text-gray-500"} />
-                            </div>
-                            <h3
-                              className="text-base font-bold text-gray-900"
-                              style={{ fontFamily: "var(--font-landing-heading)" }}
-                            >
-                              Free
-                            </h3>
-                          </div>
-                          <div className="flex items-baseline gap-1 mb-3">
-                            <span className="text-2xl font-bold text-gray-900 font-mono">$0</span>
-                            <span className="text-sm text-gray-500">/mo</span>
-                          </div>
-                          <ul className="space-y-2 mb-5">
-                            {["3 scans/month", "Public repos only", "Basic scans"].map((f) => (
-                              <li key={f} className="flex items-center gap-2 text-xs text-gray-600">
-                                <Check size={12} className="text-gray-400 shrink-0" />
-                                {f}
-                              </li>
-                            ))}
-                          </ul>
-                          {isCurrent ? (
-                            <div
-                              className="w-full py-2.5 rounded-xl text-center text-xs font-semibold text-[#3079FF] bg-[#3079FF]/5 border border-[#3079FF]/20"
-                              style={{ fontFamily: "var(--font-landing-body)" }}
-                            >
-                              Your current plan
-                            </div>
-                          ) : (
-                            <button
-                              onClick={() => initiatePlanChange("free")}
-                              className="w-full py-2.5 rounded-xl text-center text-xs font-semibold text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 hover:border-gray-300 transition-all"
-                              style={{ fontFamily: "var(--font-landing-body)" }}
-                            >
-                              Switch to Free
-                            </button>
-                          )}
-                        </div>
-                      );
-                    })()}
-
-                    {/* Pro Plan Card */}
-                    {(() => {
-                      const isCurrent = effectivePlan === "pro";
-                      const isUpgrade = effectivePlan === "free";
-                      return (
-                        <div
-                          className={`relative rounded-2xl border-2 p-5 transition-all duration-200 ${
-                            isCurrent
-                              ? "border-[#3079FF] bg-blue-50/40 shadow-md shadow-blue-100/50"
-                              : "border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm"
-                          }`}
-                        >
-                          {isCurrent && (
-                            <div className="absolute -top-3 left-4">
-                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase bg-[#3079FF] text-white shadow-sm">
-                                <Check size={10} strokeWidth={3} /> Current
-                              </span>
-                            </div>
-                          )}
-                          {!isCurrent && isUpgrade && (
-                            <div className="absolute -top-3 right-4">
-                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase bg-gray-900 text-white shadow-sm">
-                                Popular
-                              </span>
-                            </div>
-                          )}
-                          <div className="flex items-center gap-2 mb-3 mt-1">
-                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-                              isCurrent ? "bg-[#3079FF]/10" : "bg-gray-100"
-                            }`}>
-                              <Zap size={16} className={isCurrent ? "text-[#3079FF]" : "text-gray-500"} />
-                            </div>
-                            <h3
-                              className="text-base font-bold text-gray-900"
-                              style={{ fontFamily: "var(--font-landing-heading)" }}
-                            >
-                              Pro
-                            </h3>
-                          </div>
-                          <div className="flex items-baseline gap-1 mb-3">
-                            <span className="text-2xl font-bold text-gray-900 font-mono">$15</span>
-                            <span className="text-sm text-gray-500">/mo</span>
-                          </div>
-                          <ul className="space-y-2 mb-5">
-                            {["50 scans/month", "Private & Public repos", "Deep analysis"].map((f) => (
-                              <li key={f} className="flex items-center gap-2 text-xs text-gray-600">
-                                <Check size={12} className="text-[#3079FF] shrink-0" />
-                                {f}
-                              </li>
-                            ))}
-                          </ul>
-                          {isCurrent ? (
-                            <div
-                              className="w-full py-2.5 rounded-xl text-center text-xs font-semibold text-[#3079FF] bg-[#3079FF]/5 border border-[#3079FF]/20"
-                              style={{ fontFamily: "var(--font-landing-body)" }}
-                            >
-                              Your current plan
-                            </div>
-                          ) : (
-                            <button
-                              onClick={() => initiatePlanChange("pro")}
-                              className={`w-full py-2.5 rounded-xl text-center text-xs font-semibold transition-all flex items-center justify-center gap-1.5 ${
-                                isUpgrade
-                                  ? "text-white bg-gray-900 hover:bg-gray-800 shadow-sm"
-                                  : "text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 hover:border-gray-300"
-                              }`}
-                              style={{ fontFamily: "var(--font-landing-body)" }}
-                            >
-                              {isUpgrade ? (
-                                <><Sparkles size={12} /> Upgrade to Pro</>
-                              ) : (
-                                <>Switch to Pro</>
-                              )}
-                            </button>
-                          )}
-                        </div>
-                      );
-                    })()}
-
-                    {/* Unlimited Plan Card */}
-                    {(() => {
-                      const isCurrent = effectivePlan === "unlimited";
-                      const isUpgrade = effectivePlan === "free" || effectivePlan === "pro";
-                      return (
-                        <div
-                          className={`relative rounded-2xl border-2 p-5 transition-all duration-200 ${
-                            isCurrent
-                              ? "border-[#3079FF] bg-blue-50/40 shadow-md shadow-blue-100/50"
-                              : "border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm"
-                          }`}
-                        >
-                          {isCurrent && (
-                            <div className="absolute -top-3 left-4">
-                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase bg-[#3079FF] text-white shadow-sm">
-                                <Check size={10} strokeWidth={3} /> Current
-                              </span>
-                            </div>
-                          )}
-                          {!isCurrent && (
-                            <div className="absolute -top-3 right-4">
-                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase bg-[#3079FF] text-white shadow-sm">
-                                Best Value
-                              </span>
-                            </div>
-                          )}
-                          <div className="flex items-center gap-2 mb-3 mt-1">
-                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-                              isCurrent ? "bg-[#3079FF]/10" : "bg-gray-100"
-                            }`}>
-                              <Crown size={16} className={isCurrent ? "text-[#3079FF]" : "text-gray-500"} />
-                            </div>
-                            <h3
-                              className="text-base font-bold text-gray-900"
-                              style={{ fontFamily: "var(--font-landing-heading)" }}
-                            >
-                              Unlimited
-                            </h3>
-                          </div>
-                          <div className="flex items-baseline gap-1 mb-3">
-                            <span className="text-2xl font-bold text-gray-900 font-mono">$39</span>
-                            <span className="text-sm text-gray-500">/mo</span>
-                          </div>
-                          <ul className="space-y-2 mb-5">
-                            {["Unlimited scans", "Everything in Pro", "API access + Custom rules"].map((f) => (
-                              <li key={f} className="flex items-center gap-2 text-xs text-gray-600">
-                                <Check size={12} className="text-[#3079FF] shrink-0" />
-                                {f}
-                              </li>
-                            ))}
-                          </ul>
-                          {isCurrent ? (
-                            <div
-                              className="w-full py-2.5 rounded-xl text-center text-xs font-semibold text-[#3079FF] bg-[#3079FF]/5 border border-[#3079FF]/20"
-                              style={{ fontFamily: "var(--font-landing-body)" }}
-                            >
-                              Your current plan
-                            </div>
-                          ) : (
-                            <button
-                              onClick={() => initiatePlanChange("unlimited")}
-                              className={`w-full py-2.5 rounded-xl text-center text-xs font-semibold transition-all flex items-center justify-center gap-1.5 ${
-                                isUpgrade
-                                  ? "text-white bg-[#3079FF] hover:bg-blue-600 shadow-sm"
-                                  : "text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 hover:border-gray-300"
-                              }`}
-                              style={{ fontFamily: "var(--font-landing-body)" }}
-                            >
-                              {isUpgrade ? (
-                                <><Sparkles size={12} /> Upgrade to Unlimited</>
-                              ) : (
-                                <>Switch to Unlimited</>
-                              )}
-                            </button>
-                          )}
-                        </div>
-                      );
-                    })()}
-                  </div>
-
-                  {/* Billing Portal Link */}
-                  {(effectivePlan === "pro" || effectivePlan === "unlimited") && (
-                    <div className="flex items-center justify-between p-4 bg-gray-50 border border-gray-200 rounded-2xl">
-                      <div>
-                        <p
-                          className="text-sm font-semibold text-gray-900"
-                          style={{ fontFamily: "var(--font-landing-body)" }}
-                        >
-                          Billing & Invoices
-                        </p>
-                        <p
-                          className="text-xs text-gray-500 mt-0.5"
-                          style={{ fontFamily: "var(--font-landing-body)" }}
-                        >
-                          View invoices, update payment method, or download receipts.
-                        </p>
+                          Usage This Cycle
+                        </h3>
+                        <span className="text-xs font-semibold text-gray-600">
+                          {userData?.scans_used ?? 0} / {((userData?.scans_limit ?? 3) >= 999999) ? "Unlimited" : (userData?.scans_limit ?? 3)}
+                        </span>
                       </div>
+
+                      <div className="h-2.5 rounded-full bg-gray-100 overflow-hidden mb-3">
+                        <div
+                          className="h-full rounded-full bg-gradient-to-r from-[#3079FF] to-[#77adff] transition-all duration-700"
+                          style={{
+                            width:
+                              (userData?.scans_limit ?? 3) >= 999999
+                                ? "100%"
+                                : `${Math.min(100, ((userData?.scans_used ?? 0) / Math.max((userData?.scans_limit ?? 1), 1)) * 100)}%`,
+                          }}
+                        />
+                      </div>
+
+                      {(userData?.scans_limit ?? 3) < 999999 &&
+                        (userData?.scans_used ?? 0) >= (userData?.scans_limit ?? 3) && (
+                          <p className="text-xs text-red-600 font-semibold flex items-center gap-1 mt-1">
+                            <AlertTriangle size={12} />
+                            You have reached your scan limit. Upgrade to continue scanning.
+                          </p>
+                        )}
+                    </div>
+
+                    <div className="xl:col-span-2 rounded-2xl border border-gray-200 bg-gradient-to-b from-gray-50 to-white p-5 shadow-sm">
+                      <h3
+                        className="text-sm font-bold text-gray-900 mb-1"
+                        style={{ fontFamily: "var(--font-landing-heading)" }}
+                      >
+                        Billing Portal
+                      </h3>
+                      <p
+                        className="text-xs text-gray-500 mb-4"
+                        style={{ fontFamily: "var(--font-landing-body)" }}
+                      >
+                        Manage invoices, payment method, and subscription details in Polar.
+                      </p>
                       <button
+                        type="button"
                         onClick={async () => {
                           try {
                             await openBillingPortal();
@@ -1303,12 +1064,193 @@ export default function SettingsPage() {
                             );
                           }
                         }}
-                        className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-gray-700 bg-white border border-gray-200 rounded-full hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm"
+                        disabled={effectivePlan === "free"}
+                        className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-full border border-gray-200 bg-white text-gray-800 text-xs font-semibold hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         style={{ fontFamily: "var(--font-landing-body)" }}
                       >
-                        <ExternalLink size={12} />
                         Manage Billing
+                        <ExternalLink size={12} />
                       </button>
+                      {effectivePlan === "free" ? (
+                        <p className="text-[11px] text-gray-500 mt-2">
+                          Available after upgrading to a paid plan.
+                        </p>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 mb-6">
+                    {[
+                      {
+                        id: "free",
+                        name: "Free",
+                        price: "$0",
+                        subtitle: "Great for trial runs",
+                        features: ["3 scans/month", "Basic checks", "Community support"],
+                      },
+                      {
+                        id: "pro",
+                        name: "Pro",
+                        price: "$15",
+                        subtitle: "For growing engineering teams",
+                        features: ["50 scans/month", "Deep analysis", "Priority processing"],
+                      },
+                      {
+                        id: "unlimited",
+                        name: "Unlimited",
+                        price: "$39",
+                        subtitle: "Scale without scan limits",
+                        features: ["Unlimited scans", "Everything in Pro", "Priority support"],
+                      },
+                    ].map((plan) => {
+                      const isCurrent = effectivePlan === plan.id;
+                      const canUpgrade =
+                        (effectivePlan === "free" && (plan.id === "pro" || plan.id === "unlimited")) ||
+                        (effectivePlan === "pro" && plan.id === "unlimited");
+                      const canDowngradeToFree = effectivePlan !== "free" && plan.id === "free";
+                      const isLoading = checkoutLoading === plan.id;
+
+                      return (
+                        <div
+                          key={plan.id}
+                          className={`relative overflow-hidden rounded-2xl border p-5 transition-all duration-200 ${
+                            isCurrent
+                              ? "border-[#3079FF] bg-gradient-to-b from-[#3079FF]/10 to-white shadow-md"
+                              : "border-gray-200 bg-white shadow-sm hover:shadow-md"
+                          }`}
+                        >
+                          {plan.id === "pro" && !isCurrent ? (
+                            <span className="absolute top-3 right-3 rounded-full bg-gray-900 text-white text-[10px] px-2.5 py-1 tracking-wide uppercase font-semibold">
+                              Popular
+                            </span>
+                          ) : null}
+
+                          <div className="flex items-center justify-between gap-2 mb-2">
+                            <h3
+                              className="text-base font-bold text-gray-900"
+                              style={{ fontFamily: "var(--font-landing-heading)" }}
+                            >
+                              {plan.name}
+                            </h3>
+                            {isCurrent ? (
+                              <span className="rounded-full border border-[#3079FF]/30 bg-[#3079FF]/10 text-[#1b5fdb] text-[10px] font-bold px-2.5 py-1 uppercase tracking-wide">
+                                Current
+                              </span>
+                            ) : null}
+                          </div>
+
+                          <p className="text-2xl font-bold text-gray-900">
+                            {plan.price}
+                            <span className="text-sm font-medium text-gray-500">/mo</span>
+                          </p>
+                          <p
+                            className="text-xs text-gray-500 mt-1 mb-4"
+                            style={{ fontFamily: "var(--font-landing-body)" }}
+                          >
+                            {plan.subtitle}
+                          </p>
+
+                          <ul className="space-y-2 mb-5">
+                            {plan.features.map((feature) => (
+                              <li
+                                key={feature}
+                                className="text-xs text-gray-700 flex items-center gap-2"
+                                style={{ fontFamily: "var(--font-landing-body)" }}
+                              >
+                                <span className="h-1.5 w-1.5 rounded-full bg-[#3079FF]" />
+                                {feature}
+                              </li>
+                            ))}
+                          </ul>
+
+                          {isCurrent ? (
+                            <button
+                              type="button"
+                              disabled
+                              className="inline-flex h-9 w-full items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 text-xs font-semibold"
+                              style={{ fontFamily: "var(--font-landing-body)" }}
+                            >
+                              Current Plan
+                            </button>
+                          ) : canUpgrade ? (
+                            <button
+                              type="button"
+                              onClick={() => startCheckout(plan.id as "pro" | "unlimited")}
+                              disabled={isLoading}
+                              className="inline-flex h-9 w-full items-center justify-center rounded-full bg-gray-900 text-white text-xs font-semibold hover:bg-black transition-colors disabled:opacity-70"
+                              style={{ fontFamily: "var(--font-landing-body)" }}
+                            >
+                              {isLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                              {plan.id === "pro" ? "Upgrade to Pro" : "Upgrade to Unlimited"}
+                            </button>
+                          ) : canDowngradeToFree ? (
+                            <button
+                              type="button"
+                              onClick={() => initiatePlanChange("free")}
+                              className="inline-flex h-9 w-full items-center justify-center rounded-full border border-gray-200 bg-white text-gray-700 text-xs font-semibold hover:bg-gray-50 transition-colors"
+                              style={{ fontFamily: "var(--font-landing-body)" }}
+                            >
+                              Switch to Free
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={openBillingPortal}
+                              className="inline-flex h-9 w-full items-center justify-center rounded-full border border-gray-200 bg-white text-gray-700 text-xs font-semibold hover:bg-gray-50 transition-colors"
+                              style={{ fontFamily: "var(--font-landing-body)" }}
+                            >
+                              Manage in Billing
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {(effectivePlan === "pro" || effectivePlan === "unlimited") && (
+                    <div className="border border-gray-200 rounded-2xl p-6 bg-white shadow-sm">
+                      <h3
+                        className="text-base font-bold text-gray-900 mb-2"
+                        style={{ fontFamily: "var(--font-landing-heading)" }}
+                      >
+                        Subscription Controls
+                      </h3>
+                      <p
+                        className="text-sm text-gray-500 mb-4"
+                        style={{ fontFamily: "var(--font-landing-body)" }}
+                      >
+                        You can cancel anytime. Access stays active until the end of your current billing cycle.
+                      </p>
+
+                      {cancellationScheduled ? (
+                        <div className="flex flex-wrap items-center gap-3">
+                          <span
+                            className="inline-flex px-4 py-2 border border-amber-200 text-amber-700 bg-amber-50 rounded-full text-xs font-semibold"
+                            style={{ fontFamily: "var(--font-landing-body)" }}
+                          >
+                            Cancellation Scheduled
+                          </span>
+                          <button
+                            type="button"
+                            className="inline-flex px-4 py-2 border border-gray-200 text-gray-700 rounded-full text-xs font-semibold hover:bg-gray-50 transition-colors disabled:opacity-60"
+                            style={{ fontFamily: "var(--font-landing-body)" }}
+                            onClick={handleUncancelSubscription}
+                            disabled={uncancelingSubscription}
+                          >
+                            {uncancelingSubscription ? "Keeping Active..." : "Keep Subscription Active"}
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          className="inline-flex px-4 py-2 border border-gray-200 text-gray-700 rounded-full text-xs font-semibold hover:bg-gray-50 transition-colors disabled:opacity-60"
+                          style={{ fontFamily: "var(--font-landing-body)" }}
+                          onClick={handleCancelSubscription}
+                          disabled={cancelingSubscription || uncancelingSubscription}
+                        >
+                          {cancelingSubscription ? "Cancelling..." : "Cancel Subscription"}
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
