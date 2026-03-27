@@ -76,7 +76,7 @@ export default function DashboardSidebar() {
               "plan, scans_used, scans_limit, name, email, avatar_url, github_token",
             )
             .eq("id", user.id)
-            .single();
+            .maybeSingle();
           
           const freshPlan = statusData?.plan || data?.plan || "free";
           const freshScansLimit = statusData?.scansLimit ?? data?.scans_limit ?? 3;
@@ -101,7 +101,7 @@ export default function DashboardSidebar() {
               "plan, scans_used, scans_limit, name, email, avatar_url, github_token",
             )
             .eq("id", user.id)
-            .single();
+            .maybeSingle();
           setUserData(data);
           setCached("sidebar:user", { user, userData: data }, 60_000);
         }

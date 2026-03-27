@@ -71,7 +71,7 @@ export async function POST(req: NextRequest) {
       .from('users')
       .select('customer_id, subscription_id')
       .eq('id', user.id)
-      .single()
+      .maybeSingle()
 
     if (userError) {
       console.error('User lookup error:', userError)
@@ -168,7 +168,7 @@ export async function POST(req: NextRequest) {
         .from('users')
         .select('customer_id')
         .eq('id', user.id)
-        .single()
+        .maybeSingle()
 
       const portalBody: Record<string, unknown> = freshUserData?.customer_id
         ? { customer_id: freshUserData.customer_id, return_url: returnUrl }

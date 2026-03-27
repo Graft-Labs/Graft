@@ -108,7 +108,7 @@ export async function GET(request: Request) {
           .from('users')
           .select('id, github_user_id, name, email, avatar_url, plan, scans_used, scans_limit, github_token')
           .eq('id', userId)
-          .single()
+          .maybeSingle()
 
         if (provider === 'github' && providerToken) {
           const githubUserId = await getGithubUserId(providerToken)
@@ -120,7 +120,7 @@ export async function GET(request: Request) {
               .eq('github_user_id', githubUserId)
               .neq('id', userId)
               .limit(1)
-              .single()
+              .maybeSingle()
 
             if (conflictUser.data) {
               const redirect = NextResponse.redirect(

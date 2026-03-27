@@ -142,7 +142,7 @@ export default function Dashboard() {
           .from('users')
           .select('*')
           .eq('id', authUser.id)
-          .single();
+          .maybeSingle();
         if (userData) {
           setUser(userData);
           latestUser = userData;

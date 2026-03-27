@@ -104,6 +104,12 @@ function getNormalizedStatus(
 function getSubscriptionsFromStatePayload(
   payload: Record<string, unknown>,
 ): Array<Record<string, unknown>> {
+  // Handle active_subscriptions (Polar CustomerState top-level field)
+  const active = payload.active_subscriptions;
+  if (Array.isArray(active) && active.length) {
+    return active as Array<Record<string, unknown>>;
+  }
+
   const direct = payload.subscriptions;
   if (Array.isArray(direct)) {
     return direct as Array<Record<string, unknown>>;
@@ -161,13 +167,10 @@ export async function POST(req: NextRequest) {
         "id, email, plan, scans_limit, subscription_id, subscription_status, customer_id",
       )
       .eq("id", user.id)
-      .single<UserRow>();
+      .maybeSingle<UserRow>();
 
-    if (userError || !userData) {
-      return NextResponse.json(
-        { message: "Could not load user data." },
-        { status: 500 },
-      );
+    if (userError) {
+      console.error("sync: failed to load user row", { userId: user.id, error: userError });
     }
 
     // If Polar is not configured, return what we have
@@ -177,8 +180,8 @@ export async function POST(req: NextRequest) {
     ) {
       return NextResponse.json({
         success: true,
-        plan: userData.plan || "free",
-        subscriptionStatus: userData.subscription_status,
+        plan: userData?.plan || "free",
+        subscriptionStatus: userData?.subscription_status,
         message: "Payment provider not configured.",
       });
     }
@@ -233,17 +236,20 @@ export async function POST(req: NextRequest) {
 
         if (completedStatuses.has(checkoutStatus) && planFromCheckout) {
           const updater = adminSupabase ?? supabase;
+          const upsertPayload: Record<string, unknown> = {
+            id: user.id,
+            plan: planFromCheckout,
+            scans_limit: PLAN_SCANS_LIMITS[planFromCheckout] ?? 3,
+            subscription_status: "active",
+            customer_id: checkoutCustomerId || userData?.customer_id,
+            subscription_id: checkoutSubscriptionId || userData?.subscription_id,
+            updated_at: new Date().toISOString(),
+          };
+          if (!userData) upsertPayload.scans_used = 0;
+
           const { error: checkoutUpdateError } = await updater
             .from("users")
-            .update({
-              plan: planFromCheckout,
-              scans_limit: PLAN_SCANS_LIMITS[planFromCheckout] ?? 3,
-              subscription_status: "active",
-              customer_id: checkoutCustomerId || userData.customer_id,
-              subscription_id: checkoutSubscriptionId || userData.subscription_id,
-              updated_at: new Date().toISOString(),
-            })
-            .eq("id", user.id);
+            .upsert(upsertPayload, { onConflict: "id" });
 
           if (checkoutUpdateError) {
             console.error("Failed to update user from checkout sync", {
@@ -272,7 +278,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 1) Prefer known subscription_id
-    if (userData.subscription_id) {
+    if (userData?.subscription_id) {
       const polarResponse = await fetch(
         `${POLAR_API_URL}/subscriptions/${userData.subscription_id}`,
         {
@@ -326,7 +332,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 3) Fallback to subscriptions list by customer_id
-    if (!subscription && userData.customer_id) {
+    if (!subscription && userData?.customer_id) {
       const listResponse = await fetch(
         `${POLAR_API_URL}/subscriptions?customer_id=${encodeURIComponent(userData.customer_id)}&limit=20`,
         {
@@ -351,7 +357,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    if (!subscription && userData.customer_id) {
+    if (!subscription && userData?.customer_id) {
       const stateByCustomerResponse = await fetch(
         `${POLAR_API_URL}/customers/${encodeURIComponent(userData.customer_id)}/state`,
         {
@@ -374,8 +380,8 @@ export async function POST(req: NextRequest) {
     if (!subscription) {
       return NextResponse.json({
         success: true,
-        plan: userData.plan || "free",
-        subscriptionStatus: userData.subscription_status,
+        plan: userData?.plan || "free",
+        subscriptionStatus: userData?.subscription_status,
         message: "No subscription found on Polar. Kept current plan.",
       });
     }
@@ -385,31 +391,34 @@ export async function POST(req: NextRequest) {
 
     const detectedPlan = getPlanFromSubscription(subscription);
     const effectivePlan = isActive
-      ? detectedPlan || (userData.plan && userData.plan !== "free" ? userData.plan : "pro")
+      ? detectedPlan || (userData?.plan && userData.plan !== "free" ? userData.plan : "pro")
       : "free";
     const scansLimit = PLAN_SCANS_LIMITS[effectivePlan] ?? 3;
 
     const resolvedSubscriptionId =
-      (subscription.id as string | undefined) || userData.subscription_id;
+      (subscription.id as string | undefined) || userData?.subscription_id;
     const resolvedCustomerId =
-      (subscription.customer_id as string | undefined) || userData.customer_id;
+      (subscription.customer_id as string | undefined) || userData?.customer_id;
     const cancelAtPeriodEnd =
       subscription.cancel_at_period_end === true ||
       subscription.cancelAtPeriodEnd === true;
 
-    // Update DB
+    // Upsert DB — works even when the users row doesn't yet exist
     const updater = adminSupabase ?? supabase;
+    const finalUpsertPayload: Record<string, unknown> = {
+      id: user.id,
+      plan: effectivePlan,
+      scans_limit: scansLimit,
+      subscription_id: resolvedSubscriptionId || null,
+      subscription_status: effectiveStatus,
+      customer_id: resolvedCustomerId || null,
+      updated_at: new Date().toISOString(),
+    };
+    if (!userData) finalUpsertPayload.scans_used = 0;
+
     const { error: finalUpdateError } = await updater
       .from("users")
-      .update({
-        plan: effectivePlan,
-        scans_limit: scansLimit,
-        subscription_id: resolvedSubscriptionId || null,
-        subscription_status: effectiveStatus,
-        customer_id: resolvedCustomerId || null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", user.id);
+      .upsert(finalUpsertPayload, { onConflict: "id" });
 
     if (finalUpdateError) {
       console.error("Failed to persist subscription sync", {
