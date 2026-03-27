@@ -267,7 +267,7 @@ export default function LandingPage() {
 
         {/* ─── STORY SECTION: PRODUCT SHOWCASE ─────────────────────────────────────────────── */}
         <section className="py-16 px-6 relative bg-white">
-          <div className="max-w-6xl mx-auto space-y-10">
+          <div className="max-w-6xl mx-auto space-y-0">
             {/* ── OPTION A: Animated Vulnerability Detection ──────────────────────── */}
             <BlurFade delay={0.1} direction="up">
             <div className="flex flex-col md:flex-row items-center gap-8">
