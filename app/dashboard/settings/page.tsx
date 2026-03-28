@@ -1095,6 +1095,33 @@ export default function SettingsPage() {
                     </div>
                   </div>
 
+                  {effectivePlan === "free" && (
+                    <div className="mb-4 p-4 rounded-xl border border-amber-200 bg-amber-50">
+                      <p className="text-sm font-semibold text-amber-800 mb-1">Plan not showing correctly?</p>
+                      <p className="text-xs text-amber-700 mb-3">If you have paid but your plan still shows Free, click below to sync from Polar.</p>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            const res = await fetch("/api/subscription/repair", { method: "POST" });
+                            const data = await res.json();
+                            if (data.success) {
+                              alert(`Fixed! Your plan is now: ${data.plan}. Refreshing...`);
+                              window.location.reload();
+                            } else {
+                              alert(data.message || data.error || "Could not find a subscription on Polar for your account.");
+                            }
+                          } catch {
+                            alert("Repair failed. Please contact support.");
+                          }
+                        }}
+                        className="text-xs font-semibold px-4 py-2 rounded-full bg-amber-100 hover:bg-amber-200 text-amber-800 transition-colors border border-amber-300"
+                      >
+                        Sync subscription from Polar
+                      </button>
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 mb-6">
                     {[
                       {

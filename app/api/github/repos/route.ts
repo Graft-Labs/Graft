@@ -84,14 +84,17 @@ export async function GET(_req: NextRequest) {
       if (!token && userRow?.github_user_id) {
         return NextResponse.json({
           error: 'github_not_connected',
-          message: 'Your GitHub session expired. Go to Settings → Integrations, disconnect GitHub, then reconnect it to refresh your token.',
+          message: 'Your GitHub session token has expired. Please go to Settings → Integrations, disconnect GitHub, then reconnect it.',
           needs_reauth: true,
         }, { status: 400 })
       }
     }
 
     if (!token) {
-      return NextResponse.json({ error: 'github_not_connected', message: 'GitHub is not connected yet. Go to Settings → Integrations and connect GitHub.' }, { status: 400 })
+      return NextResponse.json({
+        error: 'github_not_connected',
+        message: 'GitHub is not connected yet. Go to Settings → Integrations and connect GitHub.',
+      }, { status: 400 })
     }
 
     // Fetch user profile + personal repos in parallel; orgs may 403 if read:org scope is missing

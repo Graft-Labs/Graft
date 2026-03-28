@@ -115,52 +115,53 @@ export async function GET(request: Request) {
         let resolvedGithubToken: string | null = existingUser?.github_token ?? null
         let resolvedGithubUserId: string | null = existingUser?.github_user_id ?? null
 
-        if (provider === 'github' && providerToken) {
-          const githubUserId = await getGithubUserId(providerToken)
+        if (provider === 'github') {
+          const tokenToUse = providerToken ?? resolvedGithubToken
+          if (tokenToUse) {
+            const githubUserId = await getGithubUserId(tokenToUse)
 
-          if (githubUserId) {
-            const conflictUser = await supabase
-              .from('users')
-              .select('id')
-              .eq('github_user_id', githubUserId)
-              .neq('id', userId)
-              .limit(1)
-              .maybeSingle()
+            if (githubUserId) {
+              const conflictUser = await supabase
+                .from('users')
+                .select('id')
+                .eq('github_user_id', githubUserId)
+                .neq('id', userId)
+                .limit(1)
+                .maybeSingle()
 
-            if (conflictUser.data) {
-              const redirect = NextResponse.redirect(
-                new URL('/dashboard/settings?tab=integrations&integration_error=github_already_linked', requestUrl.origin)
-              )
-              return withClearedConnectCookies(redirect)
-            }
+              if (conflictUser.data) {
+                const redirect = NextResponse.redirect(
+                  new URL('/dashboard/settings?tab=integrations&integration_error=github_already_linked', requestUrl.origin)
+                )
+                return withClearedConnectCookies(redirect)
+              }
 
-            if (isConnectingProvider && connectingProvider === 'github') {
+              if (isConnectingProvider && connectingProvider === 'github') {
+                await supabase
+                  .from('users')
+                  .update({
+                    github_token: tokenToUse,
+                    github_user_id: githubUserId,
+                    updated_at: new Date().toISOString(),
+                  })
+                  .eq('id', userId)
+
+                const redirect = NextResponse.redirect(new URL(next, requestUrl.origin))
+                return withClearedConnectCookies(redirect)
+              }
+
+              resolvedGithubToken = tokenToUse
+              resolvedGithubUserId = githubUserId
+
               await supabase
                 .from('users')
                 .update({
-                  github_token: providerToken,
+                  github_token: tokenToUse,
                   github_user_id: githubUserId,
                   updated_at: new Date().toISOString(),
                 })
                 .eq('id', userId)
-
-              const redirect = NextResponse.redirect(new URL(next, requestUrl.origin))
-              return withClearedConnectCookies(redirect)
             }
-
-            // Save the fresh credentials so the upsert below persists them
-            // (the UPDATE only works for existing rows; the upsert handles new users)
-            resolvedGithubToken = providerToken
-            resolvedGithubUserId = githubUserId
-
-            await supabase
-              .from('users')
-              .update({
-                github_token: providerToken,
-                github_user_id: githubUserId,
-                updated_at: new Date().toISOString(),
-              })
-              .eq('id', userId)
           }
         }
 

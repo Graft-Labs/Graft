@@ -175,35 +175,25 @@ export async function GET() {
     const dbScansLimit = (userData?.scans_limit as number) ?? 3;
     const dbSubscriptionId = (userData?.subscription_id as string) || null;
     const dbCustomerId = (userData?.customer_id as string) || null;
-    const dbSubscriptionStatus =
-      (userData?.subscription_status as string) || null;
+    const dbSubscriptionStatus = (userData?.subscription_status as string) || null;
 
-    // Polar not configured — return whatever is in DB
-    if (
-      !POLAR_ACCESS_TOKEN ||
-      POLAR_ACCESS_TOKEN === "your_polar_access_token_here"
-    ) {
+    // TRUST THE DB FIRST — the webhook writes the ground truth.
+    // If DB already has a paid plan, return it immediately without calling Polar.
+    // This prevents env var misconfiguration from overriding a correctly webhook-set plan.
+    if (dbPlan && dbPlan !== "free") {
       return buildResponse(
-        dbPlan || "free",
+        dbPlan,
         dbScansLimit,
         dbSubscriptionStatus,
         dbSubscriptionId,
         dbCustomerId,
-        dbSubscriptionStatus === "cancelled" ||
-          dbSubscriptionStatus === "canceled",
+        dbSubscriptionStatus === "cancelled" || dbSubscriptionStatus === "canceled",
         null,
       );
     }
 
-    // Fetch subscription from Polar
-    const subscription = await fetchSubscriptionFromPolar(
-      userId,
-      dbSubscriptionId,
-      dbCustomerId,
-    );
-
-    if (!subscription) {
-      console.log("No subscription found on Polar for user:", userId);
+    // DB says free. Only call Polar if we have a token configured.
+    if (!POLAR_ACCESS_TOKEN || POLAR_ACCESS_TOKEN === "your_polar_access_token_here") {
       return buildResponse(
         dbPlan || "free",
         dbScansLimit,
@@ -215,81 +205,63 @@ export async function GET() {
       );
     }
 
-    // Determine plan from subscription
-    const detectedPlan = getPlanFromSubscription(subscription);
-    const polarProductId =
-      subscription.product_id ||
-      (subscription.product as Record<string, unknown>)?.id ||
-      null;
-    const rawStatus =
-      typeof subscription.status === "string"
-        ? subscription.status.toLowerCase()
-        : "";
-    const isActive = rawStatus === "active" || rawStatus === "trialing";
-
-    console.log(
-      "Polar sub found - product_id:",
-      polarProductId,
-      "status:",
-      rawStatus,
-      "detected_plan:",
-      detectedPlan,
-      "known_ids:",
-      JSON.stringify(PLAN_PRODUCT_MAP),
+    // DB says free but Polar might know better (webhook may have failed).
+    // Try to find subscription on Polar using external customer ID (user.id).
+    const subscription = await fetchSubscriptionFromPolar(
+      userId,
+      dbSubscriptionId,
+      dbCustomerId,
     );
 
+    if (!subscription) {
+      return buildResponse(
+        dbPlan || "free",
+        dbScansLimit,
+        dbSubscriptionStatus,
+        dbSubscriptionId,
+        dbCustomerId,
+        false,
+        null,
+      );
+    }
+
+    const detectedPlan = getPlanFromSubscription(subscription);
+    const rawStatus = typeof subscription.status === "string"
+      ? subscription.status.toLowerCase()
+      : "";
+    const isActive = rawStatus === "active" || rawStatus === "trialing";
+
+    // If Polar found an active subscription but plan detection failed,
+    // it means POLAR_PRO_PRODUCT_ID / POLAR_UNLIMITED_PRODUCT_ID env vars
+    // are not set. Fall back to whatever DB says rather than incorrectly downgrading.
     const effectivePlan = isActive
       ? detectedPlan || (dbPlan && dbPlan !== "free" ? dbPlan : "pro")
       : "free";
 
     const scansLimit = PLAN_SCANS_LIMITS[effectivePlan] ?? 3;
     const cancellationScheduled = getCancellationScheduled(subscription);
-    const effectiveStatus = cancellationScheduled
-      ? "cancelled"
-      : isActive
-        ? "active"
-        : rawStatus;
+    const effectiveStatus = cancellationScheduled ? "cancelled" : isActive ? "active" : rawStatus;
+    const resolvedSubscriptionId = (subscription.id as string | undefined) || dbSubscriptionId;
+    const resolvedCustomerId = (subscription.customer_id as string | undefined) || dbCustomerId;
 
-    const resolvedSubscriptionId =
-      (subscription.id as string | undefined) || dbSubscriptionId;
-    const resolvedCustomerId =
-      (subscription.customer_id as string | undefined) || dbCustomerId;
+    // Polar found a paid plan the webhook missed — write it to DB now.
+    if (effectivePlan !== "free" && supabase && userId) {
+      const adminSupabase = SUPABASE_URL && SUPABASE_SERVICE_KEY
+        ? createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+        : supabase;
 
-    // Persist if anything changed — use admin client to ensure the write goes
-    // through even when the user's row doesn't exist yet (upsert creates it).
-    if (supabase && userId) {
-      const hasChanges =
-        !userData ||
-        effectivePlan !== dbPlan ||
-        scansLimit !== dbScansLimit ||
-        effectiveStatus !== dbSubscriptionStatus ||
-        resolvedSubscriptionId !== dbSubscriptionId ||
-        resolvedCustomerId !== dbCustomerId;
+      const persistPayload: Record<string, unknown> = {
+        id: userId,
+        plan: effectivePlan,
+        scans_limit: scansLimit,
+        subscription_status: effectiveStatus,
+        subscription_id: resolvedSubscriptionId || null,
+        customer_id: resolvedCustomerId || null,
+        updated_at: new Date().toISOString(),
+      };
+      if (!userData) persistPayload.scans_used = 0;
 
-      if (hasChanges) {
-        const adminSupabase =
-          SUPABASE_URL && SUPABASE_SERVICE_KEY
-            ? createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
-            : supabase;
-
-        const persistPayload: Record<string, unknown> = {
-          id: userId,
-          plan: effectivePlan,
-          scans_limit: scansLimit,
-          subscription_status: effectiveStatus,
-          subscription_id: resolvedSubscriptionId || null,
-          customer_id: resolvedCustomerId || null,
-          updated_at: new Date().toISOString(),
-        };
-        // Supply defaults only when inserting a brand-new row
-        if (!userData) {
-          persistPayload.scans_used = 0;
-        }
-
-        await adminSupabase
-          .from("users")
-          .upsert(persistPayload, { onConflict: "id" });
-      }
+      await adminSupabase.from("users").upsert(persistPayload, { onConflict: "id" });
     }
 
     return buildResponse(

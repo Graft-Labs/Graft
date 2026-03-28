@@ -245,15 +245,25 @@ export default function IntegrationsTab({ hasGithubConnected: _hasGithubConnecte
               </div>
 
               {githubConnected ? (
-                <button
-                  onClick={() => disconnectProvider("github")}
-                  disabled={busy}
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-gray-200 bg-white text-gray-700 text-sm font-semibold hover:bg-gray-50 transition-colors disabled:opacity-50"
-                  style={{ fontFamily: "var(--font-landing-body)" }}
-                >
-                  <Unlink size={16} />
-                  Disconnect
-                </button>
+                <div className="flex flex-col items-end gap-2">
+                  <button
+                    onClick={() => disconnectProvider("github")}
+                    disabled={busy}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-gray-200 bg-white text-gray-700 text-sm font-semibold hover:bg-gray-50 transition-colors disabled:opacity-50"
+                    style={{ fontFamily: "var(--font-landing-body)" }}
+                  >
+                    <Unlink size={16} />
+                    Disconnect
+                  </button>
+                  <button
+                    onClick={() => connectProvider("github")}
+                    disabled={busy}
+                    className="text-xs text-gray-500 hover:text-gray-700 underline"
+                    style={{ fontFamily: "var(--font-landing-body)" }}
+                  >
+                    Reconnect to refresh token
+                  </button>
+                </div>
               ) : (
                 <button
                   onClick={() => connectProvider("github")}
