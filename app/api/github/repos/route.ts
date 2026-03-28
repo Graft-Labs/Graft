@@ -76,10 +76,18 @@ export async function GET(_req: NextRequest) {
     } else {
       const { data: userRow } = await supabase
         .from('users')
-        .select('github_token')
+        .select('github_token, github_user_id')
         .eq('id', user.id)
         .maybeSingle()
       token = userRow?.github_token ?? null
+
+      if (!token && userRow?.github_user_id) {
+        return NextResponse.json({
+          error: 'github_not_connected',
+          message: 'Your GitHub session expired. Go to Settings → Integrations, disconnect GitHub, then reconnect it to refresh your token.',
+          needs_reauth: true,
+        }, { status: 400 })
+      }
     }
 
     if (!token) {

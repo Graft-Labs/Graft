@@ -61,50 +61,16 @@ export default function DashboardSidebar() {
       setUser(user);
 
       if (user) {
-        try {
-          const response = await fetch("/api/subscription/status", {
-            credentials: "include",
-          });
-          const statusData = await response.json();
-          if (!response.ok) {
-            console.error("Subscription status API error:", response.status, JSON.stringify(statusData));
-          }
-          
-          const { data } = await supabase
-            .from("users")
-            .select(
-              "plan, scans_used, scans_limit, name, email, avatar_url, github_token",
-            )
-            .eq("id", user.id)
-            .maybeSingle();
-          
-          const freshPlan = statusData?.plan || data?.plan || "free";
-          const freshScansLimit = statusData?.scansLimit ?? data?.scans_limit ?? 3;
-          
-          const mergedData = {
-            plan: freshPlan,
-            scans_used: data?.scans_used ?? 0,
-            scans_limit: freshScansLimit,
-            name: data?.name ?? null,
-            email: data?.email ?? null,
-            avatar_url: data?.avatar_url ?? null,
-            github_token: data?.github_token ?? null,
-          };
-          
-          setUserData(mergedData);
-          setCached("sidebar:user", { user, userData: mergedData }, 60_000);
-        } catch (error) {
-          console.error("Failed to fetch subscription status:", error);
-          const { data } = await supabase
-            .from("users")
-            .select(
-              "plan, scans_used, scans_limit, name, email, avatar_url, github_token",
-            )
-            .eq("id", user.id)
-            .maybeSingle();
-          setUserData(data);
-          setCached("sidebar:user", { user, userData: data }, 60_000);
-        }
+        const { data } = await supabase
+          .from("users")
+          .select(
+            "plan, scans_used, scans_limit, name, email, avatar_url, github_token",
+          )
+          .eq("id", user.id)
+          .maybeSingle();
+
+        setUserData(data);
+        setCached("sidebar:user", { user, userData: data }, 60_000);
       }
 
       setLoadingUser(false);

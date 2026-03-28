@@ -86,12 +86,16 @@ export default function NewScanPage() {
 
         if (data.needs_reauth) {
           setError(
-            "GitHub is not connected yet. Go to Settings → Integrations and connect GitHub.",
+            "Your GitHub session expired. Go to Settings → Integrations, disconnect GitHub, then reconnect it to refresh your token.",
           );
         }
       } catch (err: any) {
         console.error("Error fetching repos:", err);
-        setError(err.message || "Failed to load repositories");
+        if (err?.needs_reauth) {
+          setError("Your GitHub session expired. Go to Settings → Integrations, disconnect GitHub, then reconnect it to refresh your token.");
+        } else {
+          setError(err.message || "Failed to load repositories");
+        }
       } finally {
         setLoading(false);
       }
