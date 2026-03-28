@@ -270,7 +270,7 @@ export async function POST(req: NextRequest) {
     // Basic idempotency guard: if event already applied, skip duplicate side effects.
     const { data: existingUser } = await supabase
       .from('users')
-      .select('plan, subscription_id, subscription_status, customer_id')
+      .select('plan, subscription_id, subscription_status, customer_id, email')
       .eq('id', userId)
       .maybeSingle()
 
@@ -332,6 +332,7 @@ export async function POST(req: NextRequest) {
         // set on INSERT (new rows) to avoid resetting usage for existing users.
         const upsertPayload: Record<string, unknown> = {
           id: userId,
+          email: resolvedCustomerEmail || existingUser?.email || null,
           plan: resolvedPlan,
           scans_limit: scansLimit,
           subscription_id: subscriptionId || existingUser?.subscription_id,
@@ -340,8 +341,6 @@ export async function POST(req: NextRequest) {
           updated_at: new Date().toISOString(),
         }
         if (!existingUser) {
-          // New row — supply defaults for required columns
-          upsertPayload.email = resolvedCustomerEmail ?? null
           upsertPayload.scans_used = 0
         }
 
@@ -511,6 +510,7 @@ export async function POST(req: NextRequest) {
 
           const genericUpsertPayload: Record<string, unknown> = {
             id: userId,
+            email: resolvedCustomerEmail || existingUser?.email || null,
             plan: resolvedPlan,
             scans_limit: scansLimit,
             subscription_id: subscriptionId || existingUser?.subscription_id,
@@ -519,7 +519,6 @@ export async function POST(req: NextRequest) {
             updated_at: new Date().toISOString(),
           }
           if (!existingUser) {
-            genericUpsertPayload.email = resolvedCustomerEmail ?? null
             genericUpsertPayload.scans_used = 0
           }
 
