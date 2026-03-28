@@ -1,33 +1,71 @@
-import { NextResponse } from 'next/server'
-import { createServerClient } from '@/lib/supabase-server'
-import { cookies } from 'next/headers'
+import { NextResponse } from "next/server";
+import { createServerClient } from "@/lib/supabase-server";
+import { createClient } from "@supabase/supabase-js";
+import { cookies } from "next/headers";
+
+// Service-role client bypasses RLS — used for user upsert so it always succeeds
+// regardless of whether the users row already exists or not.
+const adminSupabase =
+  process.env.NEXT_PUBLIC_SUPABASE_URL &&
+  (process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY)
+    ? createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL,
+        (process.env.SUPABASE_SECRET_KEY ||
+          process.env.SUPABASE_SERVICE_ROLE_KEY)!,
+      )
+    : null;
 
 function withClearedConnectCookies(response: NextResponse) {
-  response.cookies.set('graft_next', '', { path: '/', maxAge: 0 })
-  response.cookies.set('graft_connecting_provider', '', { path: '/', maxAge: 0 })
-  response.cookies.set('graft_connecting_user_id', '', { path: '/', maxAge: 0 })
-  response.cookies.set('graft_connecting_github', '', { path: '/', maxAge: 0 })
-  response.cookies.set('shipguard_next', '', { path: '/', maxAge: 0 })
-  response.cookies.set('shipguard_connecting_provider', '', { path: '/', maxAge: 0 })
-  response.cookies.set('shipguard_connecting_user_id', '', { path: '/', maxAge: 0 })
-  response.cookies.set('shipguard_connecting_github', '', { path: '/', maxAge: 0 })
-  return response
+  response.cookies.set("graft_next", "", { path: "/", maxAge: 0 });
+  response.cookies.set("graft_connecting_provider", "", {
+    path: "/",
+    maxAge: 0,
+  });
+  response.cookies.set("graft_connecting_user_id", "", {
+    path: "/",
+    maxAge: 0,
+  });
+  response.cookies.set("graft_connecting_github", "", { path: "/", maxAge: 0 });
+  response.cookies.set("shipguard_next", "", { path: "/", maxAge: 0 });
+  response.cookies.set("shipguard_connecting_provider", "", {
+    path: "/",
+    maxAge: 0,
+  });
+  response.cookies.set("shipguard_connecting_user_id", "", {
+    path: "/",
+    maxAge: 0,
+  });
+  response.cookies.set("shipguard_connecting_github", "", {
+    path: "/",
+    maxAge: 0,
+  });
+  return response;
 }
 
-function resolveConnectingProvider(cookieStore: Awaited<ReturnType<typeof cookies>>): 'github' | 'google' | null {
-  const provider = cookieStore.get('graft_connecting_provider')?.value ?? cookieStore.get('shipguard_connecting_provider')?.value
-  if (provider === 'github' || provider === 'google') return provider
-  if (cookieStore.get('graft_connecting_github')?.value === '1') return 'github'
-  if (cookieStore.get('shipguard_connecting_github')?.value === '1') return 'github'
-  return null
+function resolveConnectingProvider(
+  cookieStore: Awaited<ReturnType<typeof cookies>>,
+): "github" | "google" | null {
+  const provider =
+    cookieStore.get("graft_connecting_provider")?.value ??
+    cookieStore.get("shipguard_connecting_provider")?.value;
+  if (provider === "github" || provider === "google") return provider;
+  if (cookieStore.get("graft_connecting_github")?.value === "1")
+    return "github";
+  if (cookieStore.get("shipguard_connecting_github")?.value === "1")
+    return "github";
+  return null;
 }
 
-function mapIntegrationError(provider: 'github' | 'google', errorCode: string | null) {
-  if (errorCode === 'identity_already_exists') return `${provider}_already_linked`
-  return `${provider}_oauth_failed`
+function mapIntegrationError(
+  provider: "github" | "google",
+  errorCode: string | null,
+) {
+  if (errorCode === "identity_already_exists")
+    return `${provider}_already_linked`;
+  return `${provider}_oauth_failed`;
 }
 
-function redirectUsingHashError(origin: string, provider: 'github' | 'google') {
+function redirectUsingHashError(origin: string, provider: "github" | "google") {
   const html = `<!doctype html>
 <html>
   <head>
@@ -45,147 +83,174 @@ function redirectUsingHashError(origin: string, provider: 'github' | 'google') {
       })();
     </script>
   </body>
-</html>`
+</html>`;
 
   const response = new NextResponse(html, {
     status: 200,
-    headers: { 'content-type': 'text/html; charset=utf-8' },
-  })
+    headers: { "content-type": "text/html; charset=utf-8" },
+  });
 
-  return withClearedConnectCookies(response)
+  return withClearedConnectCookies(response);
 }
 
 async function getGithubUserId(token: string): Promise<string | null> {
   try {
-    const res = await fetch('https://api.github.com/user', {
+    const res = await fetch("https://api.github.com/user", {
       headers: {
         Authorization: `Bearer ${token}`,
-        Accept: 'application/vnd.github+json',
+        Accept: "application/vnd.github+json",
       },
-    })
-    if (!res.ok) return null
-    const data = await res.json()
-    return String(data.id)
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return String(data.id);
   } catch {
-    return null
+    return null;
   }
 }
 
 export async function GET(request: Request) {
-  const requestUrl = new URL(request.url)
-  const code = requestUrl.searchParams.get('code')
-  const cookieStore = await cookies()
-  const nextFromCookie = requestUrl.searchParams.get('next') ?? cookieStore.get('graft_next')?.value ?? cookieStore.get('shipguard_next')?.value
-  const safeNextDecoded = nextFromCookie ? decodeURIComponent(nextFromCookie) : '/dashboard'
-  const next = safeNextDecoded.startsWith('/') ? safeNextDecoded : '/dashboard'
-  const connectingProvider = resolveConnectingProvider(cookieStore)
-  const isConnectingProvider = Boolean(connectingProvider)
-  const connectingUserId = cookieStore.get('graft_connecting_user_id')?.value ?? cookieStore.get('shipguard_connecting_user_id')?.value ?? null
-  const oauthErrorCode = requestUrl.searchParams.get('error_code')
+  const requestUrl = new URL(request.url);
+  const code = requestUrl.searchParams.get("code");
+  const cookieStore = await cookies();
+  const nextFromCookie =
+    requestUrl.searchParams.get("next") ??
+    cookieStore.get("graft_next")?.value ??
+    cookieStore.get("shipguard_next")?.value;
+  const safeNextDecoded = nextFromCookie
+    ? decodeURIComponent(nextFromCookie)
+    : "/dashboard";
+  const next = safeNextDecoded.startsWith("/") ? safeNextDecoded : "/dashboard";
+  const connectingProvider = resolveConnectingProvider(cookieStore);
+  const isConnectingProvider = Boolean(connectingProvider);
+  const connectingUserId =
+    cookieStore.get("graft_connecting_user_id")?.value ??
+    cookieStore.get("shipguard_connecting_user_id")?.value ??
+    null;
+  const oauthErrorCode = requestUrl.searchParams.get("error_code");
 
   if (!code && connectingProvider) {
-    return redirectUsingHashError(requestUrl.origin, connectingProvider)
+    return redirectUsingHashError(requestUrl.origin, connectingProvider);
   }
 
   if (code) {
-    const supabase = await createServerClient()
-    const { data, error } = await supabase.auth.exchangeCodeForSession(code)
+    const supabase = await createServerClient();
+    const { data, error } = await supabase.auth.exchangeCodeForSession(code);
 
     if (!error) {
-      const provider = data.session?.user?.app_metadata?.provider
-      const userId = data.session?.user?.id
-      const providerToken = data.session?.provider_token
+      const provider = data.session?.user?.app_metadata?.provider;
+      const userId = data.session?.user?.id;
+      const providerToken = data.session?.provider_token;
 
-      if (isConnectingProvider && connectingUserId && userId !== connectingUserId) {
+      if (
+        isConnectingProvider &&
+        connectingUserId &&
+        userId !== connectingUserId
+      ) {
         const redirect = NextResponse.redirect(
-          new URL('/dashboard/settings?tab=integrations&integration_error=oauth_user_mismatch', requestUrl.origin)
-        )
-        return withClearedConnectCookies(redirect)
+          new URL(
+            "/dashboard/settings?tab=integrations&integration_error=oauth_user_mismatch",
+            requestUrl.origin,
+          ),
+        );
+        return withClearedConnectCookies(redirect);
       }
 
       if (userId) {
         const { data: existingUser } = await supabase
-          .from('users')
-          .select('id, github_user_id, name, email, avatar_url, plan, scans_used, scans_limit, github_token')
-          .eq('id', userId)
-          .maybeSingle()
+          .from("users")
+          .select(
+            "id, github_user_id, name, email, avatar_url, plan, scans_used, scans_limit, github_token",
+          )
+          .eq("id", userId)
+          .maybeSingle();
 
         // Track the verified GitHub credentials so the final upsert can use the
         // freshly-obtained token rather than the stale existingUser snapshot.
-        let resolvedGithubToken: string | null = existingUser?.github_token ?? null
-        let resolvedGithubUserId: string | null = existingUser?.github_user_id ?? null
+        let resolvedGithubToken: string | null =
+          existingUser?.github_token ?? null;
+        let resolvedGithubUserId: string | null =
+          existingUser?.github_user_id ?? null;
 
-        if (provider === 'github') {
-          const tokenToUse = providerToken ?? resolvedGithubToken
+        if (provider === "github") {
+          const tokenToUse = providerToken ?? resolvedGithubToken;
           if (tokenToUse) {
-            const githubUserId = await getGithubUserId(tokenToUse)
+            const githubUserId = await getGithubUserId(tokenToUse);
 
             if (githubUserId) {
               const conflictUser = await supabase
-                .from('users')
-                .select('id')
-                .eq('github_user_id', githubUserId)
-                .neq('id', userId)
+                .from("users")
+                .select("id")
+                .eq("github_user_id", githubUserId)
+                .neq("id", userId)
                 .limit(1)
-                .maybeSingle()
+                .maybeSingle();
 
               if (conflictUser.data) {
                 const redirect = NextResponse.redirect(
-                  new URL('/dashboard/settings?tab=integrations&integration_error=github_already_linked', requestUrl.origin)
-                )
-                return withClearedConnectCookies(redirect)
+                  new URL(
+                    "/dashboard/settings?tab=integrations&integration_error=github_already_linked",
+                    requestUrl.origin,
+                  ),
+                );
+                return withClearedConnectCookies(redirect);
               }
 
-              if (isConnectingProvider && connectingProvider === 'github') {
+              if (isConnectingProvider && connectingProvider === "github") {
                 await supabase
-                  .from('users')
+                  .from("users")
                   .update({
                     github_token: tokenToUse,
                     github_user_id: githubUserId,
                     updated_at: new Date().toISOString(),
                   })
-                  .eq('id', userId)
+                  .eq("id", userId);
 
-                const redirect = NextResponse.redirect(new URL(next, requestUrl.origin))
-                return withClearedConnectCookies(redirect)
+                const redirect = NextResponse.redirect(
+                  new URL(next, requestUrl.origin),
+                );
+                return withClearedConnectCookies(redirect);
               }
 
-              resolvedGithubToken = tokenToUse
-              resolvedGithubUserId = githubUserId
+              resolvedGithubToken = tokenToUse;
+              resolvedGithubUserId = githubUserId;
 
               await supabase
-                .from('users')
+                .from("users")
                 .update({
                   github_token: tokenToUse,
                   github_user_id: githubUserId,
                   updated_at: new Date().toISOString(),
                 })
-                .eq('id', userId)
+                .eq("id", userId);
             }
           }
         }
 
-        if (isConnectingProvider && connectingProvider === 'google') {
-          const redirect = NextResponse.redirect(new URL(next, requestUrl.origin))
-          return withClearedConnectCookies(redirect)
+        if (isConnectingProvider && connectingProvider === "google") {
+          const redirect = NextResponse.redirect(
+            new URL(next, requestUrl.origin),
+          );
+          return withClearedConnectCookies(redirect);
         }
 
-        const metadata = data.session?.user?.user_metadata ?? {}
+        const metadata = data.session?.user?.user_metadata ?? {};
 
         const resolvedName =
           existingUser?.name ??
           (metadata.full_name as string | undefined) ??
           (metadata.name as string | undefined) ??
-          null
+          null;
 
-        const resolvedEmail = existingUser?.email ?? data.session?.user?.email ?? null
+        const resolvedEmail =
+          existingUser?.email ?? data.session?.user?.email ?? null;
         const resolvedAvatar =
           existingUser?.avatar_url ??
           (metadata.avatar_url as string | undefined) ??
           (metadata.picture as string | undefined) ??
-          null
+          null;
 
-        const isNewUser = !existingUser
+        const isNewUser = !existingUser;
         const userData: Record<string, unknown> = {
           id: userId,
           name: resolvedName,
@@ -194,30 +259,50 @@ export async function GET(request: Request) {
           github_token: resolvedGithubToken,
           github_user_id: resolvedGithubUserId,
           updated_at: new Date().toISOString(),
-        }
+        };
 
         if (isNewUser) {
-          userData.plan = 'free'
-          userData.scans_used = 0
-          userData.scans_limit = 3
+          userData.plan = "free";
+          userData.scans_used = 0;
+          userData.scans_limit = 3;
         }
 
-        await supabase.from('users').upsert(userData, { onConflict: 'id' })
+        // Prefer the service-role client so the upsert bypasses RLS and always
+        // succeeds even on first sign-in when no public.users row exists yet.
+        const upsertClient = adminSupabase ?? supabase;
+        const { error: upsertError } = await upsertClient
+          .from("users")
+          .upsert(userData, { onConflict: "id" });
+        if (upsertError) {
+          console.error("[auth/callback] Failed to upsert user profile:", {
+            userId,
+            error: upsertError.message,
+            code: upsertError.code,
+          });
+        }
       }
 
-      const redirect = NextResponse.redirect(new URL(next, requestUrl.origin))
-      return withClearedConnectCookies(redirect)
+      const redirect = NextResponse.redirect(new URL(next, requestUrl.origin));
+      return withClearedConnectCookies(redirect);
     }
 
     if (connectingProvider) {
-      const integrationError = mapIntegrationError(connectingProvider, oauthErrorCode)
+      const integrationError = mapIntegrationError(
+        connectingProvider,
+        oauthErrorCode,
+      );
       const redirect = NextResponse.redirect(
-        new URL(`/dashboard/settings?tab=integrations&integration_error=${integrationError}`, requestUrl.origin)
-      )
-      return withClearedConnectCookies(redirect)
+        new URL(
+          `/dashboard/settings?tab=integrations&integration_error=${integrationError}`,
+          requestUrl.origin,
+        ),
+      );
+      return withClearedConnectCookies(redirect);
     }
   }
 
-  const errorRedirect = NextResponse.redirect(new URL('/auth/login?error=oauth_callback_failed', requestUrl.origin))
-  return withClearedConnectCookies(errorRedirect)
+  const errorRedirect = NextResponse.redirect(
+    new URL("/auth/login?error=oauth_callback_failed", requestUrl.origin),
+  );
+  return withClearedConnectCookies(errorRedirect);
 }
