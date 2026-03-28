@@ -119,11 +119,17 @@ export async function POST(request: NextRequest) {
     logScan('repo_parsed', { traceId, repoOwner, repoName, isPrivate })
 
     // ── Rate limiting ────────────────────────────────────────────────────────
+    // Use adminSupabase (defined below for user upsert) for scans table ops
+    // to avoid RLS blocking stale cleanup and rate-limit queries.
+    const scansAdmin = SUPABASE_URL && SUPABASE_SERVICE_KEY
+      ? createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+      : supabase
+
     // First, auto-expire any pending/scanning rows older than 15 minutes —
     // these are stale rows the task never cleaned up (e.g. Trigger.dev run
     // expired, crashed before our catch block, etc.)
     const staleWindow = new Date(Date.now() - 15 * 60 * 1000).toISOString()
-    await supabase
+    await scansAdmin
       .from('scans')
       .update({ status: 'failed' })
       .eq('user_id', user.id)
@@ -132,7 +138,7 @@ export async function POST(request: NextRequest) {
 
     // Max 3 concurrent scans (pending/scanning) in the last 15 minutes
     const activeWindow = new Date(Date.now() - 15 * 60 * 1000).toISOString()
-    const { count: activeCount } = await supabase
+    const { count: activeCount } = await scansAdmin
       .from('scans')
       .select('id', { count: 'exact', head: true })
       .eq('user_id', user.id)
@@ -221,7 +227,8 @@ export async function POST(request: NextRequest) {
       logScan('user_upsert_failed', { traceId, error: userUpsertError.message })
     }
 
-    const { data: scan, error: scanError } = await supabase
+    // Use admin client for scan insert to bypass RLS policies on the scans table
+    const { data: scan, error: scanError } = await adminSupabase
       .from('scans')
       .insert({
         user_id:   user.id,
