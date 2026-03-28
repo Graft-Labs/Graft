@@ -158,7 +158,7 @@ export async function POST() {
       );
     }
 
-    return await applySubscription(user.id, subscription);
+    return await applySubscription(user.id, user.email ?? userData?.email ?? null, subscription);
   } catch (error) {
     console.error("Repair error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
@@ -167,6 +167,7 @@ export async function POST() {
 
 async function applySubscription(
   userId: string,
+  userEmail: string | null,
   subscription: Record<string, unknown>,
 ) {
   const { status: effectiveStatus, active: isActive } = getNormalizedStatus(subscription);
@@ -195,16 +196,20 @@ async function applySubscription(
     );
   }
 
+  // Include email to satisfy NOT NULL constraint on the users table
+  const upsertPayload: Record<string, unknown> = {
+    id: userId,
+    plan,
+    scans_limit: scansLimit,
+    subscription_id: subscriptionId,
+    subscription_status: effectiveStatus || "active",
+    customer_id: customerId,
+    updated_at: new Date().toISOString(),
+  };
+  if (userEmail) upsertPayload.email = userEmail;
+
   const { error: upsertError } = await adminSupabase.from("users").upsert(
-    {
-      id: userId,
-      plan,
-      scans_limit: scansLimit,
-      subscription_id: subscriptionId,
-      subscription_status: effectiveStatus || "active",
-      customer_id: customerId,
-      updated_at: new Date().toISOString(),
-    },
+    upsertPayload,
     { onConflict: "id" },
   );
 

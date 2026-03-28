@@ -140,6 +140,7 @@ export async function POST(req: NextRequest) {
           const updater = adminSupabase ?? supabase;
           const upsertPayload: Record<string, unknown> = {
             id: user.id,
+            email: user.email ?? userData?.email ?? null,
             plan: planFromCheckout,
             scans_limit: PLAN_SCANS_LIMITS[planFromCheckout] ?? 3,
             subscription_status: "active",
@@ -309,6 +310,7 @@ export async function POST(req: NextRequest) {
     const updater = adminSupabase ?? supabase;
     const finalUpsertPayload: Record<string, unknown> = {
       id: user.id,
+      email: user.email ?? userData?.email ?? null,
       plan: effectivePlan,
       scans_limit: scansLimit,
       subscription_id: resolvedSubscriptionId || null,

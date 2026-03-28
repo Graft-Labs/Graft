@@ -135,6 +135,7 @@ export async function GET() {
 
     // Try to get authenticated user from Supabase
     let userId: string | null = null;
+    let userEmail: string | null = null;
     let supabase: Awaited<ReturnType<typeof createServerClient>> | null = null;
     let userData: Record<string, unknown> | null = null;
 
@@ -146,12 +147,13 @@ export async function GET() {
         } = await supabase.auth.getUser();
         if (user) {
           userId = user.id;
+          userEmail = user.email ?? null;
 
           // Try to load user from DB
           const { data: dbData, error: dbError } = await supabase
             .from("users")
             .select(
-              "plan, scans_limit, subscription_id, subscription_status, customer_id",
+              "plan, scans_limit, subscription_id, subscription_status, customer_id, email",
             )
             .eq("id", user.id)
             .maybeSingle();
@@ -252,6 +254,7 @@ export async function GET() {
 
       const persistPayload: Record<string, unknown> = {
         id: userId,
+        email: userEmail || (userData?.email as string | undefined) || null,
         plan: effectivePlan,
         scans_limit: scansLimit,
         subscription_status: effectiveStatus,
