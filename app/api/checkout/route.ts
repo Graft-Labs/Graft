@@ -115,6 +115,7 @@ export async function POST(req: NextRequest) {
       userId: user.id,
       customerEmail: user.email,
       customerId: customerId || (userRow?.customer_id as string | undefined) || null,
+      appUrl: req.nextUrl.origin,
       metadata: {
         user_id: user.id,
         plan: planId,

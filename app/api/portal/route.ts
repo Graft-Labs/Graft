@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase-server";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import {
-  createCustomerPortalUrl,
+  createCustomerPortalUrlWithBase,
   isPolarConfigured,
   resolveCustomerFromPolarExternalId,
 } from "@/lib/polar-adapter";
@@ -62,7 +62,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const url = await createCustomerPortalUrl(customerId);
+    const url = await createCustomerPortalUrlWithBase(customerId, req.nextUrl.origin);
     return NextResponse.json({ url });
   } catch (error) {
     console.error("Portal route error:", error);

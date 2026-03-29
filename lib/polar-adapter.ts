@@ -14,6 +14,11 @@ const POLAR_IS_SANDBOX = process.env.POLAR_IS_SANDBOX === "true";
 const APP_URL =
   process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") || "http://localhost:3000";
 
+function getBaseAppUrl(appUrl?: string): string {
+  const normalized = appUrl?.replace(/\/$/, "");
+  return normalized || APP_URL;
+}
+
 const POLAR_API_URL = POLAR_IS_SANDBOX
   ? "https://sandbox-api.polar.sh/v1"
   : "https://api.polar.sh/v1";
@@ -69,16 +74,18 @@ export async function createCheckoutUrl(params: {
   customerEmail?: string | null;
   customerId?: string | null;
   metadata?: Record<string, unknown>;
+  appUrl?: string;
 }): Promise<string> {
+  const baseUrl = getBaseAppUrl(params.appUrl);
   const handler = Checkout({
     accessToken: getPolarAccessToken(),
     server: getPolarServer(),
-    successUrl: `${APP_URL}/dashboard/settings?tab=billing&upgrade=success`,
-    returnUrl: `${APP_URL}/dashboard/settings?tab=billing`,
+    successUrl: `${baseUrl}/dashboard/settings?tab=billing&upgrade=success`,
+    returnUrl: `${baseUrl}/dashboard/settings?tab=billing`,
   });
 
   async function runCheckout(includeCustomerId: boolean): Promise<string | null> {
-    const url = new URL(`${APP_URL}/api/checkout`);
+    const url = new URL(`${baseUrl}/api/checkout`);
     url.searchParams.append("products", params.productId);
     url.searchParams.set("customerExternalId", params.userId);
     if (params.customerEmail) {
@@ -109,14 +116,22 @@ export async function createCheckoutUrl(params: {
 }
 
 export async function createCustomerPortalUrl(customerId: string): Promise<string> {
+  return createCustomerPortalUrlWithBase(customerId, undefined);
+}
+
+export async function createCustomerPortalUrlWithBase(
+  customerId: string,
+  appUrl?: string,
+): Promise<string> {
+  const baseUrl = getBaseAppUrl(appUrl);
   const handler = CustomerPortal({
     accessToken: getPolarAccessToken(),
     server: getPolarServer(),
-    returnUrl: `${APP_URL}/dashboard/settings?tab=billing`,
+    returnUrl: `${baseUrl}/dashboard/settings?tab=billing`,
     getCustomerId: async () => customerId,
   });
 
-  const response = await handler(new Request(`${APP_URL}/api/portal`, { method: "GET" }));
+  const response = await handler(new Request(`${baseUrl}/api/portal`, { method: "GET" }));
   const redirectUrl = response.headers.get("location");
   if (!response.ok || !redirectUrl) {
     throw new Error("Failed to create Polar customer portal session");
