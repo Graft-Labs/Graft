@@ -1,30 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase-server";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
-
-const POLAR_ACCESS_TOKEN = process.env.POLAR_ACCESS_TOKEN;
-const POLAR_IS_SANDBOX = process.env.POLAR_IS_SANDBOX === "true";
-
-const POLAR_API_URL = POLAR_IS_SANDBOX
-  ? "https://sandbox-api.polar.sh/v1"
-  : "https://api.polar.sh/v1";
-
-function getCancellationScheduled(subscription: Record<string, unknown>) {
-  if (subscription.cancel_at_period_end === true) return true;
-
-  const status =
-    typeof subscription.status === "string"
-      ? subscription.status.toLowerCase()
-      : "";
-
-  return status === "cancelled" || status === "canceled";
-}
+import { patchSubscription } from "@/lib/subscription-core";
+import { getSubscriptionStatus } from "@/lib/polar-adapter";
 
 export async function POST(req: NextRequest) {
-  // Rate limit: 10 cancel requests per minute per IP
-  const ip = getClientIp(req)
+  const ip = getClientIp(req);
   if (!checkRateLimit(`subscription-cancel:${ip}`, 10, 60_000)) {
-    return NextResponse.json({ message: "Too many requests" }, { status: 429 })
+    return NextResponse.json({ message: "Too many requests" }, { status: 429 });
   }
 
   try {
@@ -37,116 +20,52 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }
 
-    if (
-      !POLAR_ACCESS_TOKEN ||
-      POLAR_ACCESS_TOKEN === "your_polar_access_token_here"
-    ) {
-      return NextResponse.json(
-        {
-          message:
-            "Subscriptions are not configured right now. Please contact support.",
-        },
-        { status: 500 },
-      );
-    }
-
-    const { data: userData, error: userError } = await supabase
+    const { data: userRow } = await supabase
       .from("users")
-      .select("subscription_id, plan")
+      .select("subscription_id")
       .eq("id", user.id)
       .maybeSingle();
 
-    if (userError || !userData?.subscription_id) {
+    const subscriptionId = (userRow?.subscription_id as string | undefined) || null;
+    if (!subscriptionId) {
       return NextResponse.json(
         { message: "No active subscription found for this account." },
         { status: 404 },
       );
     }
 
-    const response = await fetch(
-      `${POLAR_API_URL}/subscriptions/${userData.subscription_id}`,
-      {
-        method: "PATCH",
-        headers: {
-          Authorization: `Bearer ${POLAR_ACCESS_TOKEN}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          cancel_at_period_end: true,
-        }),
-      },
-    );
+    const patched = await patchSubscription(subscriptionId, {
+      cancel_at_period_end: true,
+    });
 
-    if (!response.ok) {
-      const details = await response.text();
-      console.error("Failed to cancel Polar subscription", {
-        status: response.status,
-        details,
-      });
-
-      if (response.status === 403) {
-        return NextResponse.json(
-          {
-            message:
-              "Your subscription is already canceled for the current period.",
-          },
-          { status: 400 },
-        );
-      }
-
+    if (!patched) {
       return NextResponse.json(
         { message: "Failed to cancel subscription. Please try again." },
         { status: 500 },
       );
     }
 
-    const subscription = (await response.json()) as Record<string, unknown>;
-    const cancellationScheduled = getCancellationScheduled(subscription);
-    const subscriptionStatus =
-      typeof subscription.status === "string"
-        ? subscription.status
-        : cancellationScheduled
-          ? "cancelled"
-          : "active";
-
-    const { error: updateError } = await supabase
+    const status = getSubscriptionStatus(patched);
+    await supabase
       .from("users")
       .update({
-        subscription_status: cancellationScheduled
-          ? "cancelled"
-          : subscriptionStatus,
+        subscription_status: status.status,
         updated_at: new Date().toISOString(),
       })
       .eq("id", user.id);
 
-    if (updateError) {
-      console.error("Failed to persist subscription status after cancel", {
-        userId: user.id,
-        updateError,
-      });
-
-      return NextResponse.json(
-        {
-          message:
-            "Cancellation was sent but we could not update account status. Please refresh and try again.",
-        },
-        { status: 500 },
-      );
-    }
-
     return NextResponse.json({
       success: true,
-      subscription,
-      subscriptionStatus,
-      cancellationScheduled,
+      subscriptionStatus: status.status,
+      cancellationScheduled: status.cancellationScheduled,
       currentPeriodEnd:
-        typeof subscription.current_period_end === "string"
-          ? subscription.current_period_end
+        typeof patched.current_period_end === "string"
+          ? patched.current_period_end
           : null,
       message: "Subscription cancellation scheduled.",
     });
   } catch (error) {
-    console.error("Subscription cancel API error", error);
+    console.error("Subscription cancel error:", error);
     return NextResponse.json(
       { message: "Internal server error" },
       { status: 500 },

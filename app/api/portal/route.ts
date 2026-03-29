@@ -1,211 +1,74 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { Polar } from '@polar-sh/sdk'
-import { createServerClient } from '@/lib/supabase-server'
-import { checkRateLimit, getClientIp } from '@/lib/rate-limit'
-
-const POLAR_ACCESS_TOKEN = process.env.POLAR_ACCESS_TOKEN
-const POLAR_IS_SANDBOX = process.env.POLAR_IS_SANDBOX === 'true'
-
-const POLAR_API_URL = POLAR_IS_SANDBOX
-  ? 'https://sandbox-api.polar.sh/v1'
-  : 'https://api.polar.sh/v1'
-
-function buildPolarClient() {
-  if (!POLAR_ACCESS_TOKEN || POLAR_ACCESS_TOKEN === 'your_polar_access_token_here') return null
-  return new Polar({
-    accessToken: POLAR_ACCESS_TOKEN,
-    server: POLAR_IS_SANDBOX ? 'sandbox' : 'production',
-  })
-}
-
-function extractPortalUrl(session: unknown): string | null {
-  if (!session || typeof session !== 'object') return null
-  const obj = session as Record<string, unknown>
-
-  // Direct fields
-  const direct =
-    (obj.customerPortalUrl as string | undefined) ||
-    (obj.customer_portal_url as string | undefined) ||
-    (obj.url as string | undefined)
-
-  if (direct) return direct
-
-  // Nested in .value (SDK ok/value pattern)
-  const value = obj.value as Record<string, unknown> | undefined
-  if (value) {
-    return (
-      (value.customerPortalUrl as string | undefined) ||
-      (value.customer_portal_url as string | undefined) ||
-      (value.url as string | undefined) ||
-      null
-    )
-  }
-
-  return null
-}
+import { NextRequest, NextResponse } from "next/server";
+import { createServerClient } from "@/lib/supabase-server";
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
+import {
+  createCustomerPortalUrl,
+  isPolarConfigured,
+  resolveCustomerFromPolarExternalId,
+} from "@/lib/polar-adapter";
 
 export async function POST(req: NextRequest) {
-  // Rate limit: 10 portal requests per minute per IP
-  const ip = getClientIp(req)
+  const ip = getClientIp(req);
   if (!checkRateLimit(`portal:${ip}`, 10, 60_000)) {
-    return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
+    return NextResponse.json({ error: "Too many requests" }, { status: 429 });
   }
 
   try {
-    const supabase = await createServerClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    if (!isPolarConfigured()) {
+      return NextResponse.json(
+        {
+          error: "Payment not configured",
+          message: "Polar is not configured. Please contact support.",
+        },
+        { status: 500 },
+      );
+    }
+
+    const supabase = await createServerClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    if (!POLAR_ACCESS_TOKEN || POLAR_ACCESS_TOKEN === 'your_polar_access_token_here') {
-      return NextResponse.json({
-        error: 'Payment not configured',
-        message: 'Polar.sh is not configured. Please contact support.'
-      }, { status: 500 })
-    }
+    const { data: userRow } = await supabase
+      .from("users")
+      .select("customer_id")
+      .eq("id", user.id)
+      .maybeSingle();
 
-    // Get customer_id from users table
-    const { data: userData, error: userError } = await supabase
-      .from('users')
-      .select('customer_id, subscription_id')
-      .eq('id', user.id)
-      .maybeSingle()
+    let customerId = (userRow?.customer_id as string | undefined) || null;
 
-    if (userError) {
-      console.error('User lookup error:', userError)
-      return NextResponse.json({ error: 'Failed to load account data' }, { status: 500 })
-    }
-
-    const returnUrl = `${process.env.NEXT_PUBLIC_APP_URL}/dashboard`
-
-    // --- Attempt 1: SDK with customerId ---
-    try {
-      const polar = buildPolarClient()
-      if (polar && userData?.customer_id) {
-        const session = await polar.customerSessions.create({
-          customerId: userData.customer_id,
-          returnUrl,
-        })
-        const portalUrl = extractPortalUrl(session)
-        if (portalUrl) {
-          return NextResponse.json({ url: portalUrl })
-        }
-      }
-    } catch (sdkErr1) {
-      console.error('Portal SDK (customerId) failed:', sdkErr1)
-    }
-
-    // --- Attempt 2: SDK with externalCustomerId ---
-    try {
-      const polar = buildPolarClient()
-      if (polar) {
-        const session = await polar.customerSessions.create({
-          externalCustomerId: user.id,
-          returnUrl,
-        })
-        const portalUrl = extractPortalUrl(session)
-        if (portalUrl) {
-          return NextResponse.json({ url: portalUrl })
-        }
-      }
-    } catch (sdkErr2) {
-      console.error('Portal SDK (externalCustomerId) failed:', sdkErr2)
-    }
-
-    // --- Attempt 3: Recover customer_id from subscription_id via Polar API ---
-    if (!userData?.customer_id && userData?.subscription_id) {
-      try {
-        const subResp = await fetch(
-          `${POLAR_API_URL}/subscriptions/${userData.subscription_id}`,
-          {
-            headers: {
-              Authorization: `Bearer ${POLAR_ACCESS_TOKEN}`,
-              'Content-Type': 'application/json',
-            },
-          },
-        )
-        if (subResp.ok) {
-          const subData = (await subResp.json()) as Record<string, unknown>
-          const customerIdFromSub =
-            (subData.customer_id as string | undefined) ||
-            ((subData.customer as Record<string, unknown> | undefined)?.id as string | undefined)
-
-          if (customerIdFromSub) {
-            await supabase
-              .from('users')
-              .update({ customer_id: customerIdFromSub, updated_at: new Date().toISOString() })
-              .eq('id', user.id)
-
-            // Retry portal creation with recovered customer_id
-            try {
-              const polar = buildPolarClient()
-              if (polar) {
-                const session = await polar.customerSessions.create({
-                  customerId: customerIdFromSub,
-                  returnUrl,
-                })
-                const portalUrl = extractPortalUrl(session)
-                if (portalUrl) {
-                  return NextResponse.json({ url: portalUrl })
-                }
-              }
-            } catch (e) {
-              console.error('Portal SDK (recovered customerId) failed:', e)
-            }
-          }
-        }
-      } catch (e) {
-        console.error('Subscription lookup for customer_id recovery failed:', e)
+    if (!customerId) {
+      const resolved = await resolveCustomerFromPolarExternalId(user.id);
+      customerId = resolved.customerId;
+      if (customerId) {
+        await supabase
+          .from("users")
+          .update({ customer_id: customerId, updated_at: new Date().toISOString() })
+          .eq("id", user.id);
       }
     }
 
-    // --- Attempt 4: Raw HTTP ---
-    try {
-      // Re-read customer_id in case it was recovered above
-      const { data: freshUserData } = await supabase
-        .from('users')
-        .select('customer_id')
-        .eq('id', user.id)
-        .maybeSingle()
-
-      const portalBody: Record<string, unknown> = freshUserData?.customer_id
-        ? { customer_id: freshUserData.customer_id, return_url: returnUrl }
-        : { external_customer_id: user.id, return_url: returnUrl }
-
-      const resp = await fetch(`${POLAR_API_URL}/customer-sessions/`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${POLAR_ACCESS_TOKEN}`,
-          'Content-Type': 'application/json',
+    if (!customerId) {
+      return NextResponse.json(
+        {
+          error: "No active customer",
+          message: "No Polar customer was found for your account.",
         },
-        body: JSON.stringify(portalBody),
-      })
-
-      if (resp.ok) {
-        const data = (await resp.json()) as Record<string, unknown>
-        const portalUrl =
-          (data.customer_portal_url as string | undefined) ||
-          (data.url as string | undefined) ||
-          (data.customerPortalUrl as string | undefined)
-
-        if (portalUrl) {
-          return NextResponse.json({ url: portalUrl })
-        }
-      } else {
-        console.error('Portal HTTP failed:', resp.status, await resp.text())
-      }
-    } catch (httpErr) {
-      console.error('Portal HTTP error:', httpErr)
+        { status: 404 },
+      );
     }
 
-    return NextResponse.json({
-      error: 'Failed to open billing portal',
-      message: 'Could not open billing portal. Please try upgrading again or contact support.',
-    }, { status: 500 })
+    const url = await createCustomerPortalUrl(customerId);
+    return NextResponse.json({ url });
   } catch (error) {
-    console.error('Portal error:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    console.error("Portal route error:", error);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 },
+    );
   }
 }
