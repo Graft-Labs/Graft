@@ -150,6 +150,18 @@ export default function SettingsPage() {
           window.location.href = "/auth/login";
           return;
         }
+        if (response.status === 409 && data?.shouldOpenPortal) {
+          try {
+            await openBillingPortal();
+            return;
+          } catch {
+            setCheckoutError(
+              "You already have an active subscription. Open Billing Portal from this page to manage your plan.",
+            );
+            setCheckoutLoading(null);
+            return;
+          }
+        }
         if (response.status === 409) {
           window.location.href = "/dashboard/settings?tab=billing";
           return;

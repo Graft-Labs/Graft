@@ -77,26 +77,35 @@ export async function createCheckoutUrl(params: {
     returnUrl: `${APP_URL}/dashboard/settings?tab=billing`,
   });
 
-  const url = new URL(`${APP_URL}/api/checkout`);
-  url.searchParams.append("products", params.productId);
-  url.searchParams.set("customerExternalId", params.userId);
-  if (params.customerEmail) {
-    url.searchParams.set("customerEmail", params.customerEmail);
-  }
-  if (params.customerId) {
-    url.searchParams.set("customerId", params.customerId);
-  }
-  if (params.metadata) {
-    url.searchParams.set("metadata", JSON.stringify(params.metadata));
+  async function runCheckout(includeCustomerId: boolean): Promise<string | null> {
+    const url = new URL(`${APP_URL}/api/checkout`);
+    url.searchParams.append("products", params.productId);
+    url.searchParams.set("customerExternalId", params.userId);
+    if (params.customerEmail) {
+      url.searchParams.set("customerEmail", params.customerEmail);
+    }
+    if (includeCustomerId && params.customerId) {
+      url.searchParams.set("customerId", params.customerId);
+    }
+    if (params.metadata) {
+      url.searchParams.set("metadata", JSON.stringify(params.metadata));
+    }
+
+    const response = await handler(new Request(url.toString(), { method: "GET" }));
+    const redirectUrl = response.headers.get("location");
+    if (!response.ok || !redirectUrl) {
+      return null;
+    }
+    return redirectUrl;
   }
 
-  const response = await handler(new Request(url.toString(), { method: "GET" }));
-  const redirectUrl = response.headers.get("location");
-  if (!response.ok || !redirectUrl) {
-    throw new Error("Failed to create Polar checkout session");
-  }
+  const firstTry = await runCheckout(Boolean(params.customerId));
+  if (firstTry) return firstTry;
 
-  return redirectUrl;
+  const fallbackTry = await runCheckout(false);
+  if (fallbackTry) return fallbackTry;
+
+  throw new Error("Failed to create Polar checkout session");
 }
 
 export async function createCustomerPortalUrl(customerId: string): Promise<string> {
