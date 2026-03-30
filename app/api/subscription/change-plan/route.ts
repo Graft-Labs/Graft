@@ -4,8 +4,9 @@ import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import {
   PLAN_PRODUCT_IDS,
   PLAN_SCANS_LIMITS,
-  createCheckoutUrl,
   getSubscriptionStatus,
+  getPolarAccessToken,
+  getPolarServer,
   type PlanId,
 } from "@/lib/polar-adapter";
 import {
@@ -13,6 +14,7 @@ import {
   fetchBestSubscriptionForUser,
   resolvePlanFromSubscription,
 } from "@/lib/subscription-core";
+import { Polar } from "@polar-sh/sdk";
 
 const VALID_PLANS: PlanId[] = ["free", "pro", "unlimited"];
 
@@ -144,12 +146,19 @@ export async function POST(req: NextRequest) {
     }
 
     if (!hasActiveSubscription || !subscriptionId || !isPaid(currentPlan)) {
-      const checkoutUrl = await createCheckoutUrl({
-        productId,
-        userId: user.id,
-        customerEmail: user.email,
-        customerId: (userRow?.customer_id as string | undefined) || null,
-        appUrl: req.nextUrl.origin,
+      const baseUrl = req.nextUrl.origin;
+      const polar = new Polar({
+        accessToken: getPolarAccessToken(),
+        server: getPolarServer(),
+      });
+
+      const checkout = await polar.checkouts.create({
+        products: [productId],
+        successUrl: `${baseUrl}/dashboard/settings?tab=billing&upgrade=success`,
+        returnUrl: `${baseUrl}/dashboard/settings?tab=billing`,
+        externalCustomerId: user.id,
+        customerEmail: user.email || undefined,
+        customerId: (userRow?.customer_id as string | undefined) || undefined,
         metadata: {
           user_id: user.id,
           plan: targetPlan,
@@ -159,7 +168,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({
         success: true,
         action: "checkout",
-        redirectUrl: checkoutUrl,
+        redirectUrl: checkout.url,
         message: "Redirecting to checkout...",
       });
     }
@@ -169,12 +178,19 @@ export async function POST(req: NextRequest) {
     });
 
     if (!patched) {
-      const checkoutUrl = await createCheckoutUrl({
-        productId,
-        userId: user.id,
-        customerEmail: user.email,
-        customerId: (userRow?.customer_id as string | undefined) || null,
-        appUrl: req.nextUrl.origin,
+      const baseUrl = req.nextUrl.origin;
+      const polar = new Polar({
+        accessToken: getPolarAccessToken(),
+        server: getPolarServer(),
+      });
+
+      const checkout = await polar.checkouts.create({
+        products: [productId],
+        successUrl: `${baseUrl}/dashboard/settings?tab=billing&upgrade=success`,
+        returnUrl: `${baseUrl}/dashboard/settings?tab=billing`,
+        externalCustomerId: user.id,
+        customerEmail: user.email || undefined,
+        customerId: (userRow?.customer_id as string | undefined) || undefined,
         metadata: {
           user_id: user.id,
           plan: targetPlan,
@@ -184,7 +200,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({
         success: true,
         action: "checkout",
-        redirectUrl: checkoutUrl,
+        redirectUrl: checkout.url,
         message: "Redirecting to confirm plan change...",
       });
     }

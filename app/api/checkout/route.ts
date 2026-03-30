@@ -4,12 +4,14 @@ import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import {
   PLAN_PRODUCT_IDS,
   PLAN_SCANS_LIMITS,
-  createCheckoutUrl,
   getSubscriptionStatus,
   isPolarConfigured,
+  getPolarAccessToken,
+  getPolarServer,
   resolveCustomerFromPolarExternalId,
   type PlanId,
 } from "@/lib/polar-adapter";
+import { Polar } from "@polar-sh/sdk";
 
 const VALID_PAID_PLANS: Array<Exclude<PlanId, "free">> = ["pro", "unlimited"];
 
@@ -110,12 +112,19 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const checkoutUrl = await createCheckoutUrl({
-      productId,
-      userId: user.id,
-      customerEmail: user.email,
-      customerId: customerId || (userRow?.customer_id as string | undefined) || null,
-      appUrl: req.nextUrl.origin,
+    const baseUrl = req.nextUrl.origin;
+    const polar = new Polar({
+      accessToken: getPolarAccessToken(),
+      server: getPolarServer(),
+    });
+
+    const checkout = await polar.checkouts.create({
+      products: [productId],
+      successUrl: `${baseUrl}/dashboard/settings?tab=billing&upgrade=success`,
+      returnUrl: `${baseUrl}/dashboard/settings?tab=billing`,
+      externalCustomerId: user.id,
+      customerEmail: user.email || undefined,
+      customerId: customerId || (userRow?.customer_id as string | undefined) || undefined,
       metadata: {
         user_id: user.id,
         plan: planId,
@@ -129,7 +138,7 @@ export async function POST(req: NextRequest) {
         .eq("id", user.id);
     }
 
-    return NextResponse.json({ url: checkoutUrl });
+    return NextResponse.json({ url: checkout.url });
   } catch (error) {
     console.error("Checkout route error:", error);
     const message = error instanceof Error ? error.message : "Internal server error";

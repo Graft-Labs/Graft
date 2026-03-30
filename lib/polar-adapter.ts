@@ -1,5 +1,3 @@
-import { Checkout, CustomerPortal } from "@polar-sh/supabase";
-
 export type PlanId = "free" | "pro" | "unlimited";
 
 export const PLAN_SCANS_LIMITS: Record<PlanId, number> = {
@@ -10,14 +8,6 @@ export const PLAN_SCANS_LIMITS: Record<PlanId, number> = {
 
 const POLAR_ACCESS_TOKEN = process.env.POLAR_ACCESS_TOKEN;
 const POLAR_IS_SANDBOX = process.env.POLAR_IS_SANDBOX === "true";
-
-const APP_URL =
-  process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") || "http://localhost:3000";
-
-function getBaseAppUrl(appUrl?: string): string {
-  const normalized = appUrl?.replace(/\/$/, "");
-  return normalized || APP_URL;
-}
 
 const POLAR_API_URL = POLAR_IS_SANDBOX
   ? "https://sandbox-api.polar.sh/v1"
@@ -99,78 +89,6 @@ export function getPlanFromProductIds(
     if (plan) return plan;
   }
   return null;
-}
-
-export async function createCheckoutUrl(params: {
-  productId: string;
-  userId: string;
-  customerEmail?: string | null;
-  customerId?: string | null;
-  metadata?: Record<string, unknown>;
-  appUrl?: string;
-}): Promise<string> {
-  const baseUrl = getBaseAppUrl(params.appUrl);
-  const handler = Checkout({
-    accessToken: getPolarAccessToken(),
-    server: getPolarServer(),
-    successUrl: `${baseUrl}/dashboard/settings?tab=billing&upgrade=success`,
-    returnUrl: `${baseUrl}/dashboard/settings?tab=billing`,
-  });
-
-  async function runCheckout(includeCustomerId: boolean): Promise<string | null> {
-    const url = new URL(`${baseUrl}/api/checkout`);
-    url.searchParams.append("products", params.productId);
-    url.searchParams.set("customerExternalId", params.userId);
-    if (params.customerEmail) {
-      url.searchParams.set("customerEmail", params.customerEmail);
-    }
-    if (includeCustomerId && params.customerId) {
-      url.searchParams.set("customerId", params.customerId);
-    }
-    if (params.metadata) {
-      url.searchParams.set("metadata", JSON.stringify(params.metadata));
-    }
-
-    const response = await handler(new Request(url.toString(), { method: "GET" }));
-    const redirectUrl = response.headers.get("location");
-    if (!response.ok || !redirectUrl) {
-      return null;
-    }
-    return redirectUrl;
-  }
-
-  const firstTry = await runCheckout(Boolean(params.customerId));
-  if (firstTry) return firstTry;
-
-  const fallbackTry = await runCheckout(false);
-  if (fallbackTry) return fallbackTry;
-
-  throw new Error("Failed to create Polar checkout session");
-}
-
-export async function createCustomerPortalUrl(customerId: string): Promise<string> {
-  return createCustomerPortalUrlWithBase(customerId, undefined);
-}
-
-export async function createCustomerPortalUrlWithBase(
-  customerId: string,
-  appUrl?: string,
-): Promise<string> {
-  const baseUrl = getBaseAppUrl(appUrl);
-  const handler = CustomerPortal({
-    accessToken: getPolarAccessToken(),
-    server: getPolarServer(),
-    returnUrl: `${baseUrl}/dashboard/settings?tab=billing`,
-    getCustomerId: async () => customerId,
-  });
-
-  const response = await handler(new Request(`${baseUrl}/api/portal`, { method: "GET" }));
-  const redirectUrl = response.headers.get("location");
-  if (!response.ok || !redirectUrl) {
-    throw new Error("Failed to create Polar customer portal session");
-  }
-
-  return redirectUrl;
 }
 
 function extractSubscriptions(payload: Record<string, unknown>): Array<Record<string, unknown>> {

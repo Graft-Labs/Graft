@@ -2,10 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase-server";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import {
-  createCustomerPortalUrlWithBase,
   isPolarConfigured,
+  getPolarAccessToken,
+  getPolarServer,
   resolveCustomerFromPolarExternalId,
 } from "@/lib/polar-adapter";
+import { Polar } from "@polar-sh/sdk";
 
 export async function POST(req: NextRequest) {
   const ip = getClientIp(req);
@@ -62,8 +64,17 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const url = await createCustomerPortalUrlWithBase(customerId, req.nextUrl.origin);
-    return NextResponse.json({ url });
+    const polar = new Polar({
+      accessToken: getPolarAccessToken(),
+      server: getPolarServer(),
+    });
+
+    const session = await polar.customerSessions.create({
+      customerId,
+      returnUrl: `${req.nextUrl.origin}/dashboard/settings?tab=billing`,
+    });
+
+    return NextResponse.json({ url: session.customerPortalUrl });
   } catch (error) {
     console.error("Portal route error:", error);
     return NextResponse.json(
