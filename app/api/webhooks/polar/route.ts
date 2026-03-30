@@ -207,13 +207,31 @@ async function handleBillingPayload(
   data: Record<string, unknown>,
 ): Promise<void> {
   const supabase = adminClient();
-  if (!supabase) return;
+  if (!supabase) {
+    console.error("[Polar webhook] adminClient is null — check SUPABASE env vars");
+    return;
+  }
 
   const user = await resolveUser(data);
   if (!user) {
-    console.warn("[Polar webhook] could not resolve user", { eventType });
+    // Log WHY resolveUser failed — show what fields are available
+    const customerObj = data.customer as Record<string, unknown> | undefined;
+    console.warn("[Polar webhook] could not resolve user", {
+      eventType,
+      hasCustomer: !!customerObj,
+      externalId: customerObj?.external_id,
+      customerId: data.customer_id || customerObj?.id,
+      hasMetadata: !!(data.metadata as Record<string, unknown> | undefined)?.user_id,
+    });
     return;
   }
+
+  console.log("[Polar webhook] resolved user", {
+    userId: user.id,
+    email: user.email,
+    currentPlan: user.plan,
+    eventType,
+  });
 
   const customerId =
     (data.customer_id as string | undefined) ||
@@ -237,6 +255,13 @@ async function handleBillingPayload(
 
   let nextPlan = detectPlan(eventType, data);
   let nextStatus = status.status;
+
+  console.log("[Polar webhook] detected plan", {
+    eventType,
+    nextPlan,
+    nextStatus,
+    productId: (data.product_id as string | undefined) || "no product_id in data",
+  });
 
   // Debug logging for subscription.updated
   if (eventType === "subscription.updated") {
@@ -300,8 +325,13 @@ async function handleBillingPayload(
     updated_at: new Date().toISOString(),
   };
 
-  console.log("[Polar webhook] upserting", { userId: user.id, plan: nextPlan, status: nextStatus, eventType });
-  await supabase.from("users").upsert(payload, { onConflict: "id" });
+  console.log("[Polar webhook] upserting", { userId: user.id, plan: nextPlan, status: nextStatus, eventType, subscriptionId });
+  const { error } = await supabase.from("users").upsert(payload, { onConflict: "id" });
+  if (error) {
+    console.error("[Polar webhook] upsert FAILED:", error.message, error.details);
+  } else {
+    console.log("[Polar webhook] upsert SUCCESS", { userId: user.id, plan: nextPlan });
+  }
 }
 
 export async function POST(req: NextRequest) {
