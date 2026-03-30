@@ -111,17 +111,19 @@ function detectPlan(eventType: string, data: Record<string, unknown>): "free" | 
   const subscription =
     (data.subscription as Record<string, unknown> | undefined) || data;
 
-  // 1. Check metadata.plan (most explicit signal)
+  // 1. Check product IDs FIRST — this is the authoritative source of truth.
+  //    product_id always reflects the current product, even after portal plan changes.
+  //    Metadata is set at checkout time and does NOT update when product changes.
+  const planFromProducts = getPlanFromProductIds(extractProductIds(subscription));
+  if (planFromProducts) return planFromProducts;
+
+  // 2. Check metadata.plan as fallback (only if product_id didn't match)
   const metadata = subscription.metadata as Record<string, unknown> | undefined;
   const metadataPlan =
     typeof metadata?.plan === "string" ? metadata.plan.toLowerCase() : null;
   if (metadataPlan === "pro" || metadataPlan === "unlimited") {
     return metadataPlan;
   }
-
-  // 2. Check product IDs against our env var map
-  const planFromProducts = getPlanFromProductIds(extractProductIds(subscription));
-  if (planFromProducts) return planFromProducts;
 
   // 3. Fallback: if active → "pro", otherwise "free"
   const status = getSubscriptionStatus(subscription);

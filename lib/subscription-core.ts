@@ -70,6 +70,12 @@ function extractProductIds(subscription: Record<string, unknown>): string[] {
 }
 
 export function resolvePlanFromSubscription(subscription: Record<string, unknown>): PlanId {
+  // 1. Check product IDs FIRST — product_id always reflects the current product.
+  //    Metadata is set at checkout and does NOT update when product changes via portal.
+  const planFromProducts = getPlanFromProductIds(extractProductIds(subscription));
+  if (planFromProducts) return planFromProducts;
+
+  // 2. Check metadata.plan as fallback (only if product_id didn't match)
   const metadata = subscription.metadata as Record<string, unknown> | undefined;
   const metadataPlan =
     typeof metadata?.plan === "string" ? metadata.plan.toLowerCase() : null;
@@ -77,9 +83,7 @@ export function resolvePlanFromSubscription(subscription: Record<string, unknown
     return metadataPlan;
   }
 
-  const planFromProducts = getPlanFromProductIds(extractProductIds(subscription));
-  if (planFromProducts) return planFromProducts;
-
+  // 3. Fallback: if active → "pro", otherwise "free"
   const status = getSubscriptionStatus(subscription);
   if (status.active) return "pro";
   return "free";
