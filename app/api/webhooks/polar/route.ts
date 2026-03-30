@@ -231,13 +231,46 @@ async function handleBillingPayload(
   let nextPlan = detectPlan(data);
   let nextStatus = status.status;
 
+  // Debug logging for subscription.updated — helps verify product_id mapping
+  if (eventType === "subscription.updated") {
+    const subData = data.subscription as Record<string, unknown> | undefined;
+    const newProductId =
+      (data.product_id as string | undefined) ||
+      ((data.product as Record<string, unknown> | undefined)?.id as string | undefined) ||
+      (subData?.product_id as string | undefined) ||
+      "unknown";
+    console.log("[Polar webhook] subscription.updated", {
+      subscriptionId: (subData?.id as string | undefined) || (data.id as string | undefined),
+      newProductId,
+      detectedPlan: nextPlan,
+      currentDbPlan: user.plan,
+      status: nextStatus,
+    });
+  }
+
   if (eventType === "subscription.revoked" || eventType === "order.refunded") {
     nextPlan = "free";
     nextStatus = eventType === "order.refunded" ? "refunded" : "cancelled";
   }
 
   if (eventType === "subscription.canceled") {
-    nextPlan = (user.plan as "free" | "pro" | "unlimited" | null) || "free";
+    // Polar fires subscription.canceled when:
+    //   1. User requests cancellation (cancel_at_period_end = true) — period still active
+    //   2. Period has actually ended — subscription fully expired
+    // Only set plan to "free" when the period has ended. Otherwise keep the
+    // current plan so the user retains access until current_period_end.
+    const periodEnd =
+      (data.current_period_end as string | undefined) ||
+      (subscription.current_period_end as string | undefined) ||
+      null;
+    const periodExpired =
+      periodEnd ? new Date(periodEnd).getTime() <= Date.now() : false;
+
+    if (periodExpired) {
+      nextPlan = "free";
+    } else {
+      nextPlan = (user.plan as "free" | "pro" | "unlimited" | null) || "free";
+    }
     nextStatus = "cancelled";
   }
 

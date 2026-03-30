@@ -44,6 +44,39 @@ export function isPolarConfigured(): boolean {
   );
 }
 
+export function validatePolarEnvVars(): {
+  valid: boolean;
+  missing: string[];
+  warnings: string[];
+} {
+  const missing: string[] = [];
+  const warnings: string[] = [];
+
+  if (!POLAR_ACCESS_TOKEN || POLAR_ACCESS_TOKEN === "your_polar_access_token_here") {
+    missing.push("POLAR_ACCESS_TOKEN");
+  }
+
+  if (!PLAN_PRODUCT_IDS.pro) {
+    missing.push("POLAR_PRO_PRODUCT_ID");
+  }
+
+  if (!PLAN_PRODUCT_IDS.unlimited) {
+    missing.push("POLAR_UNLIMITED_PRODUCT_ID");
+  }
+
+  if (missing.length === 0 && PLAN_PRODUCT_IDS.pro === PLAN_PRODUCT_IDS.unlimited) {
+    warnings.push(
+      "POLAR_PRO_PRODUCT_ID and POLAR_UNLIMITED_PRODUCT_ID are identical — plan detection will break.",
+    );
+  }
+
+  if (!process.env.POLAR_WEBHOOK_SECRET || process.env.POLAR_WEBHOOK_SECRET === "your_polar_webhook_secret_here") {
+    warnings.push("POLAR_WEBHOOK_SECRET is missing — webhooks will not be processed.");
+  }
+
+  return { valid: missing.length === 0, missing, warnings };
+}
+
 export function getPolarAccessToken(): string {
   if (!isPolarConfigured() || !POLAR_ACCESS_TOKEN) {
     throw new Error("Polar is not configured");

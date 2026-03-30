@@ -205,6 +205,14 @@ export async function patchSubscription(
   body: Record<string, unknown>,
 ): Promise<Record<string, unknown> | null> {
   if (!isPolarConfigured()) return null;
+
+  // Polar requires proration_behavior when changing product_id.
+  // "invoice" = immediately charge the prorated difference.
+  const payload = { ...body };
+  if ("product_id" in payload && !("proration_behavior" in payload)) {
+    payload.proration_behavior = "invoice";
+  }
+
   const response = await fetch(
     `${POLAR_API_URL}/subscriptions/${encodeURIComponent(subscriptionId)}`,
     {
@@ -213,10 +221,17 @@ export async function patchSubscription(
         Authorization: `Bearer ${getPolarAccessToken()}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(body),
+      body: JSON.stringify(payload),
     },
   );
 
-  if (!response.ok) return null;
+  if (!response.ok) {
+    const errorBody = await response.text().catch(() => "");
+    console.error(
+      `Polar PATCH /subscriptions/${subscriptionId} failed (${response.status}):`,
+      errorBody,
+    );
+    return null;
+  }
   return (await response.json()) as Record<string, unknown>;
 }
