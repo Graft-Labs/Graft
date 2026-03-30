@@ -39,8 +39,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         {
           error: "Payment not configured",
-          message:
-            "Polar is not configured. Please contact support or configure billing.",
+          message: "Polar is not configured. Please contact support.",
         },
         { status: 500 },
       );
@@ -68,7 +67,7 @@ export async function POST(req: NextRequest) {
 
     const { data: userRow } = await supabase
       .from("users")
-      .select("plan, customer_id")
+      .select("plan, customer_id, subscription_id")
       .eq("id", user.id)
       .maybeSingle();
 
@@ -83,41 +82,61 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { customerId, subscription } = await resolveCustomerFromPolarExternalId(
-      user.id,
-    );
-    const status = subscription ? getSubscriptionStatus(subscription) : null;
-    const hasActiveSubscription = Boolean(status?.active);
-
-    if (hasActiveSubscription && customerId && subscription) {
-      const nextPlanScans = PLAN_SCANS_LIMITS[currentPlan] ?? 3;
-      await supabase
-        .from("users")
-        .update({
-          customer_id: customerId,
-          subscription_id: (subscription.id as string | undefined) || null,
-          subscription_status: status?.status || "active",
-          scans_limit: nextPlanScans,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", user.id);
-
-      return NextResponse.json(
-        {
-          error: "Active subscription exists",
-          message: "You already have an active subscription. Use Billing Portal to change plans.",
-          shouldOpenPortal: true,
-        },
-        { status: 409 },
-      );
-    }
-
-    const baseUrl = req.nextUrl.origin;
     const polar = new Polar({
       accessToken: getPolarAccessToken(),
       server: getPolarServer(),
     });
 
+    // Check if user already has an active subscription in Polar
+    const { customerId, subscription } = await resolveCustomerFromPolarExternalId(user.id);
+    const status = subscription ? getSubscriptionStatus(subscription) : null;
+    const hasActiveSubscription = Boolean(status?.active);
+    const subscriptionId =
+      (subscription?.id as string | undefined) ||
+      (userRow?.subscription_id as string | undefined) ||
+      null;
+
+    // If user has an active subscription, UPDATE it instead of creating a new checkout
+    if (hasActiveSubscription && subscriptionId) {
+      console.log("[Checkout] Updating existing subscription", {
+        subscriptionId,
+        from: currentPlan,
+        to: planId,
+        productId,
+      });
+
+      const updated = await polar.subscriptions.update({
+        id: subscriptionId,
+        subscriptionUpdate: {
+          productId,
+          prorationBehavior: "invoice",
+        },
+      });
+
+      // Update DB immediately
+      await supabase
+        .from("users")
+        .update({
+          plan: planId,
+          scans_limit: PLAN_SCANS_LIMITS[planId],
+          subscription_id: updated.id,
+          subscription_status: "active",
+          customer_id: customerId || (userRow?.customer_id as string | undefined) || null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", user.id);
+
+      return NextResponse.json({
+        success: true,
+        action: "updated",
+        plan: planId,
+        scansLimit: PLAN_SCANS_LIMITS[planId],
+        message: `Plan changed to ${planId}.`,
+      });
+    }
+
+    // No active subscription — create a new checkout
+    const baseUrl = req.nextUrl.origin;
     const checkout = await polar.checkouts.create({
       products: [productId],
       successUrl: `${baseUrl}/dashboard/settings?tab=billing&upgrade=success`,

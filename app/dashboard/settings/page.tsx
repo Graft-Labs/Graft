@@ -171,6 +171,24 @@ export default function SettingsPage() {
         return;
       }
 
+      // If the backend updated the subscription directly (no checkout needed)
+      if (data?.success && data?.action === "updated") {
+        if (userData) {
+          setUserData({
+            ...userData,
+            plan: data.plan,
+            scans_limit: data.scansLimit,
+            subscription_status: "active",
+            scans_used: userData.scans_used ?? 0,
+          });
+        }
+        await loadSubscriptionStatus();
+        window.dispatchEvent(new CustomEvent("plan-changed"));
+        setShowUpgradeSuccess(true);
+        setCheckoutLoading(null);
+        return;
+      }
+
       if (!data?.url) {
         setCheckoutError("No checkout URL returned. Please try again.");
         setCheckoutLoading(null);

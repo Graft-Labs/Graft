@@ -4,15 +4,13 @@ import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import {
   PLAN_PRODUCT_IDS,
   PLAN_SCANS_LIMITS,
-  getSubscriptionStatus,
   getPolarAccessToken,
   getPolarServer,
   type PlanId,
 } from "@/lib/polar-adapter";
 import {
-  patchSubscription,
   fetchBestSubscriptionForUser,
-  resolvePlanFromSubscription,
+  patchSubscription,
 } from "@/lib/subscription-core";
 import { Polar } from "@polar-sh/sdk";
 
@@ -72,8 +70,10 @@ export async function POST(req: NextRequest) {
       subscriptionId: (userRow?.subscription_id as string | undefined) || null,
     });
 
-    const status = subscription ? getSubscriptionStatus(subscription) : null;
-    const hasActiveSubscription = Boolean(status?.active);
+    const subStatus = subscription
+      ? (typeof subscription.status === "string" ? subscription.status.toLowerCase() : "")
+      : "";
+    const hasActiveSubscription = subStatus === "active" || subStatus === "trialing";
     const subscriptionId =
       (subscription?.id as string | undefined) ||
       (userRow?.subscription_id as string | undefined) ||
@@ -173,17 +173,24 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const patched = await patchSubscription(subscriptionId, {
-      product_id: productId,
+    // User has active subscription — update it via SDK instead of creating checkout
+    const polar = new Polar({
+      accessToken: getPolarAccessToken(),
+      server: getPolarServer(),
     });
 
-    if (!patched) {
-      const baseUrl = req.nextUrl.origin;
-      const polar = new Polar({
-        accessToken: getPolarAccessToken(),
-        server: getPolarServer(),
+    let updatedSub;
+    try {
+      updatedSub = await polar.subscriptions.update({
+        id: subscriptionId,
+        subscriptionUpdate: {
+          productId,
+          prorationBehavior: "invoice",
+        },
       });
-
+    } catch {
+      // Fallback to checkout if SDK update fails
+      const baseUrl = req.nextUrl.origin;
       const checkout = await polar.checkouts.create({
         products: [productId],
         successUrl: `${baseUrl}/dashboard/settings?tab=billing&upgrade=success`,
@@ -205,30 +212,26 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const detectedPlan = resolvePlanFromSubscription(patched);
-    const nextStatus = getSubscriptionStatus(patched);
+    // Update DB
     await supabase
       .from("users")
       .update({
-        plan: detectedPlan,
-        scans_limit: PLAN_SCANS_LIMITS[detectedPlan],
-        subscription_id:
-          (patched.id as string | undefined) || subscriptionId || null,
-        subscription_status: nextStatus.status,
+        plan: targetPlan,
+        scans_limit: PLAN_SCANS_LIMITS[targetPlan],
+        subscription_id: updatedSub.id,
+        subscription_status: "active",
         customer_id:
-          (patched.customer_id as string | undefined) ||
-          (userRow?.customer_id as string | undefined) ||
-          null,
+          (userRow?.customer_id as string | undefined) || null,
         updated_at: new Date().toISOString(),
       })
       .eq("id", user.id);
 
     return NextResponse.json({
       success: true,
-      action: detectedPlan === "unlimited" ? "upgraded" : "changed",
-      plan: detectedPlan,
-      scansLimit: PLAN_SCANS_LIMITS[detectedPlan],
-      message: `Plan changed to ${detectedPlan}.`,
+      action: targetPlan === "unlimited" ? "upgraded" : "changed",
+      plan: targetPlan,
+      scansLimit: PLAN_SCANS_LIMITS[targetPlan],
+      message: `Plan changed to ${targetPlan}.`,
     });
   } catch (error) {
     console.error("Change plan error:", error);
