@@ -78,6 +78,95 @@ export default function DashboardSidebar() {
     fetchUser();
   }, []);
 
+  // Re-fetch user data when tab becomes visible (e.g., returning from checkout)
+  useEffect(() => {
+    async function refreshOnVisible() {
+      if (document.visibilityState !== "visible") return;
+      clearCacheByPrefix("sidebar:");
+
+      const supabase = createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (user) {
+        const { data } = await supabase
+          .from("users")
+          .select(
+            "plan, scans_used, scans_limit, name, email, avatar_url, github_token",
+          )
+          .eq("id", user.id)
+          .maybeSingle();
+
+        if (data) {
+          setUserData(data);
+          setCached("sidebar:user", { user, userData: data }, 60_000);
+        }
+      }
+    }
+
+    document.addEventListener("visibilitychange", refreshOnVisible);
+    return () => document.removeEventListener("visibilitychange", refreshOnVisible);
+  }, []);
+
+  // Listen for plan-changed custom event from billing page
+  useEffect(() => {
+    async function onPlanChanged() {
+      clearCacheByPrefix("sidebar:");
+
+      const supabase = createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (user) {
+        const { data } = await supabase
+          .from("users")
+          .select(
+            "plan, scans_used, scans_limit, name, email, avatar_url, github_token",
+          )
+          .eq("id", user.id)
+          .maybeSingle();
+
+        if (data) {
+          setUserData(data);
+          setCached("sidebar:user", { user, userData: data }, 60_000);
+        }
+      }
+    }
+
+    window.addEventListener("plan-changed", onPlanChanged);
+    return () => window.removeEventListener("plan-changed", onPlanChanged);
+  }, []);
+
+  // Re-fetch user data when navigating (covers checkout return flow)
+  useEffect(() => {
+    async function refreshOnNav() {
+      clearCacheByPrefix("sidebar:");
+
+      const supabase = createClient();
+      const {
+        data: { user: currentUser },
+      } = await supabase.auth.getUser();
+
+      if (currentUser) {
+        const { data } = await supabase
+          .from("users")
+          .select(
+            "plan, scans_used, scans_limit, name, email, avatar_url, github_token",
+          )
+          .eq("id", currentUser.id)
+          .maybeSingle();
+
+        if (data) {
+          setUserData(data);
+          setCached("sidebar:user", { user: currentUser, userData: data }, 60_000);
+        }
+      }
+    }
+    refreshOnNav();
+  }, [pathname]);
+
   // Function to handle logout
   const handleLogout = async () => {
     const supabase = createClient();

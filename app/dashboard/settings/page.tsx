@@ -227,6 +227,9 @@ export default function SettingsPage() {
         message: data.message || "Plan changed successfully!",
       });
 
+      // Notify sidebar to refresh
+      window.dispatchEvent(new CustomEvent("plan-changed"));
+
       // Refresh user data
       const supabase = createClient();
       const { data: { user: currentUser } } = await supabase.auth.getUser();
@@ -365,6 +368,7 @@ export default function SettingsPage() {
 
         if (upgradeSuccess === "success" && confirmedUpgrade) {
           setShowUpgradeSuccess(true);
+          window.dispatchEvent(new CustomEvent("plan-changed"));
         }
       }
       syncAndShowSuccess();
@@ -618,6 +622,7 @@ export default function SettingsPage() {
       );
 
       loadSubscriptionStatus();
+      window.dispatchEvent(new CustomEvent("plan-changed"));
     } finally {
       setCancelingSubscription(false);
     }
@@ -670,6 +675,7 @@ export default function SettingsPage() {
       );
 
       loadSubscriptionStatus();
+      window.dispatchEvent(new CustomEvent("plan-changed"));
     } finally {
       setUncancelingSubscription(false);
     }
