@@ -1124,12 +1124,12 @@ export default function SettingsPage() {
                               : "border-gray-200 bg-white hover:border-gray-300"
                           }`}
                         >
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="text-sm font-bold text-gray-900" style={{ fontFamily: "var(--font-landing-heading)" }}>
+                          <div className="flex items-center justify-between gap-2 mb-2">
+                            <span className="text-sm font-bold text-gray-900 truncate" style={{ fontFamily: "var(--font-landing-heading)" }}>
                               {plan.name}
                             </span>
                             {isCurrent && (
-                              <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
+                              <span className="shrink-0 text-[10px] font-bold uppercase tracking-wider text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
                                 Current
                               </span>
                             )}
