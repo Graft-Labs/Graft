@@ -1254,7 +1254,7 @@ export default function SettingsPage() {
                           ) : canUpgrade ? (
                             <button
                               type="button"
-                              onClick={() => startCheckout(plan.id as "pro" | "unlimited")}
+                              onClick={() => initiatePlanChange(plan.id)}
                               disabled={isLoading}
                               className="inline-flex h-9 w-full items-center justify-center rounded-full bg-gray-900 text-white text-xs font-semibold hover:bg-black transition-colors disabled:opacity-70"
                               style={{ fontFamily: "var(--font-landing-body)" }}
