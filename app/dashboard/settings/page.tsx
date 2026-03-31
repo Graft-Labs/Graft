@@ -13,7 +13,6 @@ import {
   X,
   ArrowRight,
   ArrowDown,
-  Sparkles,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase";
 import IntegrationsTab from "@/components/settings/IntegrationsTab";
@@ -971,7 +970,6 @@ export default function SettingsPage() {
               {/* --- BILLING TAB --- */}
               {activeTab === "billing" && (
                 <div className="p-8">
-                  {/* Toast notifications */}
                   {showUpgradeSuccess && (
                     <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-xl flex items-center gap-3">
                       <CheckCircle size={16} className="text-green-600 shrink-0" />
@@ -987,310 +985,19 @@ export default function SettingsPage() {
                       </button>
                     </div>
                   )}
-
-                  {cancellationScheduled && (
-                    <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-xl flex items-center gap-3">
-                      <AlertTriangle size={16} className="text-amber-600 shrink-0" />
-                      <p className="text-xs text-amber-800 flex-1">
-                        {formattedCurrentPeriodEnd
-                          ? `Cancellation scheduled. Access until ${formattedCurrentPeriodEnd}.`
-                          : "Cancellation scheduled. Access until billing period ends."}
-                      </p>
-                      <button
-                        onClick={handleUncancelSubscription}
-                        disabled={uncancelingSubscription}
-                        className="shrink-0 px-3 py-1 bg-amber-100 hover:bg-amber-200 text-amber-800 text-xs font-semibold rounded-full transition-colors disabled:opacity-60"
-                        style={{ fontFamily: "var(--font-landing-body)" }}
-                      >
-                        {uncancelingSubscription ? "Restoring..." : "Keep Active"}
-                      </button>
-                    </div>
-                  )}
-
                   {cancelSubscriptionError && (
                     <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl">
                       <p className="text-xs text-red-700">{cancelSubscriptionError}</p>
                     </div>
                   )}
-
                   {cancelSubscriptionSuccess && !cancellationScheduled && (
                     <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-xl">
                       <p className="text-xs text-green-700">{cancelSubscriptionSuccess}</p>
                     </div>
                   )}
-
                   {checkoutError && (
                     <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl">
                       <p className="text-xs text-red-700">{checkoutError}</p>
-                    </div>
-                  )}
-
-                  {/* Main billing card */}
-                  <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-                    {/* Hero: Current plan + usage */}
-                    <div className="p-5 bg-gradient-to-r from-gray-50 to-white border-b border-gray-100">
-                      <div className="flex items-center justify-between gap-4 mb-3">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#3079FF] to-[#77adff] flex items-center justify-center shrink-0">
-                            <Sparkles size={18} className="text-white" />
-                          </div>
-                          <div className="min-w-0">
-                            <p className="text-base font-bold text-gray-900 truncate" style={{ fontFamily: "var(--font-landing-heading)" }}>
-                              {effectivePlan === "free" ? "Free" : effectivePlan === "pro" ? "Pro" : "Unlimited"} Plan
-                            </p>
-                            <p className="text-xs text-gray-500">
-                              {effectivePlan === "free" ? "$0/month" : effectivePlan === "pro" ? "$15/month" : "$39/month"}
-                            </p>
-                          </div>
-                        </div>
-                        {effectivePlan !== "free" && (
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              try {
-                                await openBillingPortal();
-                              } catch (err: unknown) {
-                                setCheckoutError(
-                                  err instanceof Error ? err.message : "Could not open billing portal."
-                                );
-                              }
-                            }}
-                            className="shrink-0 inline-flex items-center gap-1.5 px-4 py-2 rounded-full border border-gray-200 bg-white text-gray-700 text-xs font-semibold hover:bg-gray-50 transition-colors"
-                            style={{ fontFamily: "var(--font-landing-body)" }}
-                          >
-                            Manage Billing
-                            <ExternalLink size={12} />
-                          </button>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <div className="flex-1 h-2 rounded-full bg-gray-100 overflow-hidden">
-                          <div
-                            className="h-full rounded-full bg-gradient-to-r from-[#3079FF] to-[#77adff] transition-all duration-700"
-                            style={{
-                              width:
-                                (userData?.scans_limit ?? 3) >= 999999
-                                  ? "30%"
-                                  : `${Math.min(100, ((userData?.scans_used ?? 0) / Math.max((userData?.scans_limit ?? 1), 1)) * 100)}%`,
-                            }}
-                          />
-                        </div>
-                        <span className="text-xs font-semibold text-gray-600 shrink-0">
-                          {userData?.scans_used ?? 0} / {((userData?.scans_limit ?? 3) >= 999999) ? "∞" : (userData?.scans_limit ?? 3)}
-                        </span>
-                      </div>
-                      {(userData?.scans_limit ?? 3) < 999999 &&
-                        (userData?.scans_used ?? 0) >= (userData?.scans_limit ?? 3) && (
-                          <p className="text-xs text-red-600 font-semibold flex items-center gap-1 mt-2">
-                            <AlertTriangle size={12} />
-                            Scan limit reached. Upgrade to continue.
-                          </p>
-                        )}
-                    </div>
-
-                    {/* Plan cards */}
-                    <div className="p-5">
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        {[
-                          {
-                            id: "free",
-                            name: "Free",
-                            price: "$0",
-                            features: ["3 scans/mo", "Basic checks"],
-                          },
-                          {
-                            id: "pro",
-                            name: "Pro",
-                            price: "$15",
-                            features: ["50 scans/mo", "Deep analysis"],
-                            recommended: true,
-                          },
-                          {
-                            id: "unlimited",
-                            name: "Unlimited",
-                            price: "$39",
-                            features: ["Unlimited scans", "Priority support"],
-                          },
-                        ].map((plan) => {
-                          const isCurrent = effectivePlan === plan.id;
-                          const canUpgrade =
-                            (effectivePlan === "free" && (plan.id === "pro" || plan.id === "unlimited")) ||
-                            (effectivePlan === "pro" && plan.id === "unlimited");
-                          const canDowngradeToFree = effectivePlan !== "free" && plan.id === "free";
-                          const isLoading = checkoutLoading === plan.id;
-
-                          return (
-                            <div
-                              key={plan.id}
-                              className={`rounded-xl border p-4 transition-all duration-200 ${
-                                isCurrent
-                                  ? "border-[#3079FF] bg-[#3079FF]/5 shadow-sm"
-                                  : plan.recommended
-                                    ? "border-gray-300 bg-white shadow-sm"
-                                    : "border-gray-150 bg-white"
-                              }`}
-                            >
-                              <div className="flex items-center justify-between mb-1">
-                                <span className="text-sm font-bold text-gray-900" style={{ fontFamily: "var(--font-landing-heading)" }}>
-                                  {plan.name}
-                                </span>
-                                {plan.recommended && !isCurrent && (
-                                  <span className="rounded-full bg-gray-900 text-white text-[9px] px-2 py-0.5 font-semibold uppercase tracking-wide">
-                                    Popular
-                                  </span>
-                                )}
-                                {isCurrent && (
-                                  <span className="rounded-full border border-[#3079FF]/30 bg-[#3079FF]/10 text-[#1b5fdb] text-[9px] font-bold px-2 py-0.5 uppercase tracking-wide">
-                                    Current
-                                  </span>
-                                )}
-                              </div>
-                              <p className="text-lg font-bold text-gray-900 mb-2">
-                                {plan.price}<span className="text-xs font-normal text-gray-500">/mo</span>
-                              </p>
-                              <ul className="space-y-1 mb-3">
-                                {plan.features.map((feature) => (
-                                  <li key={feature} className="text-xs text-gray-500 flex items-center gap-1.5">
-                                    <span className="h-1 w-1 rounded-full bg-gray-400 shrink-0" />
-                                    {feature}
-                                  </li>
-                                ))}
-                              </ul>
-
-                              {isCurrent ? (
-                                <button
-                                  type="button"
-                                  disabled
-                                  className="w-full h-8 rounded-lg border border-gray-200 bg-white text-gray-400 text-xs font-medium cursor-default"
-                                >
-                                  Current Plan
-                                </button>
-                              ) : canUpgrade ? (
-                                <button
-                                  type="button"
-                                  onClick={() => initiatePlanChange(plan.id)}
-                                  disabled={isLoading}
-                                  className="w-full h-8 rounded-lg bg-gray-900 text-white text-xs font-semibold hover:bg-black transition-colors disabled:opacity-70"
-                                >
-                                  {isLoading ? (
-                                    <Loader2 className="w-3.5 h-3.5 animate-spin mx-auto" />
-                                  ) : (
-                                    `Upgrade to ${plan.name}`
-                                  )}
-                                </button>
-                              ) : canDowngradeToFree ? (
-                                <button
-                                  type="button"
-                                  onClick={() => initiatePlanChange("free")}
-                                  className="w-full h-8 rounded-lg border border-gray-200 bg-white text-gray-700 text-xs font-medium hover:bg-gray-50 transition-colors"
-                                >
-                                  Switch to Free
-                                </button>
-                              ) : (
-                                <button
-                                  type="button"
-                                  onClick={openBillingPortal}
-                                  className="w-full h-8 rounded-lg border border-gray-200 bg-white text-gray-700 text-xs font-medium hover:bg-gray-50 transition-colors"
-                                >
-                                  Manage in Billing
-                                </button>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    {/* Repair (only when plan is free and user might have paid) */}
-                    {effectivePlan === "free" && (
-                      <div className="px-5 pb-3">
-                        <div className="flex items-center justify-between gap-3 p-3 rounded-xl bg-amber-50 border border-amber-100">
-                          <p className="text-xs text-amber-700">
-                            Paid but still showing Free? Sync your subscription.
-                          </p>
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              try {
-                                const res = await fetch("/api/subscription/repair", { method: "POST" });
-                                const data = await res.json();
-                                if (data.success) {
-                                  alert(`Fixed! Your plan is now: ${data.plan}. Refreshing...`);
-                                  window.location.reload();
-                                } else {
-                                  alert(data.message || data.error || "Could not find a subscription on Polar.");
-                                }
-                              } catch {
-                                alert("Repair failed. Please contact support.");
-                              }
-                            }}
-                            className="shrink-0 text-xs font-semibold px-3 py-1.5 rounded-full bg-amber-100 hover:bg-amber-200 text-amber-800 transition-colors border border-amber-200"
-                          >
-                            Sync from Polar
-                          </button>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Cancel footer (only for paid users) */}
-                    {(effectivePlan === "pro" || effectivePlan === "unlimited") && !cancellationScheduled && (
-                      <div className="px-5 py-3 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
-                        <p className="text-xs text-gray-500">
-                          Cancel anytime. Access stays active until billing period ends.
-                        </p>
-                        <button
-                          type="button"
-                          onClick={handleCancelSubscription}
-                          disabled={cancelingSubscription}
-                          className="text-xs font-medium text-gray-500 hover:text-red-600 transition-colors disabled:opacity-60"
-                        >
-                          {cancelingSubscription ? "Cancelling..." : "Cancel subscription"}
-                        </button>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Cancellation notice */}
-                  {cancellationScheduled && (
-                    <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-2xl flex items-start gap-3">
-                      <AlertTriangle
-                        size={20}
-                        className="text-amber-600 shrink-0 mt-0.5"
-                      />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-bold text-amber-800">
-                          Cancellation scheduled
-                        </p>
-                        <p className="text-xs text-amber-700 mt-0.5">
-                          {formattedCurrentPeriodEnd
-                            ? `Your subscription will end on ${formattedCurrentPeriodEnd}. You keep full access until then.`
-                            : "Your subscription will end at the close of the current billing period."}
-                        </p>
-                      </div>
-                      <button
-                        onClick={handleUncancelSubscription}
-                        disabled={uncancelingSubscription}
-                        className="shrink-0 px-3 py-1.5 bg-amber-100 hover:bg-amber-200 text-amber-800 text-xs font-semibold rounded-full transition-colors disabled:opacity-60"
-                        style={{ fontFamily: "var(--font-landing-body)" }}
-                      >
-                        {uncancelingSubscription ? "Restoring..." : "Keep Active"}
-                      </button>
-                    </div>
-                  )}
-
-                  {cancelSubscriptionError && (
-                    <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl">
-                      <p className="text-sm text-red-700" style={{ fontFamily: "var(--font-landing-body)" }}>
-                        {cancelSubscriptionError}
-                      </p>
-                    </div>
-                  )}
-
-                  {cancelSubscriptionSuccess && !cancellationScheduled && (
-                    <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-xl">
-                      <p className="text-sm text-green-700" style={{ fontFamily: "var(--font-landing-body)" }}>
-                        {cancelSubscriptionSuccess}
-                      </p>
                     </div>
                   )}
 
@@ -1309,56 +1016,7 @@ export default function SettingsPage() {
                         Choose the plan that works best for you. Changes take effect immediately.
                       </p>
                     </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 xl:grid-cols-5 gap-4 mb-6">
-                    <div className="xl:col-span-3 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-                      <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
-                        <h3
-                          className="text-sm font-bold text-gray-900"
-                          style={{ fontFamily: "var(--font-landing-heading)" }}
-                        >
-                          Usage This Cycle
-                        </h3>
-                        <span className="text-xs font-semibold text-gray-600">
-                          {userData?.scans_used ?? 0} / {((userData?.scans_limit ?? 3) >= 999999) ? "Unlimited" : (userData?.scans_limit ?? 3)}
-                        </span>
-                      </div>
-
-                      <div className="h-2.5 rounded-full bg-gray-100 overflow-hidden mb-3">
-                        <div
-                          className="h-full rounded-full bg-gradient-to-r from-[#3079FF] to-[#77adff] transition-all duration-700"
-                          style={{
-                            width:
-                              (userData?.scans_limit ?? 3) >= 999999
-                                ? "100%"
-                                : `${Math.min(100, ((userData?.scans_used ?? 0) / Math.max((userData?.scans_limit ?? 1), 1)) * 100)}%`,
-                          }}
-                        />
-                      </div>
-
-                      {(userData?.scans_limit ?? 3) < 999999 &&
-                        (userData?.scans_used ?? 0) >= (userData?.scans_limit ?? 3) && (
-                          <p className="text-xs text-red-600 font-semibold flex items-center gap-1 mt-1">
-                            <AlertTriangle size={12} />
-                            You have reached your scan limit. Upgrade to continue scanning.
-                          </p>
-                        )}
-                    </div>
-
-                    <div className="xl:col-span-2 rounded-2xl border border-gray-200 bg-gradient-to-b from-gray-50 to-white p-5 shadow-sm">
-                      <h3
-                        className="text-sm font-bold text-gray-900 mb-1"
-                        style={{ fontFamily: "var(--font-landing-heading)" }}
-                      >
-                        Billing Portal
-                      </h3>
-                      <p
-                        className="text-xs text-gray-500 mb-4"
-                        style={{ fontFamily: "var(--font-landing-body)" }}
-                      >
-                        Manage invoices, payment method, and subscription details in Polar.
-                      </p>
+                    {effectivePlan !== "free" && (
                       <button
                         type="button"
                         onClick={async () => {
@@ -1370,70 +1028,84 @@ export default function SettingsPage() {
                             );
                           }
                         }}
-                        disabled={effectivePlan === "free"}
-                        className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-full border border-gray-200 bg-white text-gray-800 text-xs font-semibold hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="shrink-0 inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 transition-colors"
                         style={{ fontFamily: "var(--font-landing-body)" }}
                       >
                         Manage Billing
-                        <ExternalLink size={12} />
+                        <ExternalLink size={14} />
                       </button>
-                      {effectivePlan === "free" ? (
-                        <p className="text-[11px] text-gray-500 mt-2">
-                          Available after upgrading to a paid plan.
-                        </p>
-                      ) : null}
-                    </div>
+                    )}
                   </div>
 
-                  {effectivePlan === "free" && (
-                    <div className="mb-4 p-4 rounded-xl border border-amber-200 bg-amber-50">
-                      <p className="text-sm font-semibold text-amber-800 mb-1">Plan not showing correctly?</p>
-                      <p className="text-xs text-amber-700 mb-3">If you have paid but your plan still shows Free, click below to sync from Polar.</p>
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          try {
-                            const res = await fetch("/api/subscription/repair", { method: "POST" });
-                            const data = await res.json();
-                            if (data.success) {
-                              alert(`Fixed! Your plan is now: ${data.plan}. Refreshing...`);
-                              window.location.reload();
-                            } else {
-                              alert(data.message || data.error || "Could not find a subscription on Polar for your account.");
-                            }
-                          } catch {
-                            alert("Repair failed. Please contact support.");
-                          }
-                        }}
-                        className="text-xs font-semibold px-4 py-2 rounded-full bg-amber-100 hover:bg-amber-200 text-amber-800 transition-colors border border-amber-300"
-                      >
-                        Sync subscription from Polar
-                      </button>
+                  {/* Usage bar */}
+                  <div className="mb-6 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-3">
+                        <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${
+                          effectivePlan === "free" ? "bg-gray-100 text-gray-500" :
+                          effectivePlan === "pro" ? "bg-blue-50 text-blue-600" :
+                          "bg-violet-50 text-violet-600"
+                        }`}>
+                          <CreditCard size={18} />
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-gray-900" style={{ fontFamily: "var(--font-landing-heading)" }}>
+                            {effectivePlan === "free" ? "Free" : effectivePlan === "pro" ? "Pro" : "Unlimited"}
+                            <span className="text-sm font-normal text-gray-500 ml-1">
+                              {effectivePlan === "free" ? "— $0/mo" : effectivePlan === "pro" ? "— $15/mo" : "— $39/mo"}
+                            </span>
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            {userData?.scans_used ?? 0} / {((userData?.scans_limit ?? 3) >= 999999) ? "unlimited" : (userData?.scans_limit ?? 3)} scans
+                          </p>
+                        </div>
+                      </div>
                     </div>
-                  )}
+                    <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all duration-700 ${
+                          (userData?.scans_limit ?? 3) < 999999 && (userData?.scans_used ?? 0) >= (userData?.scans_limit ?? 3)
+                            ? "bg-red-500" : "bg-gray-700"
+                        }`}
+                        style={{
+                          width:
+                            (userData?.scans_limit ?? 3) >= 999999
+                              ? "100%"
+                              : `${Math.min(100, ((userData?.scans_used ?? 0) / Math.max((userData?.scans_limit ?? 1), 1)) * 100)}%`,
+                        }}
+                      />
+                    </div>
+                    {(userData?.scans_limit ?? 3) < 999999 &&
+                      (userData?.scans_used ?? 0) >= (userData?.scans_limit ?? 3) && (
+                        <p className="text-xs text-red-600 font-semibold mt-2">
+                          Scan limit reached. Upgrade to continue scanning.
+                        </p>
+                      )}
+                  </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 mb-6">
+                  {/* Plan cards */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
                     {[
                       {
                         id: "free",
                         name: "Free",
                         price: "$0",
-                        subtitle: "Great for trial runs",
-                        features: ["3 scans/month", "Basic checks", "Community support"],
+                        subtitle: "Try Graft out",
+                        features: ["3 scans / month", "Basic security checks", "Public repos only", "Email support"],
                       },
                       {
                         id: "pro",
                         name: "Pro",
                         price: "$15",
-                        subtitle: "For growing engineering teams",
-                        features: ["50 scans/month", "Deep analysis", "Priority processing"],
+                        subtitle: "For growing teams",
+                        features: ["50 scans / month", "Deep analysis", "Private repos", "Priority support"],
                       },
                       {
                         id: "unlimited",
                         name: "Unlimited",
                         price: "$39",
-                        subtitle: "Scale without scan limits",
-                        features: ["Unlimited scans", "Everything in Pro", "Priority support"],
+                        subtitle: "For power users",
+                        features: ["Unlimited scans", "Deep analysis", "Private repos", "Priority support"],
                       },
                     ].map((plan) => {
                       const isCurrent = effectivePlan === plan.id;
@@ -1446,63 +1118,39 @@ export default function SettingsPage() {
                       return (
                         <div
                           key={plan.id}
-                          className={`relative overflow-hidden rounded-2xl border p-5 transition-all duration-200 ${
+                          className={`rounded-xl border p-5 transition-all duration-200 ${
                             isCurrent
-                              ? "border-[#3079FF] bg-gradient-to-b from-[#3079FF]/10 to-white shadow-md"
-                              : "border-gray-200 bg-white shadow-sm hover:shadow-md"
+                              ? "border-gray-900 bg-gray-50"
+                              : "border-gray-200 bg-white hover:border-gray-300"
                           }`}
                         >
-                          {plan.id === "pro" && !isCurrent ? (
-                            <span className="absolute top-3 right-3 rounded-full bg-gray-900 text-white text-[10px] px-2.5 py-1 tracking-wide uppercase font-semibold">
-                              Popular
-                            </span>
-                          ) : null}
-
-                          <div className="flex items-center justify-between gap-2 mb-2">
-                            <h3
-                              className="text-base font-bold text-gray-900"
-                              style={{ fontFamily: "var(--font-landing-heading)" }}
-                            >
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-sm font-bold text-gray-900" style={{ fontFamily: "var(--font-landing-heading)" }}>
                               {plan.name}
-                            </h3>
-                            {isCurrent ? (
-                              <span className="rounded-full border border-[#3079FF]/30 bg-[#3079FF]/10 text-[#1b5fdb] text-[10px] font-bold px-2.5 py-1 uppercase tracking-wide">
+                            </span>
+                            {isCurrent && (
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
                                 Current
                               </span>
-                            ) : null}
+                            )}
                           </div>
-
-                          <p className="text-2xl font-bold text-gray-900">
+                          <p className="text-2xl font-bold text-gray-900 mb-1">
                             {plan.price}
-                            <span className="text-sm font-medium text-gray-500">/mo</span>
+                            <span className="text-sm font-normal text-gray-500">/mo</span>
                           </p>
-                          <p
-                            className="text-xs text-gray-500 mt-1 mb-4"
-                            style={{ fontFamily: "var(--font-landing-body)" }}
-                          >
+                          <p className="text-xs text-gray-500 mb-4" style={{ fontFamily: "var(--font-landing-body)" }}>
                             {plan.subtitle}
                           </p>
-
                           <ul className="space-y-2 mb-5">
                             {plan.features.map((feature) => (
-                              <li
-                                key={feature}
-                                className="text-xs text-gray-700 flex items-center gap-2"
-                                style={{ fontFamily: "var(--font-landing-body)" }}
-                              >
-                                <span className="h-1.5 w-1.5 rounded-full bg-[#3079FF]" />
+                              <li key={feature} className="text-xs text-gray-600 flex items-start gap-2" style={{ fontFamily: "var(--font-landing-body)" }}>
+                                <span className="h-1 w-1 rounded-full bg-gray-400 mt-1.5 shrink-0" />
                                 {feature}
                               </li>
                             ))}
                           </ul>
-
                           {isCurrent ? (
-                            <button
-                              type="button"
-                              disabled
-                              className="inline-flex h-9 w-full items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 text-xs font-semibold"
-                              style={{ fontFamily: "var(--font-landing-body)" }}
-                            >
+                            <button type="button" disabled className="w-full h-9 rounded-lg border border-gray-200 bg-gray-100 text-gray-400 text-xs font-medium cursor-default">
                               Current Plan
                             </button>
                           ) : canUpgrade ? (
@@ -1510,18 +1158,15 @@ export default function SettingsPage() {
                               type="button"
                               onClick={() => initiatePlanChange(plan.id)}
                               disabled={isLoading}
-                              className="inline-flex h-9 w-full items-center justify-center rounded-full bg-gray-900 text-white text-xs font-semibold hover:bg-black transition-colors disabled:opacity-70"
-                              style={{ fontFamily: "var(--font-landing-body)" }}
+                              className="w-full h-9 rounded-lg bg-gray-900 text-white text-xs font-semibold hover:bg-black transition-colors disabled:opacity-70"
                             >
-                              {isLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-                              {plan.id === "pro" ? "Upgrade to Pro" : "Upgrade to Unlimited"}
+                              {isLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin mx-auto" /> : `Upgrade to ${plan.name}`}
                             </button>
                           ) : canDowngradeToFree ? (
                             <button
                               type="button"
                               onClick={() => initiatePlanChange("free")}
-                              className="inline-flex h-9 w-full items-center justify-center rounded-full border border-gray-200 bg-white text-gray-700 text-xs font-semibold hover:bg-gray-50 transition-colors"
-                              style={{ fontFamily: "var(--font-landing-body)" }}
+                              className="w-full h-9 rounded-lg border border-gray-200 bg-white text-gray-700 text-xs font-medium hover:bg-gray-50 transition-colors"
                             >
                               Switch to Free
                             </button>
@@ -1529,8 +1174,7 @@ export default function SettingsPage() {
                             <button
                               type="button"
                               onClick={openBillingPortal}
-                              className="inline-flex h-9 w-full items-center justify-center rounded-full border border-gray-200 bg-white text-gray-700 text-xs font-semibold hover:bg-gray-50 transition-colors"
-                              style={{ fontFamily: "var(--font-landing-body)" }}
+                              className="w-full h-9 rounded-lg border border-gray-200 bg-white text-gray-700 text-xs font-medium hover:bg-gray-50 transition-colors"
                             >
                               Manage in Billing
                             </button>
@@ -1540,50 +1184,68 @@ export default function SettingsPage() {
                     })}
                   </div>
 
+                  {/* Subscription controls for paid users */}
                   {(effectivePlan === "pro" || effectivePlan === "unlimited") && (
-                    <div className="border border-gray-200 rounded-2xl p-6 bg-white shadow-sm">
-                      <h3
-                        className="text-base font-bold text-gray-900 mb-2"
-                        style={{ fontFamily: "var(--font-landing-heading)" }}
-                      >
+                    <div className="border border-gray-200 rounded-xl p-5 bg-white">
+                      <h3 className="text-sm font-bold text-gray-900 mb-2" style={{ fontFamily: "var(--font-landing-heading)" }}>
                         Subscription Controls
                       </h3>
-                      <p
-                        className="text-sm text-gray-500 mb-4"
-                        style={{ fontFamily: "var(--font-landing-body)" }}
-                      >
+                      <p className="text-xs text-gray-500 mb-4" style={{ fontFamily: "var(--font-landing-body)" }}>
                         You can cancel anytime. Access stays active until the end of your current billing cycle.
                       </p>
-
                       {cancellationScheduled ? (
                         <div className="flex flex-wrap items-center gap-3">
-                          <span
-                            className="inline-flex px-4 py-2 border border-amber-200 text-amber-700 bg-amber-50 rounded-full text-xs font-semibold"
-                            style={{ fontFamily: "var(--font-landing-body)" }}
-                          >
+                          <span className="inline-flex px-3 py-1.5 border border-amber-200 text-amber-700 bg-amber-50 rounded-lg text-xs font-semibold">
                             Cancellation Scheduled
                           </span>
                           <button
                             type="button"
-                            className="inline-flex px-4 py-2 border border-gray-200 text-gray-700 rounded-full text-xs font-semibold hover:bg-gray-50 transition-colors disabled:opacity-60"
-                            style={{ fontFamily: "var(--font-landing-body)" }}
+                            className="inline-flex px-3 py-1.5 border border-gray-200 text-gray-700 rounded-lg text-xs font-semibold hover:bg-gray-50 transition-colors disabled:opacity-60"
                             onClick={handleUncancelSubscription}
                             disabled={uncancelingSubscription}
                           >
-                            {uncancelingSubscription ? "Keeping Active..." : "Keep Subscription Active"}
+                            {uncancelingSubscription ? "Restoring..." : "Keep Active"}
                           </button>
                         </div>
                       ) : (
                         <button
                           type="button"
-                          className="inline-flex px-4 py-2 border border-gray-200 text-gray-700 rounded-full text-xs font-semibold hover:bg-gray-50 transition-colors disabled:opacity-60"
-                          style={{ fontFamily: "var(--font-landing-body)" }}
+                          className="inline-flex px-3 py-1.5 border border-gray-200 text-gray-700 rounded-lg text-xs font-semibold hover:bg-gray-50 transition-colors disabled:opacity-60"
                           onClick={handleCancelSubscription}
                           disabled={cancelingSubscription || uncancelingSubscription}
                         >
                           {cancelingSubscription ? "Cancelling..." : "Cancel Subscription"}
                         </button>
                       )}
+                    </div>
+                  )}
+
+                  {/* Repair for free plan users */}
+                  {effectivePlan === "free" && (
+                    <div className="mt-4 p-4 rounded-xl border border-amber-200 bg-amber-50">
+                      <p className="text-xs text-amber-700 mb-2">
+                        Paid but still showing Free? Sync your subscription from Polar.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            const res = await fetch("/api/subscription/repair", { method: "POST" });
+                            const data = await res.json();
+                            if (data.success) {
+                              alert(`Fixed! Your plan is now: ${data.plan}. Refreshing...`);
+                              window.location.reload();
+                            } else {
+                              alert(data.message || data.error || "Could not find a subscription on Polar.");
+                            }
+                          } catch {
+                            alert("Repair failed. Please contact support.");
+                          }
+                        }}
+                        className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-800 transition-colors border border-amber-200"
+                      >
+                        Sync from Polar
+                      </button>
                     </div>
                   )}
                 </div>
@@ -1877,7 +1539,7 @@ export default function SettingsPage() {
                       </div>
                     ) : (
                       <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
-                        <Sparkles size={16} className="text-[#3079FF]" />
+                        <ArrowRight size={16} className="text-blue-600" />
                       </div>
                     )}
                     <h3
