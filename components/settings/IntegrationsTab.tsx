@@ -255,14 +255,6 @@ export default function IntegrationsTab({ hasGithubConnected: _hasGithubConnecte
                     <Unlink size={16} />
                     Disconnect
                   </button>
-                  <button
-                    onClick={() => connectProvider("github")}
-                    disabled={busy}
-                    className="text-xs text-gray-500 hover:text-gray-700 underline"
-                    style={{ fontFamily: "var(--font-landing-body)" }}
-                  >
-                    Reconnect to refresh token
-                  </button>
                 </div>
               ) : (
                 <button
