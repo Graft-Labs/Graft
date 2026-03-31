@@ -1249,8 +1249,6 @@ export default function SettingsPage() {
                       </div>
                     )}
                   </div>
-                </div>
-              )}
 
                   {/* Cancellation notice */}
                   {cancellationScheduled && (
