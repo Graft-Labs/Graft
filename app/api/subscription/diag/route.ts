@@ -12,6 +12,10 @@ const SUPABASE_SERVICE_KEY =
   process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 export async function GET(req: NextRequest) {
+  // Gate behind DIAG_ENABLED env var — disabled by default in production
+  if (process.env.DIAG_ENABLED !== "true") {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
   const supabase = createClient(SUPABASE_URL!, SUPABASE_SERVICE_KEY!);
 
   // Get current user

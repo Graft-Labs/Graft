@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
 
     const { data: userRow } = await supabase
       .from("users")
-      .select("plan, subscription_id, subscription_status, customer_id")
+      .select("plan, subscription_id, subscription_status, customer_id, scans_used")
       .eq("id", user.id)
       .maybeSingle();
 
@@ -212,12 +212,17 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Update DB
+    // Update DB (cap scans_used at new plan's limit)
+    const newLimit = PLAN_SCANS_LIMITS[targetPlan];
+    const currentScansUsed = (userRow?.scans_used as number | undefined) ?? 0;
+    const cappedScansUsed = newLimit >= 999999 ? currentScansUsed : Math.min(currentScansUsed, newLimit);
+
     await supabase
       .from("users")
       .update({
         plan: targetPlan,
-        scans_limit: PLAN_SCANS_LIMITS[targetPlan],
+        scans_limit: newLimit,
+        scans_used: cappedScansUsed,
         subscription_id: updatedSub.id,
         subscription_status: "active",
         customer_id:

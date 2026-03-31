@@ -13,8 +13,10 @@ const SUPABASE_SERVICE_KEY =
   process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
 const POLAR_WEBHOOK_SECRET = process.env.POLAR_WEBHOOK_SECRET;
 
-// Log product map at startup so we can verify env vars are loaded
-console.log("[Polar webhook] PLAN_PRODUCT_MAP:", JSON.stringify(PLAN_PRODUCT_IDS));
+// Log product map when webhook handler initializes (only when actually called)
+function logProductMap() {
+  console.log("[Polar webhook] PLAN_PRODUCT_MAP:", JSON.stringify(PLAN_PRODUCT_IDS));
+}
 
 type PolarEventPayload = {
   type: string;
@@ -331,6 +333,14 @@ async function handleBillingPayload(
   const { error } = await supabase.from("users").upsert(payload, { onConflict: "id" });
   if (error) {
     console.error("[Polar webhook] upsert FAILED:", error.message, error.details);
+    // Retry once after a short delay
+    await new Promise((r) => setTimeout(r, 2000));
+    const { error: retryError } = await supabase.from("users").upsert(payload, { onConflict: "id" });
+    if (retryError) {
+      console.error("[Polar webhook] upsert RETRY FAILED:", retryError.message, retryError.details);
+    } else {
+      console.log("[Polar webhook] upsert RETRY SUCCESS", { userId: user.id, plan: nextPlan });
+    }
   } else {
     console.log("[Polar webhook] upsert SUCCESS", { userId: user.id, plan: nextPlan });
   }
@@ -347,5 +357,6 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  logProductMap();
   return webhookHandler(req);
 }
